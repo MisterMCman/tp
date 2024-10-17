@@ -1,27 +1,51 @@
+/* src/app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Eigene Anpassungen für Glassmorphism und Farben */
+.glassmorphism {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 5px 5px 30px rgba(0, 0, 0, 0.2);
+  border-radius: 15px;
+  padding: 2rem;
+  max-width: 400px;
+  margin: 0 auto;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.bg-gradient {
+  background: linear-gradient(135deg, #ffaa86 0%, #fe584d 100%); /* heller und dunkler Verlauf */
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+.form-input {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid #ced4da;
+  border-radius: 10px;
+  color: #233b61;  /* Dunkelblaue Schriftfarbe */
+  margin-bottom: 1rem;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+.button-style {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  text-align: center;
+  color: #233b61;  /* Dunkelblaue Schriftfarbe */
+  font-weight: bold;
+  backdrop-filter: blur(10px);
+}
+
+.button-style:hover {
+  background: rgba(255, 255, 255, 0.5);
+  transition: background-color 0.3s ease;
 }
