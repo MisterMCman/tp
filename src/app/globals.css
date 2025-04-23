@@ -1,51 +1,217 @@
-/* src/app/globals.css */
+/* Tailwind CSS Base Setup */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Eigene Anpassungen für Glassmorphism und Farben */
-.glassmorphism {
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 5px 5px 30px rgba(0, 0, 0, 0.2);
-  border-radius: 15px;
-  padding: 2rem;
-  max-width: 400px;
-  margin: 0 auto;
+/* Force CSS reload */
+html {
+  scroll-behavior: smooth;
 }
 
+@layer components {
+  .form-input {
+    @apply w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+}
+
+/* Glassmorphism Style */
+.glassmorphism {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 2.5rem;
+  max-width: 500px;
+  margin: 0 auto;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glassmorphism:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+}
+
+/* Background Gradient - PowerToWork style */
 .bg-gradient {
-  background: linear-gradient(135deg, #ffaa86 0%, #fe584d 100%); /* heller und dunkler Verlauf */
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #303030;
+  padding: 1.5rem;
 }
 
+/* Form Inputs */
 .form-input {
   width: 100%;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid #ced4da;
-  border-radius: 10px;
-  color: #233b61;  /* Dunkelblaue Schriftfarbe */
+  padding: 14px 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #1f2937;
+  font-size: 1rem;
   margin-bottom: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.form-input:focus {
+  outline: none;
+  border-color: #4361ee;
+  box-shadow: 0 0 5px rgba(67, 97, 238, 0.4);
+}
+
+/* Buttons - PowerToWork style */
 .button-style {
   width: 100%;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
+  padding: 14px 18px;
+  background: #4361ee;
+  border: none;
+  border-radius: 8px;
   text-align: center;
-  color: #233b61;  /* Dunkelblaue Schriftfarbe */
-  font-weight: bold;
-  backdrop-filter: blur(10px);
+  color: #fff;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
 .button-style:hover {
-  background: rgba(255, 255, 255, 0.5);
-  transition: background-color 0.3s ease;
+  background: #3a56d4;
+  transform: translateY(-2px);
+}
+
+.button-style:disabled {
+  background: #c7d2fe;
+  color: #4361ee;
+  cursor: not-allowed;
+}
+
+/* Suggestions Dropdown for Topics */
+.suggestions-dropdown {
+  position: absolute;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.suggestions-dropdown li {
+  padding: 10px 16px;
+  color: #1f2937;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.suggestions-dropdown li:hover {
+  background: #eef2ff;
+}
+
+/* Selected Topics - PowerToWork style */
+.selected-topic {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: #4361ee;
+  color: #fff;
+  border-radius: 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.selected-topic:hover {
+  background: #3a56d4;
+}
+
+.selected-topic button {
+  margin-left: 8px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.selected-topic button:hover {
+  color: #e6f6f9;
+}
+
+/* Form Title */
+form h2 {
+  font-size: 1.75rem;
+  font-weight: bold;
+  color: #303030;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+/* Link Styling - PowerToWork style */
+.link {
+  color: #4361ee;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.link:hover {
+  color: #3a56d4;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .glassmorphism {
+    padding: 1.5rem;
+    max-width: 95%;
+  }
+
+  .form-input,
+  .button-style {
+    font-size: 0.9rem;
+  }
+
+  form h2 {
+    font-size: 1.5rem;
+  }
+}
+
+/* PowerToWork specific toggle */
+.pw-toggle {
+  position: relative;
+  display: flex;
+  background-color: #f3f4f6;
+  border-radius: 9999px;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.pw-toggle-button {
+  position: relative;
+  z-index: 10;
+  padding: 8px 16px;
+  flex: 1;
+  font-weight: 500;
+  text-align: center;
+  border-radius: 9999px;
+  transition: color 0.3s ease;
+}
+
+.pw-toggle-slider {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 50%;
+  background-color: #4361ee;
+  border-radius: 9999px;
+  transition: transform 0.3s ease, left 0.3s ease, right 0.3s ease;
 }

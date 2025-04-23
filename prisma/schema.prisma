@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Trainer {
+  id        Int           @id @default(autoincrement())
+  firstName String
+  lastName  String
+  email     String        @unique
+  phone     String
+  status    TrainerStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  inquiries Inquiry[]
+  invoices  Invoice[]
+  topics    TrainerTopic[]
+}
+
+model Topic {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  trainers TrainerTopic[]
+}
+
+model TrainerTopic {
+  id        Int      @id @default(autoincrement())
+  trainer   Trainer  @relation(fields: [trainerId], references: [id])
+  trainerId Int
+  topic     Topic    @relation(fields: [topicId], references: [id])
+  topicId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([trainerId, topicId]) // Eindeutiger Index statt Primärschlüssel
+}
+
+
+model Inquiry {
+  id            Int           @id @default(autoincrement())
+  trainerId     Int
+  eventId       Int
+  status        InquiryStatus @default(PENDING)
+  priceProposal Float?
+  message       String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  event         Event         @relation(fields: [eventId], references: [id])
+  trainer       Trainer       @relation(fields: [trainerId], references: [id])
+
+  @@index([eventId], map: "Inquiry_eventId_fkey")
+  @@index([trainerId], map: "Inquiry_trainerId_fkey")
+}
+
+model Event {
+  id           Int           @id @default(autoincrement())
+  courseId     Int
+  title        String
+  date         DateTime
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  course       Course        @relation(fields: [courseId], references: [id])
+  inquiries    Inquiry[]
+  participants Participant[]
+
+  @@index([courseId], map: "Event_courseId_fkey")
+}
+
+model Course {
+  id          Int         @id @default(autoincrement())
+  description String?
+  createdAt   DateTime    @default(now())
+  state       CourseState @default(ONLINE)
+  title       String
+  updatedAt   DateTime    @updatedAt
+  events      Event[]
+}
+
+model Participant {
+  id      Int    @id @default(autoincrement())
+  name    String
+  email   String
+  eventId Int
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  @@index([eventId], map: "Participant_eventId_fkey")
+}
+
+model Invoice {
+  id        Int           @id @default(autoincrement())
+  trainerId Int
+  courseId  Int?
+  amount    Float
+  status    InvoiceStatus @default(SUBMITTED)
+  createdAt DateTime      @default(now())
+  trainer   Trainer       @relation(fields: [trainerId], references: [id])
+
+  @@index([trainerId], map: "Invoice_trainerId_fkey")
+}
+
+enum TrainerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InquiryStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum CourseState {
+  ONLINE
+  INACTIVE
+}
+
+enum InvoiceStatus {
+  SUBMITTED
+  PAID
+}

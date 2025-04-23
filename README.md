@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Trainer Portal (TP)
+
+A comprehensive platform for managing trainers, courses, events, and invoices. This application connects trainers with courses and manages the entire workflow from inquiry to payment.
+
+## Project Overview
+
+This application is a training management system built with:
+- Next.js 14 for the frontend
+- Prisma ORM for database interactions
+- MySQL as the database
+- NextAuth for authentication
+- TypeScript for type safety
+- Tailwind CSS for styling
+
+## Features
+
+- Trainer registration and profile management
+- Course and event creation and management
+- Inquiry system for connecting trainers with events
+- Participant tracking
+- Invoice generation and management
+- Authentication and authorization
+
+## Database Structure
+
+The application uses a relational database with the following main entities:
+- Trainers: Professionals who can teach different topics
+- Topics: Subject areas that trainers specialize in
+- Courses: Training programs offered
+- Events: Specific instances of courses on particular dates
+- Inquiries: Requests for trainers to lead specific events
+- Participants: People attending events
+- Invoices: Payment records for trainers
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js (v18 or later)
+- MySQL running locally or a remote MySQL database
+- npm or yarn package manager
+
+### Environment Setup
+
+1. Clone this repository
+2. Set up your .env file with the necessary environment variables:
+   ```
+   DATABASE_URL="mysql://username:password@localhost:3306/tp"
+   ```
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies in the root directory
+npm install
+
+# Install dependencies in the Next.js application
+cd tp
+npm install
+
+# Set up the database
+npx prisma migrate dev
+npx prisma db seed
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Running the Application
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Start the Next.js development server
+cd tp
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The application will be available at [http://localhost:3000](http://localhost:3000).
 
-## Learn More
+## Development
 
-To learn more about Next.js, take a look at the following resources:
+### Database Management
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Generate Prisma client: `npx prisma generate`
+- Update database schema: `npx prisma migrate dev`
+- Seed database with initial data: `npx prisma db seed`
+- Explore your database with Prisma Studio: `npx prisma studio`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Project Structure
 
-## Deploy on Vercel
+- `/prisma`: Database schema and migrations
+- `/tp/src/app`: Next.js application routes and components
+- `/tp/src/app/api`: API routes for data manipulation
+- `/tp/src/lib`: Utility functions and shared code
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This Next.js application can be deployed on Vercel or any other hosting platform that supports Next.js.
+
+```bash
+# Build the application
+npm run build
+
+# Start the production server
+npm start
+```
+
+## License
+
+This project is proprietary and confidential.
