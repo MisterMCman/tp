@@ -11,11 +11,20 @@ interface Training {
   location: string;
   participants: number;
   status: string;
+  description?: string;
+  trainerNotes?: string;
+  materials?: string[];
 }
+
+type ViewMode = "upcoming" | "history";
 
 export default function TrainingsPage() {
   const [trainings, setTrainings] = useState<Training[]>([]);
+  const [pastTrainings, setPastTrainings] = useState<Training[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
+  const [activeTraining, setActiveTraining] = useState<Training | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     // In a real application, you would fetch from your API
@@ -24,41 +33,81 @@ export default function TrainingsPage() {
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Mock data
+      // Mock data - upcoming trainings
       const mockTrainings: Training[] = [
         {
           id: 1,
           title: "Einführung in Python",
           topicName: "Python",
-          date: "2023-10-15T09:00:00",
-          endTime: "2023-10-15T17:00:00",
+          date: "2025-10-15T09:00:00",
+          endTime: "2025-10-15T17:00:00",
           location: "Online",
           participants: 12,
-          status: "confirmed"
+          status: "confirmed",
+          description: "Ein umfassender Einführungskurs in Python für Anfänger. Grundlegende Konzepte, Syntax und erste Anwendungen werden behandelt.",
+          trainerNotes: "Teilnehmer haben unterschiedliche Vorkenntnisse. Einige haben bereits Programmiererfahrung in anderen Sprachen.",
+          materials: ["Python Basics Handout", "Übungsaufgaben", "Projektideen"]
         },
         {
           id: 2,
           title: "Advanced JavaScript Workshop",
           topicName: "JavaScript",
-          date: "2023-10-22T13:30:00",
-          endTime: "2023-10-22T18:00:00",
+          date: "2025-10-22T13:30:00",
+          endTime: "2025-10-22T18:00:00",
           location: "Berlin, Hauptstr. 17",
           participants: 8,
-          status: "confirmed"
+          status: "confirmed",
+          description: "Workshop für fortgeschrittene JavaScript-Entwickler. ES6+, Promises, async/await und moderne JavaScript-Patterns werden behandelt.",
+          trainerNotes: "Alle Teilnehmer haben Grundkenntnisse in JavaScript. Fokus auf praktische Übungen legen.",
+          materials: ["JavaScript Advanced Cheatsheet", "Code-Beispiele", "Projektstruktur-Templates"]
         },
         {
           id: 3,
           title: "Projektmanagement Grundlagen",
           topicName: "Projektmanagement",
-          date: "2023-11-05T10:00:00",
-          endTime: "2023-11-05T16:00:00",
+          date: "2025-11-05T10:00:00",
+          endTime: "2025-11-05T16:00:00",
           location: "München, Bahnhofplatz 3",
           participants: 15,
-          status: "confirmed"
+          status: "confirmed",
+          description: "Grundlagen des Projektmanagements mit Fokus auf agile Methoden und Teamführung.",
+          trainerNotes: "Teilnehmer kommen aus verschiedenen Branchen. Viele mit ersten Erfahrungen im Projektmanagement.",
+          materials: ["PM Handbuch", "Vorlagen für Projektpläne", "Case Studies"]
+        }
+      ];
+      
+      // Mock data - past trainings
+      const mockPastTrainings: Training[] = [
+        {
+          id: 101,
+          title: "Datenanalyse mit Python",
+          topicName: "Python",
+          date: "2025-05-05T09:00:00",
+          endTime: "2025-05-05T16:00:00",
+          location: "Frankfurt, Mainzer Landstr. 50",
+          participants: 10,
+          status: "completed",
+          description: "Fortgeschrittene Datenanalyse mit Python, Pandas und NumPy.",
+          trainerNotes: "Sehr interessierte Gruppe, viele Fragen zu praktischen Anwendungsfällen.",
+          materials: ["Datenanalyse Skript", "Beispieldatensätze", "Aufgabenlösungen"]
+        },
+        {
+          id: 102,
+          title: "React für Fortgeschrittene",
+          topicName: "JavaScript",
+          date: "2025-06-12T10:00:00",
+          endTime: "2025-06-12T17:00:00",
+          location: "Online",
+          participants: 14,
+          status: "completed",
+          description: "Fortgeschrittene Konzepte in React: Context API, Hooks, State Management und Performance-Optimierung.",
+          trainerNotes: "Gutes technisches Niveau bei allen Teilnehmern. Viel Interesse an Redux und Zustand.",
+          materials: ["React Advanced Guide", "CodeSandbox Beispiele", "Referenzprojekt"]
         }
       ];
       
       setTrainings(mockTrainings);
+      setPastTrainings(mockPastTrainings);
       setLoading(false);
     };
     
@@ -82,103 +131,310 @@ export default function TrainingsPage() {
     }).format(date);
   };
 
+  const openTrainingDetails = (training: Training) => {
+    setActiveTraining(training);
+    setShowModal(true);
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "confirmed": return "Bestätigt";
+      case "pending": return "Ausstehend";
+      case "completed": return "Abgeschlossen";
+      case "canceled": return "Storniert";
+      default: return status;
+    }
+  };
+
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case "confirmed": return "bg-green-100 text-green-800";
+      case "pending": return "bg-yellow-100 text-yellow-800";
+      case "completed": return "bg-blue-100 text-blue-800";
+      case "canceled": return "bg-red-100 text-red-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  // Generate and download an .ics calendar file for the training
+  const downloadCalendarEntry = (training: Training) => {
+    // Format the dates for iCalendar format (yyyyMMddTHHmmssZ)
+    const formatIcsDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      return date.toISOString().replace(/-|:|\.\d+/g, "").slice(0, 15) + "Z";
+    };
+    
+    const startDate = formatIcsDate(training.date);
+    const endDate = formatIcsDate(training.endTime);
+    const now = formatIcsDate(new Date().toISOString());
+    
+    // Generate a unique identifier for the event
+    const uid = `training-${training.id}-${Date.now()}@trainerportal.de`;
+    
+    // Description with trainer notes if available
+    let description = training.description || '';
+    if (training.trainerNotes) {
+      description += `\n\nTrainer-Notizen: ${training.trainerNotes}`;
+    }
+    if (training.materials && training.materials.length > 0) {
+      description += `\n\nMaterialien: ${training.materials.join(', ')}`;
+    }
+    
+    // Create the iCalendar content
+    const icsContent = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//TrainerPortal//DE",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "BEGIN:VEVENT",
+      `UID:${uid}`,
+      `DTSTAMP:${now}`,
+      `DTSTART:${startDate}`,
+      `DTEND:${endDate}`,
+      `SUMMARY:${training.title}`,
+      `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+      `LOCATION:${training.location}`,
+      `CATEGORIES:${training.topicName}`,
+      "STATUS:CONFIRMED",
+      "END:VEVENT",
+      "END:VCALENDAR"
+    ].join("\r\n");
+    
+    // Create a Blob object from the iCalendar content
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+    
+    // Create a temporary URL for the Blob
+    const url = URL.createObjectURL(blob);
+    
+    // Create a hidden anchor element for downloading
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${training.title.replace(/\s+/g, '_')}.ics`;
+    
+    // Append the link to the document, trigger a click, and remove it
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Release the URL object to free up memory
+    URL.revokeObjectURL(url);
+  };
+
+  const currentData = viewMode === "upcoming" ? trainings : pastTrainings;
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Meine Trainings</h1>
       
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800">Anstehende Trainings</h2>
+      {/* View Mode Selector */}
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4 md:mb-0">Trainings ansehen</h2>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setViewMode("upcoming")}
+              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
+                viewMode === "upcoming"
+                ? "bg-primary-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Anstehende Trainings ({trainings.length})
+            </button>
+            <button
+              onClick={() => setViewMode("history")}
+              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
+                viewMode === "history"
+                ? "bg-primary-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Trainingshistorie ({pastTrainings.length})
+            </button>
+          </div>
         </div>
-        
-        {loading ? (
-          <div className="p-6">
-            <div className="animate-pulse space-y-4">
-              <div className="h-12 bg-gray-200 rounded"></div>
-              <div className="h-12 bg-gray-200 rounded"></div>
-              <div className="h-12 bg-gray-200 rounded"></div>
-            </div>
-          </div>
-        ) : trainings.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Training
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Datum
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Zeit
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ort
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Teilnehmer
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Aktionen
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {trainings.map((training) => (
-                  <tr key={training.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{training.title}</div>
-                          <div className="text-sm text-primary-600">{training.topicName}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatDate(training.date)}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {formatTime(training.date)} - {formatTime(training.endTime)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{training.location}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{training.participants}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button className="text-primary-600 hover:text-primary-900 mr-3">
-                        Details
-                      </button>
-                      <button className="text-gray-600 hover:text-gray-900">
-                        Kalender
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-gray-500">Keine anstehenden Trainings gefunden.</p>
-          </div>
-        )}
       </div>
       
-      <div className="mt-8 bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Trainingshistorie</h2>
-        
-        <div className="text-center py-6">
-          <p className="text-gray-500 mb-4">Hier werden Ihre abgeschlossenen Trainings angezeigt.</p>
-          <button className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
-            Trainingshistorie anzeigen
-          </button>
+      {loading ? (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-12 bg-gray-200 rounded"></div>
+            <div className="h-12 bg-gray-200 rounded"></div>
+            <div className="h-12 bg-gray-200 rounded"></div>
+          </div>
         </div>
-      </div>
+      ) : currentData.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4">
+          {currentData.map((training) => (
+            <div key={training.id} className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="p-5 border-b">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-semibold">{training.title}</h3>
+                    <span className="inline-block mt-1 px-2 py-1 text-xs font-medium rounded-full bg-primary-100 text-primary-800">
+                      {training.topicName}
+                    </span>
+                  </div>
+                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusClass(training.status)}`}>
+                    {getStatusLabel(training.status)}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="px-5 py-3 bg-gray-50">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <span className="block text-xs text-gray-500">Datum</span>
+                    <span className="font-medium">{formatDate(training.date)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500">Zeit</span>
+                    <span className="font-medium">{formatTime(training.date)} - {formatTime(training.endTime)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500">Ort</span>
+                    <span className="font-medium">{training.location}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500">Teilnehmer</span>
+                    <span className="font-medium">{training.participants}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-5 flex justify-end space-x-2">
+                <button
+                  onClick={() => downloadCalendarEntry(training)}
+                  className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                  </svg>
+                  Kalender
+                </button>
+                <button
+                  onClick={() => openTrainingDetails(training)}
+                  className="px-3 py-1 bg-primary-500 rounded text-sm font-medium text-white hover:bg-primary-600 flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                    <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                  </svg>
+                  Details
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow p-6 text-center">
+          <p className="text-gray-500">
+            {viewMode === "upcoming" 
+              ? "Keine anstehenden Trainings gefunden." 
+              : "Keine abgeschlossenen Trainings gefunden."}
+          </p>
+        </div>
+      )}
+      
+      {/* Training Details Modal */}
+      {showModal && activeTraining && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800">Training Details</h3>
+                <button 
+                  onClick={() => setShowModal(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="flex justify-between mb-4">
+                <h4 className="text-lg font-semibold">{activeTraining.title}</h4>
+                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusClass(activeTraining.status)}`}>
+                  {getStatusLabel(activeTraining.status)}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <span className="block text-sm text-gray-500">Thema</span>
+                  <span className="font-medium">{activeTraining.topicName}</span>
+                </div>
+                <div>
+                  <span className="block text-sm text-gray-500">Datum & Zeit</span>
+                  <span className="font-medium">
+                    {formatDate(activeTraining.date)}, {formatTime(activeTraining.date)} - {formatTime(activeTraining.endTime)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-sm text-gray-500">Ort</span>
+                  <span className="font-medium">{activeTraining.location}</span>
+                </div>
+                <div>
+                  <span className="block text-sm text-gray-500">Teilnehmer</span>
+                  <span className="font-medium">{activeTraining.participants}</span>
+                </div>
+              </div>
+              
+              {activeTraining.description && (
+                <div className="mb-6">
+                  <span className="block text-sm text-gray-500 mb-1">Beschreibung</span>
+                  <p className="p-3 bg-gray-50 rounded border">{activeTraining.description}</p>
+                </div>
+              )}
+              
+              {activeTraining.trainerNotes && (
+                <div className="mb-6">
+                  <span className="block text-sm text-gray-500 mb-1">Notizen für Trainer</span>
+                  <p className="p-3 bg-yellow-50 rounded border border-yellow-200 text-yellow-800">{activeTraining.trainerNotes}</p>
+                </div>
+              )}
+              
+              {activeTraining.materials && activeTraining.materials.length > 0 && (
+                <div className="mb-6">
+                  <span className="block text-sm text-gray-500 mb-1">Materialien</span>
+                  <ul className="p-3 bg-gray-50 rounded border">
+                    {activeTraining.materials.map((material, index) => (
+                      <li key={index} className="mb-1 last:mb-0 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-primary-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                        </svg>
+                        {material}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              <div className="flex justify-end space-x-3 border-t pt-4 mt-6">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Schließen
+                </button>
+                <button
+                  onClick={() => downloadCalendarEntry(activeTraining)}
+                  className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                  </svg>
+                  Zum Kalender hinzufügen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

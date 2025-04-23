@@ -15,12 +15,16 @@ interface TrainingRequest {
   status: "pending" | "accepted" | "rejected";
 }
 
+type FilterStatus = "all" | "pending" | "accepted" | "rejected";
+
 export default function RequestsPage() {
   const [requests, setRequests] = useState<TrainingRequest[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<TrainingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeRequest, setActiveRequest] = useState<TrainingRequest | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [showModal, setShowModal] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
 
   useEffect(() => {
     // In a real application, you would fetch from your API
@@ -65,15 +69,49 @@ export default function RequestsPage() {
           participants: 12,
           proposedPrice: 1200,
           status: "pending"
+        },
+        {
+          id: 4,
+          courseTitle: "React Workshop",
+          topicName: "JavaScript",
+          date: "2025-02-15T09:30:00",
+          endTime: "2025-02-15T16:30:00",
+          location: "Online",
+          participants: 8,
+          proposedPrice: 850,
+          message: "Eine Einführung in React mit praktischen Übungen.",
+          status: "accepted"
+        },
+        {
+          id: 5,
+          courseTitle: "Excel für Fortgeschrittene",
+          topicName: "Excel",
+          date: "2025-01-20T10:00:00",
+          endTime: "2025-01-20T15:00:00",
+          location: "Hamburg, Neuer Wall 50",
+          participants: 6,
+          proposedPrice: 600,
+          message: "Schwerpunkt auf Pivot-Tabellen und Makros.",
+          status: "rejected"
         }
       ];
       
       setRequests(mockRequests);
+      setFilteredRequests(mockRequests);
       setLoading(false);
     };
     
     fetchRequests();
   }, []);
+
+  // Apply filter when statusFilter changes or requests change
+  useEffect(() => {
+    if (statusFilter === "all") {
+      setFilteredRequests(requests);
+    } else {
+      setFilteredRequests(requests.filter(request => request.status === statusFilter));
+    }
+  }, [statusFilter, requests]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -144,18 +182,101 @@ export default function RequestsPage() {
     setShowModal(false);
   };
 
+  const handleStatusFilterChange = (status: FilterStatus) => {
+    setStatusFilter(status);
+  };
+
+  const getRequestCount = (status: FilterStatus) => {
+    if (status === "all") return requests.length;
+    return requests.filter(req => req.status === status).length;
+  };
+
+  const sendInquiryEmail = (request: TrainingRequest) => {
+    // Get trainer ID from localStorage (in a real app this would be more securely handled)
+    const trainerData = localStorage.getItem("trainer");
+    let trainerId = "unknown";
+    
+    if (trainerData) {
+      const trainer = JSON.parse(trainerData);
+      trainerId = trainer.id;
+    }
+    
+    // Format the date for the email
+    const formattedDate = formatDate(request.date);
+    
+    // Create email subject
+    const subject = `Rückfrage zu Training: ${request.courseTitle} (ID: ${request.id} /T${trainerId})`;
+    
+    // Create email body
+    const body = `Liebes powertowork Team,
+
+folgende Frage habe ich zu Ihrer Anfrage vom ${formattedDate}:
+
+[Ihre Frage hier eingeben]
+
+
+Mit freundlichen Grüßen,`
+;
+    
+    // Encode subject and body for mailto link
+    const encodedSubject = encodeURIComponent(subject);
+    const encodedBody = encodeURIComponent(body);
+    
+    // Open default email client with pre-populated fields
+    window.location.href = `mailto:info@powertowork.com?subject=${encodedSubject}&body=${encodedBody}`;
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Trainingsanfragen</h1>
       
-      {/* Filter/Search (could be expanded in a real application) */}
-      <div className="flex justify-end mb-4">
-        <select className="form-select w-40">
-          <option value="all">Alle Anfragen</option>
-          <option value="pending">Offen</option>
-          <option value="accepted">Angenommen</option>
-          <option value="rejected">Abgelehnt</option>
-        </select>
+      {/* Filter/Search */}
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4 md:mb-0">Filter nach Status</h2>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => handleStatusFilterChange("all")}
+              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
+                statusFilter === "all"
+                ? "bg-gray-800 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              Alle ({getRequestCount("all")})
+            </button>
+            <button
+              onClick={() => handleStatusFilterChange("pending")}
+              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
+                statusFilter === "pending"
+                ? "bg-yellow-600 text-white"
+                : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+              }`}
+            >
+              Offen ({getRequestCount("pending")})
+            </button>
+            <button
+              onClick={() => handleStatusFilterChange("accepted")}
+              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
+                statusFilter === "accepted"
+                ? "bg-green-600 text-white"
+                : "bg-green-100 text-green-800 hover:bg-green-200"
+              }`}
+            >
+              Angenommen ({getRequestCount("accepted")})
+            </button>
+            <button
+              onClick={() => handleStatusFilterChange("rejected")}
+              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
+                statusFilter === "rejected"
+                ? "bg-red-600 text-white"
+                : "bg-red-100 text-red-800 hover:bg-red-200"
+              }`}
+            >
+              Abgelehnt ({getRequestCount("rejected")})
+            </button>
+          </div>
+        </div>
       </div>
       
       {loading ? (
@@ -166,9 +287,9 @@ export default function RequestsPage() {
             <div className="h-12 bg-gray-200 rounded"></div>
           </div>
         </div>
-      ) : requests.length > 0 ? (
+      ) : filteredRequests.length > 0 ? (
         <div className="grid grid-cols-1 gap-4">
-          {requests.map((request) => (
+          {filteredRequests.map((request) => (
             <div key={request.id} className="bg-white rounded-lg shadow overflow-hidden">
               <div className="p-5 border-b">
                 <div className="flex justify-between items-start">
@@ -225,6 +346,15 @@ export default function RequestsPage() {
                 
                 <div className="flex space-x-2">
                   <button
+                    onClick={() => sendInquiryEmail(request)}
+                    className="px-3 py-1 bg-blue-50 border border-blue-300 rounded text-sm font-medium text-blue-700 hover:bg-blue-100 flex items-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M2.94 6.412A2 2 0 002 8.108V16a2 2 0 002 2h12a2 2 0 002-2V8.108a2 2 0 00-.94-1.696l-6-3.75a2 2 0 00-2.12 0l-6 3.75zm2.615 2.423a1 1 0 10-1.11 1.664l5 3.333a1 1 0 001.11 0l5-3.333a1 1 0 00-1.11-1.664L10 11.798 5.555 8.835z" clipRule="evenodd" />
+                    </svg>
+                    Rückfrage
+                  </button>
+                  <button
                     onClick={() => openRequestDetails(request)}
                     className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
@@ -253,7 +383,7 @@ export default function RequestsPage() {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow p-6 text-center">
-          <p className="text-gray-500">Keine Trainingsanfragen gefunden.</p>
+          <p className="text-gray-500">Keine {statusFilter !== "all" ? getStatusLabel(statusFilter) + "en" : ""} Trainingsanfragen gefunden.</p>
         </div>
       )}
       
@@ -333,6 +463,16 @@ export default function RequestsPage() {
               
               <div className="flex justify-end space-x-3 border-t pt-4 mt-6">
                 <button
+                  onClick={() => sendInquiryEmail(activeRequest)}
+                  className="px-4 py-2 bg-blue-50 border border-blue-300 rounded-md text-blue-700 hover:bg-blue-100 flex items-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M2.94 6.412A2 2 0 002 8.108V16a2 2 0 002 2h12a2 2 0 002-2V8.108a2 2 0 00-.94-1.696l-6-3.75a2 2 0 00-2.12 0l-6 3.75zm2.615 2.423a1 1 0 10-1.11 1.664l5 3.333a1 1 0 001.11 0l5-3.333a1 1 0 00-1.11-1.664L10 11.798 5.555 8.835z" clipRule="evenodd" />
+                  </svg>
+                  Rückfrage senden
+                </button>
+                
+                <button
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                 >
@@ -372,4 +512,14 @@ export default function RequestsPage() {
       )}
     </div>
   );
+}
+
+// Helper function to get status label
+function getStatusLabel(status: FilterStatus): string {
+  switch (status) {
+    case "pending": return "offen";
+    case "accepted": return "angenommen";
+    case "rejected": return "abgelehnt";
+    default: return "";
+  }
 } 
