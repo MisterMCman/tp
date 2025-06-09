@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import jsPDF from 'jspdf';
 
 interface Training {
   id: number;
@@ -27,88 +28,27 @@ export default function TrainingsPage() {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    // In a real application, you would fetch from your API
-    // For now, let's mock the data
+    // Fetch actual trainings data from API
     const fetchTrainings = async () => {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock data - upcoming trainings
-      const mockTrainings: Training[] = [
-        {
-          id: 1,
-          title: "Einführung in Python",
-          topicName: "Python",
-          date: "2025-10-15T09:00:00",
-          endTime: "2025-10-15T17:00:00",
-          location: "Online",
-          participants: 12,
-          status: "confirmed",
-          description: "Ein umfassender Einführungskurs in Python für Anfänger. Grundlegende Konzepte, Syntax und erste Anwendungen werden behandelt.",
-          trainerNotes: "Teilnehmer haben unterschiedliche Vorkenntnisse. Einige haben bereits Programmiererfahrung in anderen Sprachen.",
-          materials: ["Python Basics Handout", "Übungsaufgaben", "Projektideen"]
-        },
-        {
-          id: 2,
-          title: "Advanced JavaScript Workshop",
-          topicName: "JavaScript",
-          date: "2025-10-22T13:30:00",
-          endTime: "2025-10-22T18:00:00",
-          location: "Berlin, Hauptstr. 17",
-          participants: 8,
-          status: "confirmed",
-          description: "Workshop für fortgeschrittene JavaScript-Entwickler. ES6+, Promises, async/await und moderne JavaScript-Patterns werden behandelt.",
-          trainerNotes: "Alle Teilnehmer haben Grundkenntnisse in JavaScript. Fokus auf praktische Übungen legen.",
-          materials: ["JavaScript Advanced Cheatsheet", "Code-Beispiele", "Projektstruktur-Templates"]
-        },
-        {
-          id: 3,
-          title: "Projektmanagement Grundlagen",
-          topicName: "Projektmanagement",
-          date: "2025-11-05T10:00:00",
-          endTime: "2025-11-05T16:00:00",
-          location: "München, Bahnhofplatz 3",
-          participants: 15,
-          status: "confirmed",
-          description: "Grundlagen des Projektmanagements mit Fokus auf agile Methoden und Teamführung.",
-          trainerNotes: "Teilnehmer kommen aus verschiedenen Branchen. Viele mit ersten Erfahrungen im Projektmanagement.",
-          materials: ["PM Handbuch", "Vorlagen für Projektpläne", "Case Studies"]
+      try {
+        // Fetch upcoming trainings
+        const upcomingResponse = await fetch('/api/trainings?trainerId=1&type=upcoming');
+        const pastResponse = await fetch('/api/trainings?trainerId=1&type=past');
+        
+        if (upcomingResponse.ok && pastResponse.ok) {
+          const upcomingData = await upcomingResponse.json();
+          const pastData = await pastResponse.json();
+          
+          setTrainings(upcomingData);
+          setPastTrainings(pastData);
+        } else {
+          console.error('Failed to fetch trainings data');
         }
-      ];
-      
-      // Mock data - past trainings
-      const mockPastTrainings: Training[] = [
-        {
-          id: 101,
-          title: "Datenanalyse mit Python",
-          topicName: "Python",
-          date: "2025-05-05T09:00:00",
-          endTime: "2025-05-05T16:00:00",
-          location: "Frankfurt, Mainzer Landstr. 50",
-          participants: 10,
-          status: "completed",
-          description: "Fortgeschrittene Datenanalyse mit Python, Pandas und NumPy.",
-          trainerNotes: "Sehr interessierte Gruppe, viele Fragen zu praktischen Anwendungsfällen.",
-          materials: ["Datenanalyse Skript", "Beispieldatensätze", "Aufgabenlösungen"]
-        },
-        {
-          id: 102,
-          title: "React für Fortgeschrittene",
-          topicName: "JavaScript",
-          date: "2025-06-12T10:00:00",
-          endTime: "2025-06-12T17:00:00",
-          location: "Online",
-          participants: 14,
-          status: "completed",
-          description: "Fortgeschrittene Konzepte in React: Context API, Hooks, State Management und Performance-Optimierung.",
-          trainerNotes: "Gutes technisches Niveau bei allen Teilnehmern. Viel Interesse an Redux und Zustand.",
-          materials: ["React Advanced Guide", "CodeSandbox Beispiele", "Referenzprojekt"]
-        }
-      ];
-      
-      setTrainings(mockTrainings);
-      setPastTrainings(mockPastTrainings);
-      setLoading(false);
+      } catch (error) {
+        console.error('Error fetching trainings:', error);
+      } finally {
+        setLoading(false);
+      }
     };
     
     fetchTrainings();
@@ -157,6 +97,139 @@ export default function TrainingsPage() {
   };
 
   // Generate and download an .ics calendar file for the training
+  // Generate and download contract PDF for completed trainings
+  const generateContractPDF = (training: Training) => {
+    const doc = new jsPDF();
+    const startDate = formatDate(training.date);
+    const startTime = formatTime(training.date);
+    const endTime = formatTime(training.endTime);
+    
+    // Set up fonts and colors
+    const primaryColor = [52, 73, 93]; // Dark blue similar to powertowork branding
+    
+    // Header with powertowork branding
+    doc.setFontSize(24);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFont("helvetica", "bold");
+    doc.text("powertowork", 150, 25);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.setFont("helvetica", "normal");
+    doc.text("online academy", 150, 32);
+    
+    // Main title
+    doc.setFontSize(20);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFont("helvetica", "bold");
+    doc.text("Dozentenvertrag", 105, 55, { align: "center" });
+    
+    // Contract parties
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+    
+    doc.text("Zwischen Auftraggeber (AG):", 105, 75, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.text("powertowork GmbH", 105, 85, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.text("Hermannstraße 3, 33602 Bielefeld", 105, 92, { align: "center" });
+    
+    doc.text("und Auftragnehmer (AN)", 105, 105, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    
+    // Get trainer data from localStorage
+    const trainerData = localStorage.getItem("trainer");
+    let trainerInfo = "[Trainer Name], [Trainer Adresse]";
+    
+    if (trainerData) {
+      const trainer = JSON.parse(trainerData);
+      const trainerName = `${trainer.firstName} ${trainer.lastName}`;
+      const trainerAddress = trainer.address || "[Adresse nicht hinterlegt]";
+      trainerInfo = `${trainerName}, ${trainerAddress}`;
+    }
+    
+    doc.text(trainerInfo, 105, 115, { align: "center" });
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("wird folgender Vertrag mit den Bestandteilen des", 105, 130, { align: "center" });
+    doc.text("Rahmenvertrages für Dozenten:innen geschlossen.", 105, 137, { align: "center" });
+    
+    // Training information section
+    doc.setFont("helvetica", "bold");
+    doc.text("Notwendige Informationen für Ihre Schulung:", 20, 155);
+    
+    // Create table
+    const tableStartY = 165;
+    const rowHeight = 12;
+    const col1Width = 60;
+    const col2Width = 120;
+    
+    // Table header style
+    doc.setFillColor(240, 240, 240);
+    
+    // Table rows data - for completed trainings, we don't have price info
+    const tableData = [
+      ["Veranstaltungs-ID:", `V-${training.id}`],
+      ["Thema:", training.topicName],
+      ["Kurstitel:", training.title],
+      ["Schulungsinhalte:", `https://powertowork.com/kurse/${training.topicName.toLowerCase()}`],
+      ["Termine:", `${startDate} ${startTime} Uhr bis ${endTime} Uhr`],
+      ["Dauer in Stunden:", "8 Std."],
+      ["Anzahl Teilnehmer:innen:", training.participants.toString()],
+      ["Honorar:", "Siehe ursprünglicher Vertrag"]
+    ];
+    
+    // Draw table
+    tableData.forEach((row, index) => {
+      const y = tableStartY + (index * rowHeight);
+      
+      // Draw row background (alternating)
+      if (index % 2 === 0) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(20, y - 8, col1Width + col2Width, rowHeight, 'F');
+      }
+      
+      // Draw borders
+      doc.setDrawColor(200, 200, 200);
+      doc.rect(20, y - 8, col1Width, rowHeight);
+      doc.rect(20 + col1Width, y - 8, col2Width, rowHeight);
+      
+      // Add text
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text(row[0], 22, y - 1);
+      
+      doc.setFont("helvetica", "normal");
+      // Handle long text wrapping
+      const splitText = doc.splitTextToSize(row[1], col2Width - 4);
+      doc.text(splitText, 22 + col1Width, y - 1);
+    });
+    
+    // Footer
+    const footerY = tableStartY + (tableData.length * rowHeight) + 30;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text("Mit freundlichen Grüßen", 20, footerY);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    doc.text("- Auch ohne Unterschrift gültig", 20, footerY + 15);
+    
+    return doc;
+  };
+
+  const downloadContract = (training: Training) => {
+    try {
+      const doc = generateContractPDF(training);
+      const filename = `Dozentenvertrag_${training.title.replace(/\s+/g, '_')}_${training.id}.pdf`;
+      doc.save(filename);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Fehler beim Erstellen des PDFs. Bitte versuchen Sie es erneut.');
+    }
+  };
+
   const downloadCalendarEntry = (training: Training) => {
     // Format the dates for iCalendar format (yyyyMMddTHHmmssZ)
     const formatIcsDate = (dateStr: string) => {
@@ -304,15 +377,32 @@ export default function TrainingsPage() {
               </div>
               
               <div className="p-5 flex justify-end space-x-2">
-                <button
-                  onClick={() => downloadCalendarEntry(training)}
-                  className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                  </svg>
-                  Kalender
-                </button>
+                {/* Show Calendar button only for upcoming trainings */}
+                {viewMode === "upcoming" && (
+                  <button
+                    onClick={() => downloadCalendarEntry(training)}
+                    className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                    </svg>
+                    Kalender
+                  </button>
+                )}
+                
+                {/* Show Contract download button for past trainings OR confirmed upcoming trainings */}
+                {(viewMode === "history" || (viewMode === "upcoming" && training.status === "confirmed")) && (
+                  <button
+                    onClick={() => downloadContract(training)}
+                    className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                    Vertrag downloaden
+                  </button>
+                )}
+                
                 <button
                   onClick={() => openTrainingDetails(training)}
                   className="px-3 py-1 bg-primary-500 rounded text-sm font-medium text-white hover:bg-primary-600 flex items-center"
@@ -421,15 +511,32 @@ export default function TrainingsPage() {
                 >
                   Schließen
                 </button>
-                <button
-                  onClick={() => downloadCalendarEntry(activeTraining)}
-                  className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 flex items-center"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                  </svg>
-                  Zum Kalender hinzufügen
-                </button>
+                
+                {/* Show Calendar button only for upcoming trainings */}
+                {viewMode === "upcoming" && (
+                  <button
+                    onClick={() => downloadCalendarEntry(activeTraining)}
+                    className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 flex items-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                    </svg>
+                    Zum Kalender hinzufügen
+                  </button>
+                )}
+                
+                {/* Show Contract download button for past trainings OR confirmed upcoming trainings */}
+                {(viewMode === "history" || (viewMode === "upcoming" && activeTraining.status === "confirmed")) && (
+                  <button
+                    onClick={() => downloadContract(activeTraining)}
+                    className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                    Vertrag downloaden
+                  </button>
+                )}
               </div>
             </div>
           </div>

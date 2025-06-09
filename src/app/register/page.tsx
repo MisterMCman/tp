@@ -11,11 +11,12 @@ export default function AuthForm() {
   const [isRegistering, setIsRegistering] = useState(true);
 
   // Zustände für Registrierungsdaten
-  const [registerData, setRegisterData] = useState({
+  const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
+    address: "",
     bio: "",
     profilePicture: "",
     topics: [] as string[], // List of selected topic names
@@ -80,8 +81,8 @@ export default function AuthForm() {
 
   // Event-Handler für Registrierungsänderungen
   const handleRegisterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setRegisterData({
-      ...registerData,
+    setFormData({
+      ...formData,
       [e.target.name]: e.target.value,
     });
   };
@@ -112,8 +113,8 @@ export default function AuthForm() {
   // Thema hinzufügen
   const addTopic = (topicName: string) => {
     console.log(`Adding topic: ${topicName}`);
-    if (!registerData.topics.includes(topicName)) {
-      setRegisterData((prev) => ({
+    if (!formData.topics.includes(topicName)) {
+      setFormData((prev) => ({
         ...prev,
         topics: [...prev.topics, topicName],
       }));
@@ -126,7 +127,7 @@ export default function AuthForm() {
   // Thema entfernen
   const removeTopic = (topic: string) => {
     console.log(`Removing topic: ${topic}`);
-    setRegisterData((prev) => ({
+    setFormData((prev) => ({
       ...prev,
       topics: prev.topics.filter((t) => t !== topic),
     }));
@@ -135,7 +136,7 @@ export default function AuthForm() {
   // Registrierung absenden
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Submitting registration data:", registerData);
+    console.log("Submitting registration data:", formData);
     setLoading(true);
     try {
       const response = await fetch("/api/register-trainer", {
@@ -143,16 +144,17 @@ export default function AuthForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(registerData),
+        body: JSON.stringify(formData),
       });
 
       if (response.ok) {
         alert("Trainer erfolgreich registriert!");
-        setRegisterData({
+        setFormData({
           firstName: "",
           lastName: "",
           email: "",
           phone: "",
+          address: "",
           bio: "",
           profilePicture: "",
           topics: [],
@@ -160,7 +162,7 @@ export default function AuthForm() {
         
         // Switch to login form after successful registration
         setIsRegistering(false);
-        setLoginData({ email: registerData.email });
+        setLoginData({ email: formData.email });
       } else {
         const errorData = await response.json();
         alert(`Fehler: ${errorData.message || "Registrierung fehlgeschlagen"}`);
@@ -259,7 +261,7 @@ export default function AuthForm() {
                     name="firstName"
                     id="firstName"
                     placeholder="Vorname"
-                    value={registerData.firstName}
+                    value={formData.firstName}
                     onChange={handleRegisterChange}
                     className="form-input"
                     required
@@ -274,7 +276,7 @@ export default function AuthForm() {
                     name="lastName"
                     id="lastName"
                     placeholder="Nachname"
-                    value={registerData.lastName}
+                    value={formData.lastName}
                     onChange={handleRegisterChange}
                     className="form-input"
                     required
@@ -291,7 +293,7 @@ export default function AuthForm() {
                   name="email"
                   id="email"
                   placeholder="E-Mail Adresse"
-                  value={registerData.email}
+                  value={formData.email}
                   onChange={handleRegisterChange}
                   className="form-input"
                   required
@@ -307,7 +309,7 @@ export default function AuthForm() {
                   name="phone"
                   id="phone"
                   placeholder="Telefon"
-                  value={registerData.phone}
+                  value={formData.phone}
                   onChange={handleRegisterChange}
                   className="form-input"
                   required
@@ -319,10 +321,26 @@ export default function AuthForm() {
               
               <div className="relative">
                 <textarea
+                  name="address"
+                  id="address"
+                  placeholder="Straße, PLZ Stadt, Land - Für Vertragsunterlagen erforderlich"
+                  value={formData.address}
+                  onChange={handleRegisterChange}
+                  className="form-input min-h-[80px] resize-none"
+                  rows={3}
+                  required
+                />
+                <label htmlFor="address" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                  Adresse *
+                </label>
+              </div>
+              
+              <div className="relative">
+                <textarea
                   name="bio"
                   id="bio"
                   placeholder="Beschreiben Sie Ihre Erfahrung und Expertise..."
-                  value={registerData.bio}
+                  value={formData.bio}
                   onChange={handleRegisterChange}
                   className="form-input min-h-[100px] resize-none"
                   rows={4}
@@ -356,7 +374,7 @@ export default function AuthForm() {
                         const file = e.target.files?.[0];
                         if (file) {
                           // Handle file upload here
-                          setRegisterData({ ...registerData, profilePicture: URL.createObjectURL(file) });
+                          setFormData({ ...formData, profilePicture: URL.createObjectURL(file) });
                         }
                       }}
                     />
@@ -401,9 +419,9 @@ export default function AuthForm() {
                 )}
               </div>
               
-              {registerData.topics.length > 0 && (
+              {formData.topics.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {registerData.topics.map((topic, index) => (
+                  {formData.topics.map((topic, index) => (
                     <span
                       key={index}
                       className="selected-topic"

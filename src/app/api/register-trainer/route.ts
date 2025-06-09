@@ -19,14 +19,14 @@ export async function POST(req: Request) {
     try {
         // Daten aus dem Request Body lesen
         const body = await req.json();
-        const { firstName, lastName, email, phone, topics, bio, profilePicture } = body;
+        const { firstName, lastName, email, phone, address, topics, bio, profilePicture } = body;
 
         console.log('Received registration data:', body);
 
         // Validierung der Eingabedaten
-        if (!firstName || !lastName || !email || !phone) {
+        if (!firstName || !lastName || !email || !phone || !address) {
             return NextResponse.json(
-                { message: 'Vorname, Nachname, E-Mail und Telefonnummer sind erforderlich.' },
+                { message: 'Vorname, Nachname, E-Mail, Telefonnummer und Adresse sind erforderlich.' },
                 { status: 400 }
             );
         }
@@ -64,6 +64,7 @@ export async function POST(req: Request) {
                 lastName,
                 email,
                 phone,
+                address,
                 bio: bio || null,
                 profilePicture: profilePicture || null,
                 status: 'ACTIVE'
@@ -121,6 +122,7 @@ export async function POST(req: Request) {
             lastName: newTrainer.lastName,
             email: newTrainer.email,
             phone: newTrainer.phone,
+            address: newTrainer.address,
             bio: newTrainer.bio || '',
             profilePicture: newTrainer.profilePicture || '',
             topics: trainerWithTopics?.topics.map(t => t.topic.name) || [],

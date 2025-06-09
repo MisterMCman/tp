@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 
 // Define trainer type
@@ -24,6 +24,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [trainer, setTrainer] = useState<Trainer | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -111,7 +112,7 @@ export default function DashboardLayout({
         <nav className="mt-6">
           <Link
             href="/dashboard"
-            className="flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500"
+            className={`flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500 ${pathname === "/dashboard" ? "bg-primary-50 border-primary-500 text-primary-700" : ""}`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -131,7 +132,7 @@ export default function DashboardLayout({
           </Link>
           <Link
             href="/dashboard/profile"
-            className="flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500"
+            className={`flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500 ${pathname === "/dashboard/profile" ? "bg-primary-50 border-primary-500 text-primary-700" : ""}`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -151,7 +152,7 @@ export default function DashboardLayout({
           </Link>
           <Link
             href="/dashboard/trainings"
-            className="flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500"
+            className={`flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500 ${pathname === "/dashboard/trainings" ? "bg-primary-50 border-primary-500 text-primary-700" : ""}`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -171,23 +172,43 @@ export default function DashboardLayout({
           </Link>
           <Link
             href="/dashboard/requests"
-            className="flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500"
+            className={`flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500 ${pathname === "/dashboard/requests" ? "bg-primary-50 border-primary-500 text-primary-700" : ""}`}
           >
             <svg
+              className="mr-3 w-5 h-5"
               xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 mr-3 text-gray-600"
               fill="none"
               viewBox="0 0 24 24"
+              strokeWidth="1.5"
               stroke="currentColor"
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.123.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 002.25 2.25h8.25a2.25 2.25 0 002.25-2.25V6.108a2.25 2.25 0 00-2.25-2.25H15c-1.012 0-1.867.668-2.15 1.586z"
               />
             </svg>
             Trainingsanfragen
+          </Link>
+          <Link
+            href="/dashboard/invoices"
+            className={`flex items-center px-6 py-3 hover:bg-gray-100 border-l-4 border-transparent hover:border-primary-500 ${pathname === "/dashboard/invoices" ? "bg-primary-50 border-primary-500 text-primary-700" : ""}`}
+          >
+                          <svg
+                className="mr-3 w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+                />
+              </svg>
+            Rechnungen
           </Link>
         </nav>
         <div className="absolute bottom-0 w-64 border-t border-gray-200">

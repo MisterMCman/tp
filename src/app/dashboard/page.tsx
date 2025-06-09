@@ -17,28 +17,25 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // In a real application, this would fetch data from your API
-    // For now, we'll mock some data
-    setTimeout(() => {
-      setUpcomingTrainings([
-        {
-          id: 1,
-          title: "Einführung in Python",
-          topicName: "Python",
-          date: "2025-10-15T09:00:00",
-          status: "confirmed"
-        },
-        {
-          id: 2,
-          title: "Advanced JavaScript Workshop",
-          topicName: "JavaScript",
-          date: "2025-10-22T13:30:00",
-          status: "confirmed"
+    // Fetch actual dashboard data from API
+    const fetchDashboardData = async () => {
+      try {
+        const response = await fetch('/api/dashboard?trainerId=1');
+        if (response.ok) {
+          const data = await response.json();
+          setUpcomingTrainings(data.upcomingTrainings);
+          setPendingRequests(data.pendingRequests);
+        } else {
+          console.error('Failed to fetch dashboard data');
         }
-      ]);
-      setPendingRequests(3);
-      setLoading(false);
-    }, 1000);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
   }, []);
 
   const formatDate = (dateString: string) => {

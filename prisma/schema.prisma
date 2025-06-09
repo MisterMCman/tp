@@ -13,8 +13,11 @@ model Trainer {
   lastName  String
   email     String        @unique
   phone     String
+  address   String?       @db.Text
   bio       String?       @db.Text
   profilePicture String?
+  bankDetails String?     @db.Text  // JSON string with bank info: IBAN, BIC, Bank Name, Account Holder
+  taxId     String?
   status    TrainerStatus @default(ACTIVE)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
@@ -136,6 +139,7 @@ enum InquiryStatus {
   ACCEPTED
   REJECTED
   ABGESAGT
+  COMPLETED
 }
 
 enum CourseState {

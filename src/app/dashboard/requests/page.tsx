@@ -15,12 +15,12 @@ interface TrainingRequest {
   proposedPrice: number;
   counterPrice?: number;
   message?: string;
-  status: "pending" | "accepted" | "rejected" | "abgesagt";
+  status: "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
   createdAt: string;
   updatedAt: string;
 }
 
-type FilterStatus = "all" | "pending" | "accepted" | "rejected" | "abgesagt";
+type FilterStatus = "all" | "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
 
 export default function RequestsPage() {
   const [requests, setRequests] = useState<TrainingRequest[]>([]);
@@ -209,7 +209,19 @@ export default function RequestsPage() {
     
     doc.text("und Auftragnehmer (AN)", 105, 105, { align: "center" });
     doc.setFont("helvetica", "bold");
-    doc.text("[Trainer Name], [Trainer Adresse]", 105, 115, { align: "center" });
+    
+    // Get trainer data from localStorage
+    const trainerData = localStorage.getItem("trainer");
+    let trainerInfo = "[Trainer Name], [Trainer Adresse]";
+    
+    if (trainerData) {
+      const trainer = JSON.parse(trainerData);
+      const trainerName = `${trainer.firstName} ${trainer.lastName}`;
+      const trainerAddress = trainer.address || "[Adresse nicht hinterlegt]";
+      trainerInfo = `${trainerName}, ${trainerAddress}`;
+    }
+    
+    doc.text(trainerInfo, 105, 115, { align: "center" });
     
     doc.setFont("helvetica", "normal");
     doc.text("wird folgender Vertrag mit den Bestandteilen des", 105, 130, { align: "center" });
@@ -312,6 +324,14 @@ export default function RequestsPage() {
     setShowModal(false);
   };
 
+  const handleComplete = async (id: number) => {
+    const confirmed = confirm("Möchten Sie dieses Training als abgeschlossen markieren? Dies wird automatisch eine Rechnungsgutschrift generieren.");
+    if (confirmed) {
+      await updateRequest(id, { status: "completed" });
+      setShowModal(false);
+    }
+  };
+
   const handleCounterOffer = async (id: number) => {
     const price = parseFloat(counterPrice);
     if (isNaN(price) || price <= 0) return;
@@ -338,6 +358,17 @@ export default function RequestsPage() {
     const startTime = formatTime(request.date);
     const endTime = formatTime(request.endTime);
     
+    // Get trainer data from localStorage
+    const trainerData = localStorage.getItem("trainer");
+    let trainerName = "[Trainer Name]";
+    let trainerAddress = "[Trainer Adresse]";
+    
+    if (trainerData) {
+      const trainer = JSON.parse(trainerData);
+      trainerName = `${trainer.firstName} ${trainer.lastName}`;
+      trainerAddress = trainer.address || "[Adresse nicht hinterlegt]";
+    }
+    
     return `Dozentenvertrag
 
 Zwischen Auftraggeber (AG):
@@ -345,7 +376,8 @@ powertowork GmbH
 Hermannstraße 3, 33602 Bielefeld
 
 und Auftragsnehmer (AN)
-[Trainer Name], [Trainer Adresse]
+${trainerName}
+${trainerAddress}
 
 wird folgender Vertrag mit den Bestandteilen des Rahmenvertrages für Dozenten:innen geschlossen.
 
@@ -458,6 +490,16 @@ Mit freundlichen Grüßen,`
             >
               Abgesagt ({getRequestCount("abgesagt")})
             </button>
+            <button
+              onClick={() => handleStatusFilterChange("completed")}
+              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
+                statusFilter === "completed"
+                ? "bg-gray-600 text-white"
+                : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+              }`}
+            >
+              Abgeschlossen ({getRequestCount("completed")})
+            </button>
           </div>
         </div>
       </div>
@@ -541,7 +583,9 @@ Mit freundlichen Grüßen,`
                     ? "bg-green-100 text-green-800" 
                     : request.status === "rejected"
                     ? "bg-red-100 text-red-800"
-                    : "bg-orange-100 text-orange-800"
+                    : request.status === "abgesagt"
+                    ? "bg-orange-100 text-orange-800"
+                    : "bg-gray-100 text-gray-800"
                   }`}>
                     {request.status === "pending" 
                       ? "Offen" 
@@ -549,7 +593,9 @@ Mit freundlichen Grüßen,`
                       ? "Angenommen" 
                       : request.status === "rejected"
                       ? "Abgelehnt"
-                      : "Abgesagt"}
+                      : request.status === "abgesagt"
+                      ? "Abgesagt"
+                      : "Abgeschlossen"}
                   </span>
                 </div>
                 
@@ -569,17 +615,19 @@ Mit freundlichen Grüßen,`
                   >
                     Details
                   </button>
+                  {(request.status === "accepted" || request.status === "completed") && (
+                    <button
+                      onClick={() => downloadContract(request)}
+                      className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      Vertrag downloaden
+                    </button>
+                  )}
                   {request.status === "accepted" && (
                     <>
-                      <button
-                        onClick={() => downloadContract(request)}
-                        className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                        Vertrag downloaden
-                      </button>
                       <button
                         onClick={() => handleCancel(request.id)}
                         className="px-3 py-1 bg-orange-50 border border-orange-300 rounded text-sm font-medium text-orange-700 hover:bg-orange-100 flex items-center"
@@ -588,6 +636,15 @@ Mit freundlichen Grüßen,`
                           <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                         </svg>
                         Training absagen
+                      </button>
+                      <button
+                        onClick={() => handleComplete(request.id)}
+                        className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Training abschließen
                       </button>
                     </>
                   )}
@@ -740,17 +797,20 @@ Mit freundlichen Grüßen,`
                   </>
                 )}
 
+                {(activeRequest.status === "accepted" || activeRequest.status === "completed") && (
+                  <button
+                    onClick={() => downloadContract(activeRequest)}
+                    className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                    Vertrag downloaden
+                  </button>
+                )}
+
                 {activeRequest.status === "accepted" && (
                   <>
-                    <button
-                      onClick={() => downloadContract(activeRequest)}
-                      className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                      Vertrag downloaden
-                    </button>
                     <button
                       onClick={() => handleCancel(activeRequest.id)}
                       className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 flex items-center"
@@ -759,6 +819,15 @@ Mit freundlichen Grüßen,`
                         <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                       </svg>
                       Training absagen
+                    </button>
+                    <button
+                      onClick={() => handleComplete(activeRequest.id)}
+                      className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Training abschließen
                     </button>
                   </>
                 )}
@@ -822,6 +891,7 @@ function getStatusLabel(status: FilterStatus): string {
     case "accepted": return "angenommen";
     case "rejected": return "abgelehnt";
     case "abgesagt": return "abgesagt";
+    case "completed": return "abgeschlossen";
     default: return "";
   }
 } 

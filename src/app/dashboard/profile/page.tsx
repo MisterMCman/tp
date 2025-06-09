@@ -9,10 +9,18 @@ interface Trainer {
   lastName: string;
   email: string;
   phone: string;
+  address?: string;
   status: string;
   topics: string[];
   bio?: string;
   profilePicture?: string;
+  bankDetails?: {
+    accountHolder: string;
+    iban: string;
+    bic: string;
+    bankName: string;
+  };
+  taxId?: string;
 }
 
 export default function ProfilePage() {
@@ -26,13 +34,49 @@ export default function ProfilePage() {
   const [topicSearch, setTopicSearch] = useState("");
   const [topicSuggestions, setTopicSuggestions] = useState<{id: number; name: string}[]>([]);
 
+
+
   useEffect(() => {
-    // Load trainer data from localStorage
-    const storedTrainer = localStorage.getItem("trainer");
-    if (storedTrainer) {
-      setTrainer(JSON.parse(storedTrainer));
-    }
-    setLoading(false);
+    const fetchTrainerData = async () => {
+      try {
+        setLoading(true);
+        
+        // Get trainer ID from localStorage
+        const storedTrainer = localStorage.getItem("trainer");
+        if (!storedTrainer) {
+          setLoading(false);
+          return;
+        }
+        
+        const localTrainer = JSON.parse(storedTrainer);
+        
+        // Fetch fresh data from database
+        const response = await fetch(`/api/trainer/${localTrainer.id}`);
+        
+        if (response.ok) {
+          const freshTrainerData = await response.json();
+          setTrainer(freshTrainerData);
+          
+          // Update localStorage with fresh data
+          localStorage.setItem("trainer", JSON.stringify(freshTrainerData));
+        } else {
+          // Fallback to localStorage data if API fails
+          setTrainer(localTrainer);
+        }
+      } catch (error) {
+        console.error('Error fetching trainer data:', error);
+        
+        // Fallback to localStorage data
+        const storedTrainer = localStorage.getItem("trainer");
+        if (storedTrainer) {
+          setTrainer(JSON.parse(storedTrainer));
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrainerData();
   }, []);
 
   // Handle form input changes
@@ -42,6 +86,23 @@ export default function ProfilePage() {
     setTrainer({
       ...trainer,
       [e.target.name]: e.target.value,
+    });
+  };
+
+  // Handle bank details changes
+  const handleBankDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!trainer) return;
+    
+    const { name, value } = e.target;
+    setTrainer({
+      ...trainer,
+      bankDetails: {
+        accountHolder: trainer.bankDetails?.accountHolder || "",
+        iban: trainer.bankDetails?.iban || "",
+        bic: trainer.bankDetails?.bic || "",
+        bankName: trainer.bankDetails?.bankName || "",
+        [name]: value,
+      },
     });
   };
 
@@ -115,16 +176,30 @@ export default function ProfilePage() {
     setMessage({ text: "", type: "" });
 
     try {
-      // In a real app, you would make an API call to update the trainer data
-      // For now, we'll just update localStorage and simulate a delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      localStorage.setItem("trainer", JSON.stringify(trainer));
-      
-      setMessage({
-        text: "Profil erfolgreich aktualisiert!",
-        type: "success",
+      // Update trainer data via API
+      const response = await fetch(`/api/trainer/${trainer.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(trainer),
       });
+
+      if (response.ok) {
+        const updatedTrainer = await response.json();
+        setTrainer(updatedTrainer);
+        
+        // Update localStorage with fresh data
+        localStorage.setItem("trainer", JSON.stringify(updatedTrainer));
+        
+        setMessage({
+          text: "Profil erfolgreich aktualisiert!",
+          type: "success",
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update profile');
+      }
     } catch (error) {
       console.error("Error updating profile:", error);
       setMessage({
@@ -355,6 +430,116 @@ export default function ProfilePage() {
               ))}
             </div>
           )}
+        </div>
+        
+        {/* Address Section */}
+        <div className="mb-6">
+          <div className="relative">
+            <textarea
+              name="address"
+              id="address"
+              placeholder="Straße, PLZ Stadt, Land - Für Vertragsunterlagen erforderlich"
+              value={trainer.address || ""}
+              onChange={handleChange}
+              className="form-input min-h-[80px] resize-none"
+              rows={3}
+            />
+            <label htmlFor="address" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+              Adresse
+            </label>
+          </div>
+        </div>
+        
+        {/* Tax ID Section */}
+        <div className="mb-6">
+          <div className="relative">
+            <input
+              type="text"
+              name="taxId"
+              id="taxId"
+              placeholder="Steuernummer (optional)"
+              value={trainer.taxId || ""}
+              onChange={handleChange}
+              className="form-input"
+            />
+            <label htmlFor="taxId" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+              Steuernummer (optional)
+            </label>
+          </div>
+        </div>
+        
+        {/* Bank Details Section */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Bankverbindung</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Diese Informationen werden für die automatische Generierung von Rechnungsgutschriften benötigt.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="relative">
+              <input
+                type="text"
+                name="accountHolder"
+                id="accountHolder"
+                placeholder="Kontoinhaber"
+                value={trainer.bankDetails?.accountHolder || ""}
+                onChange={handleBankDetailsChange}
+                className="form-input"
+                required
+              />
+              <label htmlFor="accountHolder" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                Kontoinhaber *
+              </label>
+            </div>
+            
+            <div className="relative">
+              <input
+                type="text"
+                name="bankName"
+                id="bankName"
+                placeholder="Name der Bank"
+                value={trainer.bankDetails?.bankName || ""}
+                onChange={handleBankDetailsChange}
+                className="form-input"
+                required
+              />
+              <label htmlFor="bankName" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                Bank *
+              </label>
+            </div>
+            
+            <div className="relative">
+              <input
+                type="text"
+                name="iban"
+                id="iban"
+                placeholder="DE89370400440532013000"
+                value={trainer.bankDetails?.iban || ""}
+                onChange={handleBankDetailsChange}
+                className="form-input"
+                required
+              />
+              <label htmlFor="iban" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                IBAN *
+              </label>
+            </div>
+            
+            <div className="relative">
+              <input
+                type="text"
+                name="bic"
+                id="bic"
+                placeholder="COBADEFFXXX"
+                value={trainer.bankDetails?.bic || ""}
+                onChange={handleBankDetailsChange}
+                className="form-input"
+                required
+              />
+              <label htmlFor="bic" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                BIC *
+              </label>
+            </div>
+          </div>
         </div>
         
         <div className="flex justify-end space-x-4">

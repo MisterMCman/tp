@@ -61,7 +61,15 @@ async function main() {
       lastName: 'Surkemper',
       email: 'l.surkemper@googlemail.com',
       phone: '017670910870',
+      address: 'Hermannstraße 3\n33602 Bielefeld\nDeutschland',
       bio: 'Vielseitiger Trainer mit Expertise in Programming, Design und Projektmanagement.',
+      bankDetails: JSON.stringify({
+        accountHolder: 'Lorenz Surkemper',
+        iban: 'DE89 3704 0044 0532 0130 00',
+        bic: 'COBADEFFXXX',
+        bankName: 'Commerzbank AG'
+      }),
+      taxId: 'DE123456789',
       status: 'ACTIVE'
     }
   });
@@ -97,6 +105,8 @@ async function main() {
   const reactTopic = createdTopics.find(t => t.name === 'React.js');
   const figmaTopic = createdTopics.find(t => t.name === 'Figma');
   const marketingTopic = createdTopics.find(t => t.name === 'Google Ads');
+  const dataAnalysisTopic = createdTopics.find(t => t.name === 'Data Analysis');
+  const machineLearningTopic = createdTopics.find(t => t.name === 'Machine Learning');
 
   // Assign topics to main trainer (Lorenz) - give him all relevant topics
   if (pythonTopic) {
@@ -127,6 +137,16 @@ async function main() {
   if (excelTopic) {
     await prisma.trainerTopic.create({
       data: { trainerId: mainTrainer.id, topicId: excelTopic.id }
+    });
+  }
+  if (dataAnalysisTopic) {
+    await prisma.trainerTopic.create({
+      data: { trainerId: mainTrainer.id, topicId: dataAnalysisTopic.id }
+    });
+  }
+  if (machineLearningTopic) {
+    await prisma.trainerTopic.create({
+      data: { trainerId: mainTrainer.id, topicId: machineLearningTopic.id }
     });
   }
 
@@ -384,16 +404,222 @@ async function main() {
     }
   });
 
+  // ADD MORE COMPREHENSIVE TRAINING DATA TO REPLACE REMOVED MOCK DATA
+  
+  // === UPCOMING TRAININGS (ACCEPTED) - For Dashboard and Trainings page ===
+  
+  // Create additional upcoming events that match the removed mock data
+  const upcomingPythonEvent = await prisma.event.create({
+    data: {
+      courseId: pythonCourse.id,
+      title: 'Einführung in Python',
+      date: new Date('2025-10-15T09:00:00'),
+      endTime: new Date('2025-10-15T17:00:00'),
+      location: 'Online',
+      participants: 12
+    }
+  });
+
+  await prisma.inquiry.create({
+    data: {
+      trainerId: mainTrainer.id,
+      eventId: upcomingPythonEvent.id,
+      status: 'ACCEPTED',
+      originalPrice: 800,
+      proposedPrice: 800,
+      message: 'Ein umfassender Einführungskurs in Python für Anfänger. Grundlegende Konzepte, Syntax und erste Anwendungen werden behandelt. Teilnehmer haben unterschiedliche Vorkenntnisse. Einige haben bereits Programmiererfahrung in anderen Sprachen.',
+      createdAt: new Date('2025-01-01T09:00:00'),
+      updatedAt: new Date('2025-01-02T14:00:00')
+    }
+  });
+
+  const upcomingJsEvent = await prisma.event.create({
+    data: {
+      courseId: jsCourse.id,
+      title: 'Advanced JavaScript Workshop',
+      date: new Date('2025-10-22T13:30:00'),
+      endTime: new Date('2025-10-22T18:00:00'),
+      location: 'Berlin, Hauptstr. 17',
+      participants: 8
+    }
+  });
+
+  await prisma.inquiry.create({
+    data: {
+      trainerId: mainTrainer.id,
+      eventId: upcomingJsEvent.id,
+      status: 'ACCEPTED',
+      originalPrice: 950,
+      proposedPrice: 950,
+      message: 'Workshop für fortgeschrittene JavaScript-Entwickler. ES6+, Promises, async/await und moderne JavaScript-Patterns werden behandelt. Alle Teilnehmer haben Grundkenntnisse in JavaScript. Fokus auf praktische Übungen legen.',
+      createdAt: new Date('2025-01-01T10:00:00'),
+      updatedAt: new Date('2025-01-02T15:00:00')
+    }
+  });
+
+  const upcomingProjectEvent = await prisma.event.create({
+    data: {
+      courseId: projectCourse.id,
+      title: 'Projektmanagement Grundlagen',
+      date: new Date('2025-11-05T10:00:00'),
+      endTime: new Date('2025-11-05T16:00:00'),
+      location: 'München, Bahnhofplatz 3',
+      participants: 15
+    }
+  });
+
+  await prisma.inquiry.create({
+    data: {
+      trainerId: mainTrainer.id,
+      eventId: upcomingProjectEvent.id,
+      status: 'ACCEPTED',
+      originalPrice: 1200,
+      proposedPrice: 1200,
+      message: 'Grundlagen des Projektmanagements mit Fokus auf agile Methoden und Teamführung. Teilnehmer kommen aus verschiedenen Branchen. Viele mit ersten Erfahrungen im Projektmanagement.',
+      createdAt: new Date('2025-01-01T11:00:00'),
+      updatedAt: new Date('2025-01-02T16:00:00')
+    }
+  });
+
+  // === PAST TRAININGS (COMPLETED) - For Trainings history ===
+  
+  // Create additional courses for more variety
+  const dataAnalysisCourse = await prisma.course.create({
+    data: {
+      title: 'Datenanalyse mit Python',
+      description: 'Fortgeschrittene Datenanalyse mit Python, Pandas und NumPy',
+      topicId: pythonTopic?.id,
+      state: 'ONLINE'
+    }
+  });
+
+  const reactAdvancedCourse = await prisma.course.create({
+    data: {
+      title: 'React für Fortgeschrittene',
+      description: 'Fortgeschrittene Konzepte in React: Context API, Hooks, State Management und Performance-Optimierung',
+      topicId: reactTopic?.id,
+      state: 'ONLINE'
+    }
+  });
+
+  // Past training events (using actual past dates)
+  const pastDataAnalysisEvent = await prisma.event.create({
+    data: {
+      courseId: dataAnalysisCourse.id,
+      title: 'Datenanalyse mit Python',
+      date: new Date('2024-05-05T09:00:00'),
+      endTime: new Date('2024-05-05T16:00:00'),
+      location: 'Frankfurt, Mainzer Landstr. 50',
+      participants: 10
+    }
+  });
+
+  await prisma.inquiry.create({
+    data: {
+      trainerId: mainTrainer.id,
+      eventId: pastDataAnalysisEvent.id,
+      status: 'COMPLETED',
+      originalPrice: 850,
+      proposedPrice: 850,
+      message: 'Fortgeschrittene Datenanalyse mit Python, Pandas und NumPy. Sehr interessierte Gruppe, viele Fragen zu praktischen Anwendungsfällen.',
+      createdAt: new Date('2024-04-20T10:00:00'),
+      updatedAt: new Date('2024-05-06T18:00:00')
+    }
+  });
+
+  const pastReactEvent = await prisma.event.create({
+    data: {
+      courseId: reactAdvancedCourse.id,
+      title: 'React für Fortgeschrittene',
+      date: new Date('2024-06-12T10:00:00'),
+      endTime: new Date('2024-06-12T17:00:00'),
+      location: 'Online',
+      participants: 14
+    }
+  });
+
+  await prisma.inquiry.create({
+    data: {
+      trainerId: mainTrainer.id,
+      eventId: pastReactEvent.id,
+      status: 'COMPLETED',
+      originalPrice: 900,
+      proposedPrice: 900,
+      message: 'Fortgeschrittene Konzepte in React: Context API, Hooks, State Management und Performance-Optimierung. Gutes technisches Niveau bei allen Teilnehmern. Viel Interesse an Redux und Zustand.',
+      createdAt: new Date('2024-05-25T14:00:00'),
+      updatedAt: new Date('2024-06-13T16:00:00')
+    }
+  });
+
+  // Add some COMPLETED trainings for Lorenz to generate invoices (older dates for invoice history)
+  const pythonCompletedEvent = await prisma.event.create({
+    data: {
+      courseId: pythonCourse.id,
+      title: 'Python Grundlagen Workshop',
+      date: new Date('2024-12-15T09:00:00'),
+      endTime: new Date('2024-12-15T17:00:00'),
+      location: 'München, TechCenter',
+      participants: 12
+    }
+  });
+
+  await prisma.inquiry.create({
+    data: {
+      trainerId: mainTrainer.id,
+      eventId: pythonCompletedEvent.id,
+      status: 'COMPLETED',
+      originalPrice: 800,
+      proposedPrice: 800,
+      message: 'Python Grundlagen für Einsteiger - erfolgreich abgeschlossen.',
+      createdAt: new Date('2024-12-01T10:00:00'),
+      updatedAt: new Date('2024-12-16T18:00:00')
+    }
+  });
+
+  const jsCompletedEvent = await prisma.event.create({
+    data: {
+      courseId: jsCourse.id,
+      title: 'JavaScript Advanced Workshop',
+      date: new Date('2024-11-20T13:30:00'),
+      endTime: new Date('2024-11-20T18:00:00'),
+      location: 'Berlin, Startup Hub',
+      participants: 8
+    }
+  });
+
+  await prisma.inquiry.create({
+    data: {
+      trainerId: mainTrainer.id,
+      eventId: jsCompletedEvent.id,
+      status: 'COMPLETED',
+      originalPrice: 950,
+      proposedPrice: 950,
+      counterPrice: 1100,
+      message: 'JavaScript Advanced - Workshop erfolgreich durchgeführt.',
+      createdAt: new Date('2024-11-05T14:00:00'),
+      updatedAt: new Date('2024-11-21T16:30:00')
+    }
+  });
+
   console.log('Seed data inserted successfully:');
-  console.log('- Topics created');
+  console.log('- Topics created:', topics.length);
   console.log('- 3 Trainers created:');
   console.log(`  - Main Trainer (ID: ${mainTrainer.id}): Lorenz Surkemper - All requests assigned to him`);
+  console.log(`    - Address: Hermannstraße 3, 33602 Bielefeld, Deutschland`);
+  console.log(`    - Bank: Commerzbank AG (DE89 3704 0044 0532 0130 00)`);
+  console.log(`    - Tax ID: DE123456789`);
   console.log(`  - Trainer 2 (ID: ${trainer2.id}): Anna Schmidt - Design/Marketing`);
   console.log(`  - Trainer 3 (ID: ${trainer3.id}): Thomas Weber - Project Management`);
-  console.log('- Courses created');
-  console.log('- Events created');
-  console.log('- Training requests (inquiries) created - ALL assigned to Lorenz Surkemper');
-  console.log('- Each request has different statuses (pending, accepted, rejected, abgesagt)');
+  console.log('- Courses created: 8 courses with variety of topics');
+  console.log('- Events created: Multiple events spanning past, present, and future');
+  console.log('- Training requests (inquiries) created - ALL assigned to Lorenz Surkemper:');
+  console.log('  ✓ 3 PENDING requests (for dashboard pending count)');
+  console.log('  ✓ 3 ACCEPTED upcoming trainings (for dashboard and trainings page)');
+  console.log('  ✓ 4 COMPLETED past trainings (for training history and invoices)');
+  console.log('  ✓ 1 REJECTED request (for complete status coverage)');
+  console.log('  ✓ 1 ABGESAGT request (for German cancellation status)');
+  console.log('- Mock data from frontend has been moved to comprehensive seed data');
+  console.log('- Database now supports all dashboard and training page functionality');
 }
 
 main()
