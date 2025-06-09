@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import jsPDF from 'jspdf';
 
 interface TrainingRequest {
   id: number;
@@ -10,12 +11,16 @@ interface TrainingRequest {
   endTime: string;
   location: string;
   participants: number;
+  originalPrice: number;
   proposedPrice: number;
+  counterPrice?: number;
   message?: string;
-  status: "pending" | "accepted" | "rejected";
+  status: "pending" | "accepted" | "rejected" | "abgesagt";
+  createdAt: string;
+  updatedAt: string;
 }
 
-type FilterStatus = "all" | "pending" | "accepted" | "rejected";
+type FilterStatus = "all" | "pending" | "accepted" | "rejected" | "abgesagt";
 
 export default function RequestsPage() {
   const [requests, setRequests] = useState<TrainingRequest[]>([]);
@@ -24,85 +29,90 @@ export default function RequestsPage() {
   const [activeRequest, setActiveRequest] = useState<TrainingRequest | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [showModal, setShowModal] = useState(false);
+  const [showContract, setShowContract] = useState(false);
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
 
   useEffect(() => {
-    // In a real application, you would fetch from your API
-    // For now, let's mock the data
-    const fetchRequests = async () => {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock data
-      const mockRequests: TrainingRequest[] = [
-        {
-          id: 1,
-          courseTitle: "Python für Einsteiger",
-          topicName: "Python",
-          date: "2025-12-10T09:00:00",
-          endTime: "2025-12-10T17:00:00",
-          location: "Online",
-          participants: 15,
-          proposedPrice: 800,
-          message: "Wir suchen einen erfahrenen Python-Trainer für unseren Einsteigerkurs. Inhalt sollte grundlegende Python-Syntax und einfache Anwendungen umfassen.",
-          status: "pending"
-        },
-        {
-          id: 2,
-          courseTitle: "JavaScript Fortgeschrittene",
-          topicName: "JavaScript",
-          date: "2025-12-15T13:30:00",
-          endTime: "2025-12-15T18:00:00",
-          location: "Berlin, Hauptstr. 17",
-          participants: 10,
-          proposedPrice: 950,
-          message: "Workshop für Entwickler mit JavaScript-Grundkenntnissen. Fokus auf modernen ES6+ Features und asynchroner Programmierung.",
-          status: "pending"
-        },
-        {
-          id: 3,
-          courseTitle: "Projektmanagement in agilen Teams",
-          topicName: "Projektmanagement",
-          date: "2025-07-05T10:00:00",
-          endTime: "2025-07-05T16:00:00",
-          location: "München, Bahnhofplatz 3",
-          participants: 12,
-          proposedPrice: 1200,
-          status: "pending"
-        },
-        {
-          id: 4,
-          courseTitle: "React Workshop",
-          topicName: "JavaScript",
-          date: "2025-02-15T09:30:00",
-          endTime: "2025-02-15T16:30:00",
-          location: "Online",
-          participants: 8,
-          proposedPrice: 850,
-          message: "Eine Einführung in React mit praktischen Übungen.",
-          status: "accepted"
-        },
-        {
-          id: 5,
-          courseTitle: "Excel für Fortgeschrittene",
-          topicName: "Excel",
-          date: "2025-01-20T10:00:00",
-          endTime: "2025-01-20T15:00:00",
-          location: "Hamburg, Neuer Wall 50",
-          participants: 6,
-          proposedPrice: 600,
-          message: "Schwerpunkt auf Pivot-Tabellen und Makros.",
-          status: "rejected"
-        }
-      ];
-      
-      setRequests(mockRequests);
-      setFilteredRequests(mockRequests);
-      setLoading(false);
-    };
-    
     fetchRequests();
   }, []);
+
+  const fetchRequests = async () => {
+    try {
+      setLoading(true);
+      
+      // Get trainer ID from localStorage (stored after login)
+      const trainerData = localStorage.getItem("trainer");
+      if (!trainerData) {
+        console.error('No trainer data found in localStorage');
+        setLoading(false);
+        return;
+      }
+      
+      const trainer = JSON.parse(trainerData);
+      if (!trainer.id) {
+        console.error('No trainer ID found in trainer data');
+        setLoading(false);
+        return;
+      }
+      
+      const response = await fetch(`/api/requests?trainerId=${trainer.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRequests(data);
+        setFilteredRequests(data);
+      } else {
+        console.error('Failed to fetch requests');
+      }
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateRequest = async (id: number, updates: Partial<TrainingRequest>) => {
+    try {
+      // Get trainer ID from localStorage for security validation
+      const trainerData = localStorage.getItem("trainer");
+      if (!trainerData) {
+        console.error('No trainer data found');
+        return null;
+      }
+      
+      const trainer = JSON.parse(trainerData);
+      
+      const response = await fetch(`/api/requests/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...updates,
+          trainerId: trainer.id // Include trainer ID for security validation
+        }),
+      });
+
+      if (response.ok) {
+        const updatedRequest = await response.json();
+        setRequests(prev => 
+          prev.map(req => 
+            req.id === id ? updatedRequest : req
+          )
+        );
+        return updatedRequest;
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to update request:', errorData.error);
+        if (response.status === 403) {
+          alert('Sie sind nicht berechtigt, diese Anfrage zu bearbeiten.');
+        }
+        return null;
+      }
+    } catch (error) {
+      console.error('Error updating request:', error);
+      return null;
+    }
+  };
 
   // Apply filter when statusFilter changes or requests change
   useEffect(() => {
@@ -119,6 +129,17 @@ export default function RequestsPage() {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
+    }).format(date);
+  };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     }).format(date);
   };
 
@@ -139,46 +160,166 @@ export default function RequestsPage() {
 
   const openRequestDetails = (request: TrainingRequest) => {
     setActiveRequest(request);
-    setCounterPrice(request.proposedPrice.toString());
+    setCounterPrice(request.counterPrice?.toString() || request.proposedPrice.toString());
     setShowModal(true);
   };
 
-  const handleAccept = (id: number) => {
-    // In a real application, you would call an API to update the status
-    setRequests(prev => 
-      prev.map(req => 
-        req.id === id 
-          ? { ...req, status: "accepted" } 
-          : req
-      )
-    );
+  const handleAcceptClick = () => {
+    setShowContract(true);
     setShowModal(false);
   };
 
-  const handleReject = (id: number) => {
-    // In a real application, you would call an API to update the status
-    setRequests(prev => 
-      prev.map(req => 
-        req.id === id 
-          ? { ...req, status: "rejected" } 
-          : req
-      )
-    );
+  const generateContractPDF = (request: TrainingRequest) => {
+    const doc = new jsPDF();
+    const finalPrice = request.counterPrice || request.proposedPrice;
+    const startDate = formatDate(request.date);
+    const startTime = formatTime(request.date);
+    const endTime = formatTime(request.endTime);
+    
+    // Set up fonts and colors
+    const primaryColor = [52, 73, 93]; // Dark blue similar to powertowork branding
+    
+    // Header with powertowork branding
+    doc.setFontSize(24);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFont("helvetica", "bold");
+    doc.text("powertowork", 150, 25);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.setFont("helvetica", "normal");
+    doc.text("online academy", 150, 32);
+    
+    // Main title
+    doc.setFontSize(20);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFont("helvetica", "bold");
+    doc.text("Dozentenvertrag", 105, 55, { align: "center" });
+    
+    // Contract parties
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+    
+    doc.text("Zwischen Auftraggeber (AG):", 105, 75, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.text("powertowork GmbH", 105, 85, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.text("Hermannstraße 3, 33602 Bielefeld", 105, 92, { align: "center" });
+    
+    doc.text("und Auftragnehmer (AN)", 105, 105, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.text("[Trainer Name], [Trainer Adresse]", 105, 115, { align: "center" });
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("wird folgender Vertrag mit den Bestandteilen des", 105, 130, { align: "center" });
+    doc.text("Rahmenvertrages für Dozenten:innen geschlossen.", 105, 137, { align: "center" });
+    
+    // Training information section
+    doc.setFont("helvetica", "bold");
+    doc.text("Notwendige Informationen für Ihre Schulung:", 20, 155);
+    
+    // Create table
+    const tableStartY = 165;
+    const rowHeight = 12;
+    const col1Width = 60;
+    const col2Width = 120;
+    
+    // Table header style
+    doc.setFillColor(240, 240, 240);
+    
+    // Table rows data
+    const tableData = [
+      ["Veranstaltungs-ID:", `V-${request.id}`],
+      ["Thema:", request.topicName],
+      ["Kurstitel:", request.courseTitle],
+      ["Schulungsinhalte:", `https://powertowork.com/kurse/${request.topicName.toLowerCase()}`],
+      ["Termine:", `${startDate} ${startTime} Uhr bis ${endTime} Uhr`],
+      ["Dauer in Stunden:", "8 Std."],
+      ["Anzahl Teilnehmer:innen:", request.participants.toString()],
+      ["Honorar:", `${formatCurrency(finalPrice)} | + 0,00 € pro weiterem Teilnehmer`]
+    ];
+    
+    // Draw table
+    tableData.forEach((row, index) => {
+      const y = tableStartY + (index * rowHeight);
+      
+      // Draw row background (alternating)
+      if (index % 2 === 0) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(20, y - 8, col1Width + col2Width, rowHeight, 'F');
+      }
+      
+      // Draw borders
+      doc.setDrawColor(200, 200, 200);
+      doc.rect(20, y - 8, col1Width, rowHeight);
+      doc.rect(20 + col1Width, y - 8, col2Width, rowHeight);
+      
+      // Add text
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text(row[0], 22, y - 1);
+      
+      doc.setFont("helvetica", "normal");
+      // Handle long text wrapping
+      const splitText = doc.splitTextToSize(row[1], col2Width - 4);
+      doc.text(splitText, 22 + col1Width, y - 1);
+    });
+    
+    // Footer
+    const footerY = tableStartY + (tableData.length * rowHeight) + 30;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text("Mit freundlichen Grüßen", 20, footerY);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    doc.text("- Auch ohne Unterschrift gültig", 20, footerY + 15);
+    
+    return doc;
+  };
+
+  const downloadContract = (request: TrainingRequest) => {
+    try {
+      const doc = generateContractPDF(request);
+      const filename = `Dozentenvertrag_${request.courseTitle.replace(/\s+/g, '_')}_${request.id}.pdf`;
+      doc.save(filename);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Fehler beim Erstellen des PDFs. Bitte versuchen Sie es erneut.');
+    }
+  };
+
+  const handleAccept = async (id: number) => {
+    const result = await updateRequest(id, { status: "accepted" });
+    if (result) {
+      // Generate and download contract
+      if (activeRequest) {
+        downloadContract(activeRequest);
+      }
+    }
+    setShowContract(false);
     setShowModal(false);
   };
 
-  const handleCounterOffer = (id: number) => {
-    // In a real application, you would call an API to update the counter price
+  const handleReject = async (id: number) => {
+    await updateRequest(id, { status: "rejected" });
+    setShowModal(false);
+  };
+
+  const handleCancel = async (id: number) => {
+    await updateRequest(id, { status: "abgesagt" });
+    setShowModal(false);
+  };
+
+  const handleCounterOffer = async (id: number) => {
     const price = parseFloat(counterPrice);
     if (isNaN(price) || price <= 0) return;
     
-    setRequests(prev => 
-      prev.map(req => 
-        req.id === id 
-          ? { ...req, proposedPrice: price, status: "pending" } 
-          : req
-      )
-    );
+    await updateRequest(id, { 
+      counterPrice: price, 
+      status: "pending" 
+    });
     setShowModal(false);
   };
 
@@ -189,6 +330,38 @@ export default function RequestsPage() {
   const getRequestCount = (status: FilterStatus) => {
     if (status === "all") return requests.length;
     return requests.filter(req => req.status === status).length;
+  };
+
+  const generateContractText = (request: TrainingRequest) => {
+    const finalPrice = request.counterPrice || request.proposedPrice;
+    const startDate = formatDate(request.date);
+    const startTime = formatTime(request.date);
+    const endTime = formatTime(request.endTime);
+    
+    return `Dozentenvertrag
+
+Zwischen Auftraggeber (AG):
+powertowork GmbH
+Hermannstraße 3, 33602 Bielefeld
+
+und Auftragsnehmer (AN)
+[Trainer Name], [Trainer Adresse]
+
+wird folgender Vertrag mit den Bestandteilen des Rahmenvertrages für Dozenten:innen geschlossen.
+
+Notwendige Informationen für Ihre Schulung:
+
+Veranstaltungs-ID: V-${request.id}
+Thema: ${request.topicName}
+Kurstitel: ${request.courseTitle}
+Schulungsinhalte: [Schulungslink]
+Termine: ${startDate} ${startTime} Uhr bis ${endTime} Uhr
+Dauer in Stunden: [Stunden]
+Anzahl Teilnehmer:innen: ${request.participants}
+Honorar: ${formatCurrency(finalPrice)} | + 0,00 € pro weiterem Teilnehmer
+
+Mit freundlichen Grüßen
+- Auch ohne Unterschrift gültig`;
   };
 
   const sendInquiryEmail = (request: TrainingRequest) => {
@@ -234,7 +407,7 @@ Mit freundlichen Grüßen,`
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex flex-col md:flex-row justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 md:mb-0">Filter nach Status</h2>
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => handleStatusFilterChange("all")}
               className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
@@ -275,6 +448,16 @@ Mit freundlichen Grüßen,`
             >
               Abgelehnt ({getRequestCount("rejected")})
             </button>
+            <button
+              onClick={() => handleStatusFilterChange("abgesagt")}
+              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
+                statusFilter === "abgesagt"
+                ? "bg-orange-600 text-white"
+                : "bg-orange-100 text-orange-800 hover:bg-orange-200"
+              }`}
+            >
+              Abgesagt ({getRequestCount("abgesagt")})
+            </button>
           </div>
         </div>
       </div>
@@ -300,8 +483,17 @@ Mit freundlichen Grüßen,`
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="block font-medium text-lg text-gray-900">{formatCurrency(request.proposedPrice)}</span>
-                    <span className="text-sm text-gray-500">Vorgeschlagener Preis</span>
+                    <span className="block font-medium text-lg text-gray-900">
+                      {formatCurrency(request.counterPrice || request.proposedPrice)}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {request.counterPrice ? "Gegenvorschlag" : "Tageshonorar"}
+                    </span>
+                    {request.counterPrice && (
+                      <div className="text-sm text-gray-400 mt-1">
+                        Original: {formatCurrency(request.originalPrice)}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -327,6 +519,19 @@ Mit freundlichen Grüßen,`
                 </div>
               </div>
               
+              <div className="px-5 py-3 bg-gray-100 text-sm text-gray-600">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <span className="block text-xs text-gray-500">Erstellt am</span>
+                    <span className="font-medium">{formatDateTime(request.createdAt)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500">Zuletzt geändert</span>
+                    <span className="font-medium">{formatDateTime(request.updatedAt)}</span>
+                  </div>
+                </div>
+              </div>
+              
               <div className="p-5 flex justify-between items-center">
                 <div>
                   <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
@@ -334,13 +539,17 @@ Mit freundlichen Grüßen,`
                     ? "bg-yellow-100 text-yellow-800" 
                     : request.status === "accepted" 
                     ? "bg-green-100 text-green-800" 
-                    : "bg-red-100 text-red-800"
+                    : request.status === "rejected"
+                    ? "bg-red-100 text-red-800"
+                    : "bg-orange-100 text-orange-800"
                   }`}>
                     {request.status === "pending" 
                       ? "Offen" 
                       : request.status === "accepted" 
                       ? "Angenommen" 
-                      : "Abgelehnt"}
+                      : request.status === "rejected"
+                      ? "Abgelehnt"
+                      : "Abgesagt"}
                   </span>
                 </div>
                 
@@ -360,19 +569,25 @@ Mit freundlichen Grüßen,`
                   >
                     Details
                   </button>
-                  {request.status === "pending" && (
+                  {request.status === "accepted" && (
                     <>
                       <button
-                        onClick={() => handleReject(request.id)}
-                        className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-red-600 hover:bg-red-50"
+                        onClick={() => downloadContract(request)}
+                        className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
                       >
-                        Ablehnen
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Vertrag downloaden
                       </button>
                       <button
-                        onClick={() => handleAccept(request.id)}
-                        className="px-3 py-1 bg-primary-500 rounded text-sm font-medium text-white hover:bg-primary-600"
+                        onClick={() => handleCancel(request.id)}
+                        className="px-3 py-1 bg-orange-50 border border-orange-300 rounded text-sm font-medium text-orange-700 hover:bg-orange-100 flex items-center"
                       >
-                        Annehmen
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Training absagen
                       </button>
                     </>
                   )}
@@ -428,6 +643,17 @@ Mit freundlichen Grüßen,`
                   <span className="font-medium">{activeRequest.participants}</span>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <span className="block text-sm text-gray-500">Erstellt am</span>
+                  <span className="font-medium">{formatDateTime(activeRequest.createdAt)}</span>
+                </div>
+                <div>
+                  <span className="block text-sm text-gray-500">Zuletzt geändert</span>
+                  <span className="font-medium">{formatDateTime(activeRequest.updatedAt)}</span>
+                </div>
+              </div>
               
               {activeRequest.message && (
                 <div className="mb-6">
@@ -437,15 +663,30 @@ Mit freundlichen Grüßen,`
               )}
               
               <div className="mb-6">
-                <span className="block text-sm text-gray-500 mb-1">Preisvorschlag</span>
-                <div className="p-3 bg-gray-50 rounded border">
-                  <span className="font-medium text-xl">{formatCurrency(activeRequest.proposedPrice)}</span>
+                <span className="block text-sm text-gray-500 mb-1">Preisdetails</span>
+                <div className="space-y-3">
+                  <div className="p-3 bg-gray-50 rounded border">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Tageshonorar:</span>
+                      <span className="font-medium text-lg">{formatCurrency(activeRequest.originalPrice)}</span>
+                    </div>
+                  </div>
+                  {activeRequest.counterPrice && (
+                    <div className="p-3 bg-blue-50 rounded border border-blue-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-blue-600">Ihr Gegenvorschlag:</span>
+                        <span className="font-medium text-lg text-blue-700">{formatCurrency(activeRequest.counterPrice)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               
               {activeRequest.status === "pending" && (
                 <div className="mb-6">
-                  <span className="block text-sm text-gray-500 mb-1">Gegenvorschlag (optional)</span>
+                  <span className="block text-sm text-gray-500 mb-1">
+                    {activeRequest.counterPrice ? "Neuer Gegenvorschlag (optional)" : "Gegenvorschlag (optional)"}
+                  </span>
                   <div className="flex items-center">
                     <span className="mr-2 text-gray-500">€</span>
                     <input
@@ -453,7 +694,7 @@ Mit freundlichen Grüßen,`
                       value={counterPrice}
                       onChange={(e) => setCounterPrice(e.target.value)}
                       className="form-input"
-                      placeholder="Ihr Preisvorschlag"
+                      placeholder={activeRequest.counterPrice ? "Neuer Preisvorschlag" : "Ihr Preisvorschlag"}
                       min="0"
                       step="50"
                     />
@@ -472,13 +713,6 @@ Mit freundlichen Grüßen,`
                   Rückfrage senden
                 </button>
                 
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                >
-                  Schließen
-                </button>
-                
                 {activeRequest.status === "pending" && (
                   <>
                     <button
@@ -488,7 +722,7 @@ Mit freundlichen Grüßen,`
                       Ablehnen
                     </button>
                     
-                    {parseFloat(counterPrice) !== activeRequest.proposedPrice && !isNaN(parseFloat(counterPrice)) && (
+                    {parseFloat(counterPrice) !== (activeRequest.counterPrice || activeRequest.proposedPrice) && !isNaN(parseFloat(counterPrice)) && (
                       <button
                         onClick={() => handleCounterOffer(activeRequest.id)}
                         className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
@@ -498,13 +732,80 @@ Mit freundlichen Grüßen,`
                     )}
                     
                     <button
-                      onClick={() => handleAccept(activeRequest.id)}
+                      onClick={() => handleAcceptClick()}
                       className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600"
                     >
-                      Annehmen
+                      Vertrag anzeigen
                     </button>
                   </>
                 )}
+
+                {activeRequest.status === "accepted" && (
+                  <>
+                    <button
+                      onClick={() => downloadContract(activeRequest)}
+                      className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      Vertrag downloaden
+                    </button>
+                    <button
+                      onClick={() => handleCancel(activeRequest.id)}
+                      className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 flex items-center"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      Training absagen
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contract Modal */}
+      {showContract && activeRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800">Dozentenvertrag</h3>
+                <button 
+                  onClick={() => setShowContract(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+              <div className="whitespace-pre-line text-sm leading-relaxed">
+                {generateContractText(activeRequest)}
+              </div>
+            </div>
+            
+            <div className="p-6 border-t bg-gray-50">
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowContract(false)}
+                  className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Zurück
+                </button>
+                <button
+                  onClick={() => handleAccept(activeRequest.id)}
+                  className="px-6 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600"
+                >
+                  Vertrag akzeptieren und PDF herunterladen
+                </button>
               </div>
             </div>
           </div>
@@ -520,6 +821,7 @@ function getStatusLabel(status: FilterStatus): string {
     case "pending": return "offen";
     case "accepted": return "angenommen";
     case "rejected": return "abgelehnt";
+    case "abgesagt": return "abgesagt";
     default: return "";
   }
 } 

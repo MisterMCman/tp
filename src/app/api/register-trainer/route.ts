@@ -45,91 +45,105 @@ export async function POST(req: Request) {
             );
         }
 
-        try {
-            // Trainer erstellen - nur mit den Feldern, die im Schema definiert sind
-            const newTrainer = await prisma.trainer.create({
-                data: {
-                    firstName,
-                    lastName,
-                    email,
-                    phone,
-                },
-            });
+        // Check if trainer with this email already exists
+        const existingTrainer = await prisma.trainer.findUnique({
+            where: { email }
+        });
 
-            // Zusätzliche Informationen, die nicht im Schema sind, für die Antwort speichern
-            const trainerResponse = {
-                ...newTrainer,
-                bio: bio || '',
-                profilePicture: profilePicture || '',
-            };
+        if (existingTrainer) {
+            return NextResponse.json(
+                { message: 'Ein Trainer mit dieser E-Mail-Adresse ist bereits registriert.' },
+                { status: 409 }
+            );
+        }
 
-            // TrainerTopic-Einträge erstellen falls topics vorhanden
-            if (topics && topics.length > 0) {
-                // Zuerst prüfen, ob alle Topics in der Datenbank existieren
-                // Falls nicht, erstellen wir sie
-                for (const topicName of topics) {
-                    const existingTopic = await prisma.topic.findFirst({
-                        where: { name: topicName }
-                    });
-                    
-                    if (!existingTopic) {
-                        await prisma.topic.create({
-                            data: { name: topicName }
-                        });
-                    }
-                }
-                
-                // Dann Verbindungen erstellen
-                for (const topicName of topics) {
-                    const topic = await prisma.topic.findFirst({
-                        where: { name: topicName }
-                    });
-                    
-                    if (topic) {
-                        await prisma.trainerTopic.create({
-                            data: {
-                                trainerId: newTrainer.id,
-                                topicId: topic.id
-                            }
-                        });
-                    }
-                }
-            }
-
-            // Erfolgreiche Antwort
-            return NextResponse.json({ 
-                message: 'Trainer erfolgreich registriert!',
-                trainer: trainerResponse 
-            }, { status: 200 });
-        } catch (dbError) {
-            console.error('Database error:', dbError);
-            
-            // Fallback to mock response
-            const mockedTrainer = {
-                id: Math.floor(Math.random() * 1000),
+        // Trainer erstellen mit allen Feldern aus dem Schema
+        const newTrainer = await prisma.trainer.create({
+            data: {
                 firstName,
                 lastName,
                 email,
                 phone,
-                bio: bio || '',
-                profilePicture: profilePicture || '',
-                topics: topics || [],
-                createdAt: new Date().toISOString(),
-            };
+                bio: bio || null,
+                profilePicture: profilePicture || null,
+                status: 'ACTIVE'
+            },
+        });
 
-            console.log('Falling back to mock registration:', mockedTrainer);
-
-            return NextResponse.json({ 
-                message: 'Trainer erfolgreich registriert! (Mock-Modus)',
-                trainer: mockedTrainer 
-            }, { status: 200 });
+        // TrainerTopic-Einträge erstellen falls topics vorhanden
+        if (topics && topics.length > 0) {
+            // Zuerst prüfen, ob alle Topics in der Datenbank existieren
+            // Falls nicht, erstellen wir sie
+            for (const topicName of topics) {
+                const existingTopic = await prisma.topic.findFirst({
+                    where: { name: topicName }
+                });
+                
+                if (!existingTopic) {
+                    await prisma.topic.create({
+                        data: { name: topicName }
+                    });
+                }
+            }
+            
+            // Dann Verbindungen erstellen
+            for (const topicName of topics) {
+                const topic = await prisma.topic.findFirst({
+                    where: { name: topicName }
+                });
+                
+                if (topic) {
+                    await prisma.trainerTopic.create({
+                        data: {
+                            trainerId: newTrainer.id,
+                            topicId: topic.id
+                        }
+                    });
+                }
+            }
         }
+
+        // Trainer mit Topics für die Antwort laden
+        const trainerWithTopics = await prisma.trainer.findUnique({
+            where: { id: newTrainer.id },
+            include: {
+                topics: {
+                    include: {
+                        topic: true
+                    }
+                }
+            }
+        });
+
+        const trainerResponse = {
+            id: newTrainer.id,
+            firstName: newTrainer.firstName,
+            lastName: newTrainer.lastName,
+            email: newTrainer.email,
+            phone: newTrainer.phone,
+            bio: newTrainer.bio || '',
+            profilePicture: newTrainer.profilePicture || '',
+            topics: trainerWithTopics?.topics.map(t => t.topic.name) || [],
+            status: newTrainer.status,
+            createdAt: newTrainer.createdAt.toISOString(),
+        };
+
+        // Erfolgreiche Antwort
+        return NextResponse.json({ 
+            message: 'Trainer erfolgreich registriert!',
+            trainer: trainerResponse 
+        }, { status: 200 });
+
     } catch (error: unknown) {
         // Fehlerbehandlung
+        console.error('Registration error:', error);
         if (error instanceof Error) {
-            console.error('Error creating trainer:', error.message);
-            return NextResponse.json({ message: error.message }, { status: 500 });
+            console.error('Error stack:', error.stack);
+            return NextResponse.json({ 
+                message: `Fehler bei der Registrierung: ${error.message}`,
+                details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            }, { status: 500 });
         }
-        return NextResponse.json({ message: 'Unknown error occurred.' }, { status: 500 });
+        return NextResponse.json({ message: 'Ein unbekannter Fehler ist aufgetreten.' }, { status: 500 });
     }
 }

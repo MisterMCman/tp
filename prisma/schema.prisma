@@ -13,18 +13,35 @@ model Trainer {
   lastName  String
   email     String        @unique
   phone     String
+  bio       String?       @db.Text
+  profilePicture String?
   status    TrainerStatus @default(ACTIVE)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   inquiries Inquiry[]
   invoices  Invoice[]
   topics    TrainerTopic[]
+  loginTokens LoginToken[]
+}
+
+model LoginToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  trainerId Int
+  trainer   Trainer  @relation(fields: [trainerId], references: [id])
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  usedAt    DateTime?
+
+  @@index([trainerId], map: "LoginToken_trainerId_fkey")
 }
 
 model Topic {
   id       Int       @id @default(autoincrement())
   name     String    @unique
   trainers TrainerTopic[]
+  courses  Course[]
 }
 
 model TrainerTopic {
@@ -38,14 +55,15 @@ model TrainerTopic {
   @@unique([trainerId, topicId]) // Eindeutiger Index statt Primärschlüssel
 }
 
-
 model Inquiry {
   id            Int           @id @default(autoincrement())
   trainerId     Int
   eventId       Int
   status        InquiryStatus @default(PENDING)
-  priceProposal Float?
-  message       String?
+  originalPrice Float
+  proposedPrice Float
+  counterPrice  Float?
+  message       String?       @db.Text
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   event         Event         @relation(fields: [eventId], references: [id])
@@ -60,23 +78,30 @@ model Event {
   courseId     Int
   title        String
   date         DateTime
+  endTime      DateTime
+  location     String
+  participants Int           @default(0)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   course       Course        @relation(fields: [courseId], references: [id])
   inquiries    Inquiry[]
-  participants Participant[]
+  eventParticipants Participant[]
 
   @@index([courseId], map: "Event_courseId_fkey")
 }
 
 model Course {
   id          Int         @id @default(autoincrement())
-  description String?
+  description String?     @db.Text
   createdAt   DateTime    @default(now())
   state       CourseState @default(ONLINE)
   title       String
+  topicId     Int?
+  topic       Topic?      @relation(fields: [topicId], references: [id])
   updatedAt   DateTime    @updatedAt
   events      Event[]
+
+  @@index([topicId], map: "Course_topicId_fkey")
 }
 
 model Participant {
@@ -110,6 +135,7 @@ enum InquiryStatus {
   PENDING
   ACCEPTED
   REJECTED
+  ABGESAGT
 }
 
 enum CourseState {

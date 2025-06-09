@@ -2,9 +2,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 
-// In-memory store for login tokens (in a production app, use Redis or a database)
-const loginTokens: Record<string, { token: string, email: string, expires: Date }> = {};
-
 export async function POST(req: Request) {
   try {
     // Get login data from request body
@@ -21,6 +18,7 @@ export async function POST(req: Request) {
         );
       }
       
+
       // Find trainer by email
       const trainer = await prisma.trainer.findUnique({
         where: { email }
@@ -35,18 +33,33 @@ export async function POST(req: Request) {
       }
 
       // Generate a random token
-      const token = crypto.randomBytes(32).toString('hex');
+      const tokenString = crypto.randomBytes(32).toString('hex');
       
-      // Set token expiration (e.g., 15 minutes)
-      const expires = new Date();
-      expires.setMinutes(expires.getMinutes() + 15);
+      // Set token expiration (1 week from now)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 1 week
       
-      // Store the token
-      loginTokens[token] = { token, email, expires };
+      // Store the token in database
+      try {
+        await prisma.loginToken.create({
+          data: {
+            token: tokenString,
+            trainerId: trainer.id,
+            expiresAt: expiresAt,
+            used: false
+          }
+        });
+      } catch (createError) {
+        console.error('Error creating login token:', createError);
+        return NextResponse.json(
+          { message: 'Fehler beim Erstellen des Login-Tokens.' },
+          { status: 500 }
+        );
+      }
       
       // Generate login link that points directly to dashboard
       // In a real app, you would send this via email
-      const loginLink = `http://localhost:3000/dashboard?token=${token}`;
+      const loginLink = `http://localhost:3000/dashboard?token=${tokenString}`;
       console.log(`Login link for ${email}: ${loginLink}`);
       
       return NextResponse.json({
@@ -66,59 +79,65 @@ export async function POST(req: Request) {
         );
       }
       
-      // Check if token exists and is valid
-      const tokenData = loginTokens[token];
+      // Find token in database
+      const tokenData = await prisma.loginToken.findUnique({
+        where: { token },
+        include: {
+          trainer: {
+            include: {
+              topics: {
+                include: {
+                  topic: true,
+                },
+              },
+            },
+          }
+        }
+      });
+      
       if (!tokenData) {
         return NextResponse.json(
-          { message: 'Ungültiger oder abgelaufener Token.' },
+          { message: 'Ungültiger Token.' },
           { status: 401 }
         );
       }
       
       // Check if token is expired
-      if (new Date() > tokenData.expires) {
-        // Remove expired token
-        delete loginTokens[token];
-        
+      if (new Date() > tokenData.expiresAt) {
         return NextResponse.json(
           { message: 'Dieser Login-Link ist abgelaufen. Bitte fordern Sie einen neuen an.' },
           { status: 401 }
         );
       }
       
-      // Get trainer data
-      const trainer = await prisma.trainer.findUnique({
-        where: { email: tokenData.email },
-        include: {
-          topics: {
-            include: {
-              topic: true,
-            },
-          },
-        },
-      });
-      
-      if (!trainer) {
+      // Check if token was already used
+      if (tokenData.used) {
         return NextResponse.json(
-          { message: 'Trainer nicht gefunden.' },
-          { status: 404 }
+          { message: 'Dieser Login-Link wurde bereits verwendet.' },
+          { status: 401 }
         );
       }
       
-      // Remove the used token (one-time use)
-      delete loginTokens[token];
+      // Mark the token as used
+      await prisma.loginToken.update({
+        where: { token },
+        data: {
+          used: true,
+          usedAt: new Date()
+        }
+      });
       
       // Format the trainer data for the response
       const trainerResponse = {
-        id: trainer.id,
-        firstName: trainer.firstName,
-        lastName: trainer.lastName,
-        email: trainer.email,
-        phone: trainer.phone,
-        status: trainer.status,
-        topics: trainer.topics.map(t => t.topic.name),
-        bio: '', // Not in database schema, but expected in the UI
-        profilePicture: '', // Not in database schema, but expected in the UI
+        id: tokenData.trainer.id,
+        firstName: tokenData.trainer.firstName,
+        lastName: tokenData.trainer.lastName,
+        email: tokenData.trainer.email,
+        phone: tokenData.trainer.phone,
+        status: tokenData.trainer.status,
+        topics: tokenData.trainer.topics.map(t => t.topic.name),
+        bio: tokenData.trainer.bio || '',
+        profilePicture: tokenData.trainer.profilePicture || '',
       };
       
       // Return success response with trainer data
@@ -138,7 +157,11 @@ export async function POST(req: Request) {
     // Error handling
     console.error('Login error:', error);
     if (error instanceof Error) {
-      return NextResponse.json({ message: error.message }, { status: 500 });
+      console.error('Error stack:', error.stack);
+      return NextResponse.json({ 
+        message: `Fehler: ${error.message}`,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }, { status: 500 });
     }
     return NextResponse.json({ message: 'Ein unbekannter Fehler ist aufgetreten.' }, { status: 500 });
   }
