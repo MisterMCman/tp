@@ -81,6 +81,7 @@ The application will be available at [http://localhost:3000](http://localhost:30
 - Update database schema: `npx prisma migrate dev`
 - Seed database with initial data: `npx prisma db seed`
 - Explore your database with Prisma Studio: `npx prisma studio`
+- start db: sudo /usr/local/opt/mariadb/bin/mariadbd --user=_mysql --basedir=/usr/local/opt/mariadb --datadir=/usr/local/var/mysql --socket=/usr/local/var/mysql/mysql.sock
 
 ### Project Structure
 

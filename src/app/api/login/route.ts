@@ -1,6 +1,61 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { cookies } from 'next/headers';
+
+// Simple email sending function (replace with real email service in production)
+async function sendLoginEmail(email: string, loginLink: string): Promise<void> {
+  // For demo purposes, just log the email
+  // In production, use a service like SendGrid, Mailgun, AWS SES, etc.
+
+  const emailContent = `
+Hallo,
+
+Sie haben einen Login-Link für das Trainerportal angefordert.
+
+Bitte klicken Sie auf den folgenden Link, um sich anzumelden:
+
+${loginLink}
+
+Dieser Link ist 7 Tage gültig und kann nur einmal verwendet werden.
+
+Falls Sie keinen Login-Link angefordert haben, ignorieren Sie diese E-Mail.
+
+Mit freundlichen Grüßen,
+Ihr Trainerportal Team
+  `.trim();
+
+  console.log('=== LOGIN EMAIL SIMULATION ===');
+  console.log(`To: ${email}`);
+  console.log(`Subject: Ihr Login-Link für das Trainerportal`);
+  console.log(`Body:\n${emailContent}`);
+  console.log('=================================');
+
+  // Simulate email sending delay
+  await new Promise(resolve => setTimeout(resolve, 100));
+
+  // In production, you would use something like:
+  /*
+  const nodemailer = require('nodemailer');
+
+  const transporter = nodemailer.createTransporter({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+
+  await transporter.sendMail({
+    from: process.env.FROM_EMAIL,
+    to: email,
+    subject: 'Ihr Login-Link für das Trainerportal',
+    text: emailContent
+  });
+  */
+}
 
 export async function POST(req: Request) {
   try {
@@ -58,14 +113,21 @@ export async function POST(req: Request) {
       }
       
       // Generate login link that points directly to dashboard
-      // In a real app, you would send this via email
-      const loginLink = `http://localhost:3000/dashboard?token=${tokenString}`;
-      console.log(`Login link for ${email}: ${loginLink}`);
-      
+      const loginLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/dashboard?token=${tokenString}`;
+
+      // Send email (simulated for demo - in production use a real email service)
+      try {
+        await sendLoginEmail(email, loginLink);
+        console.log(`Login email sent to ${email}: ${loginLink}`);
+      } catch (emailError) {
+        console.error('Failed to send login email:', emailError);
+        // Continue anyway - we can still return the link
+      }
+
       return NextResponse.json({
-        message: 'Login-Link wurde erstellt. In einer richtigen Anwendung würde dieser per E-Mail gesendet werden.',
-        // Include the link directly in the response for demonstration
-        loginLink: loginLink
+        message: 'Login-Link wurde per E-Mail versendet.',
+        // In production, don't include the link in the response for security
+        ...(process.env.NODE_ENV === 'development' && { loginLink })
       }, { status: 200 });
     }
     
@@ -118,15 +180,33 @@ export async function POST(req: Request) {
         );
       }
       
-      // Mark the token as used
-      await prisma.loginToken.update({
-        where: { token },
-        data: {
-          used: true,
-          usedAt: new Date()
+      // Mark the token as used (with error handling for race conditions)
+      try {
+        await prisma.loginToken.update({
+          where: { token },
+          data: {
+            used: true,
+            usedAt: new Date()
+          }
+        });
+      } catch (updateError) {
+        console.warn('Token update failed, checking if already used:', updateError);
+        // Check if token was already used by another request
+        const currentToken = await prisma.loginToken.findUnique({
+          where: { token }
+        });
+
+        if (currentToken?.used) {
+          return NextResponse.json(
+            { message: 'Dieser Login-Link wurde bereits verwendet.' },
+            { status: 401 }
+          );
         }
-      });
-      
+
+        // If it's not used, rethrow the error
+        throw updateError;
+      }
+
       // Format the trainer data for the response
       const trainerResponse = {
         id: tokenData.trainer.id,
@@ -138,8 +218,28 @@ export async function POST(req: Request) {
         topics: tokenData.trainer.topics.map(t => t.topic.name),
         bio: tokenData.trainer.bio || '',
         profilePicture: tokenData.trainer.profilePicture || '',
+        isCompany: tokenData.trainer.isCompany,
+        companyName: tokenData.trainer.companyName || '',
       };
-      
+
+      // Set cookies for session management (7 days)
+      const cookieStore = await cookies();
+      cookieStore.set('mr_token', 'trainer_' + tokenData.trainer.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: '/'
+      });
+
+      cookieStore.set('trainer_data', JSON.stringify(trainerResponse), {
+        httpOnly: false, // Allow client-side access
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: '/'
+      });
+
       // Return success response with trainer data
       return NextResponse.json({
         message: 'Login erfolgreich!',

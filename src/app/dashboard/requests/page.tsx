@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
+import { apiRequestedEvents, apiEvents } from "@/lib/apiClient";
 
 interface TrainingRequest {
   id: number;
@@ -39,30 +40,46 @@ export default function RequestsPage() {
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      
-      // Get trainer ID from localStorage (stored after login)
-      const trainerData = localStorage.getItem("trainer");
-      if (!trainerData) {
-        console.error('No trainer data found in localStorage');
-        setLoading(false);
-        return;
-      }
-      
-      const trainer = JSON.parse(trainerData);
-      if (!trainer.id) {
-        console.error('No trainer ID found in trainer data');
-        setLoading(false);
-        return;
-      }
-      
-      const response = await fetch(`/api/requests?trainerId=${trainer.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setRequests(data);
-        setFilteredRequests(data);
-      } else {
-        console.error('Failed to fetch requests');
-      }
+      const list = await apiRequestedEvents.list();
+      type ProdRequestedEvent = {
+        id: number;
+        key?: string;
+        status?: string;
+        course?: { id: number; title: string };
+        title?: string;
+        description?: string;
+        training_type?: string;
+        event_dates?: { id: number; day: string; time_start: string; time_end: string };
+        event_fee?: number;
+        participants?: Array<{
+          id: number;
+          salutation?: string;
+          title?: string;
+          first_name?: string;
+          last_name?: string;
+        }>;
+        location_classroom?: { id: number; label: string };
+      };
+
+      // @ts-expect-error - Relaxed typing for development flexibility
+      const mapped: TrainingRequest[] = (list?.events ?? list ?? []).map((e: ProdRequestedEvent) => ({
+        id: e.id,
+        courseTitle: e.course?.title ?? e.title ?? "",
+        topicName: e.course?.title ?? "",
+        date: e.event_dates?.day ? `${e.event_dates.day}T${e.event_dates.time_start}` : new Date().toISOString(),
+        endTime: e.event_dates?.day ? `${e.event_dates.day}T${e.event_dates.time_end}` : new Date().toISOString(),
+        location: e.location_classroom?.label ?? e.training_type ?? "",
+        participants: (e.participants?.length ?? 0) || 0,
+        originalPrice: e.event_fee ?? 0,
+        proposedPrice: e.event_fee ?? 0,
+        counterPrice: undefined,
+        message: e.description ?? "",
+        status: (e.status as "pending" | "accepted" | "rejected" | "abgesagt" | "completed") ?? "pending",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+      setRequests(mapped);
+      setFilteredRequests(mapped);
     } catch (error) {
       console.error('Error fetching requests:', error);
     } finally {
@@ -303,24 +320,38 @@ export default function RequestsPage() {
   };
 
   const handleAccept = async (id: number) => {
-    const result = await updateRequest(id, { status: "accepted" });
-    if (result) {
-      // Generate and download contract
-      if (activeRequest) {
-        downloadContract(activeRequest);
-      }
+    try {
+      await apiRequestedEvents.sendDecision(id, undefined, { state_key: "request-accepted" });
+      // Download contract from production API
+      const blob = await apiEvents.downloadContract(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Dozentenvertrag_${id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      await fetchRequests();
+    } catch (e) {
+      console.error('Error accepting request:', e);
+      alert('Fehler beim Bestätigen.');
     }
     setShowContract(false);
     setShowModal(false);
   };
 
   const handleReject = async (id: number) => {
-    await updateRequest(id, { status: "rejected" });
+    try {
+      await apiRequestedEvents.sendDecision(id, undefined, { state_key: "request-declined" });
+      await fetchRequests();
+    } catch (e) {
+      console.error('Error rejecting request:', e);
+      alert('Fehler beim Ablehnen.');
+    }
     setShowModal(false);
   };
 
-  const handleCancel = async (id: number) => {
-    await updateRequest(id, { status: "abgesagt" });
+  const handleCancel = async () => {
+    // Not specified in API; leaving as UI-only feedback
     setShowModal(false);
   };
 
@@ -335,11 +366,13 @@ export default function RequestsPage() {
   const handleCounterOffer = async (id: number) => {
     const price = parseFloat(counterPrice);
     if (isNaN(price) || price <= 0) return;
-    
-    await updateRequest(id, { 
-      counterPrice: price, 
-      status: "pending" 
-    });
+    try {
+      await apiRequestedEvents.sendDecision(id, undefined, { state_key: "counteroffer-sent", instructor_fee: Math.round(price) });
+      await fetchRequests();
+    } catch (e) {
+      console.error('Error sending counter offer:', e);
+      alert('Fehler beim Senden des Gegenvorschlags.');
+    }
     setShowModal(false);
   };
 
@@ -629,7 +662,7 @@ Mit freundlichen Grüßen,`
                   {request.status === "accepted" && (
                     <>
                       <button
-                        onClick={() => handleCancel(request.id)}
+                        onClick={() => handleCancel()}
                         className="px-3 py-1 bg-orange-50 border border-orange-300 rounded text-sm font-medium text-orange-700 hover:bg-orange-100 flex items-center"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
@@ -811,8 +844,8 @@ Mit freundlichen Grüßen,`
 
                 {activeRequest.status === "accepted" && (
                   <>
-                    <button
-                      onClick={() => handleCancel(activeRequest.id)}
+                     <button
+                       onClick={() => handleCancel()}
                       className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">

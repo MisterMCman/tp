@@ -3,215 +3,531 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Custom Properties for PowerToWork Theme */
+:root {
+  --ptw-bg-primary: linear-gradient(135deg, #ffffff 0%, #f8f9fa 25%, #e9ecef 100%);
+  --ptw-bg-secondary: #ffffff;
+  --ptw-bg-tertiary: #f8f9fa;
+  --ptw-accent-primary: rgb(254, 88, 77); /* Bright red/orange */
+  --ptw-accent-secondary: rgb(35, 59, 97); /* Dark blue */
+  --ptw-accent-hover: rgb(220, 53, 69); /* Darker red for hover */
+  --ptw-accent-secondary-hover: rgb(23, 47, 77); /* Darker blue for hover */
+  --ptw-text-primary: #212529;
+  --ptw-text-secondary: #6c757d;
+  --ptw-text-muted: #adb5bd;
+  --ptw-border-primary: #dee2e6;
+  --ptw-border-secondary: #e9ecef;
+  --ptw-shadow-primary: 0 4px 20px rgba(254, 88, 77, 0.1);
+  --ptw-shadow-secondary: 0 8px 32px rgba(35, 59, 97, 0.1);
+  --ptw-glow-primary: 0 0 20px rgba(254, 88, 77, 0.3);
+  --ptw-glow-secondary: 0 0 15px rgba(35, 59, 97, 0.2);
+}
+
 /* Force CSS reload */
 html {
   scroll-behavior: smooth;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', system-ui, -apple-system, sans-serif;
 }
 
+/* Base Styles */
+body {
+  background: var(--ptw-bg-primary);
+  color: var(--ptw-text-primary);
+  font-family: 'Inter', 'Segoe UI', 'Roboto', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ptw-bg-tertiary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ptw-accent-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ptw-accent-hover);
+}
+
+/* Selection Styling */
+::selection {
+  background: rgba(254, 88, 77, 0.2);
+  color: var(--ptw-text-primary);
+}
+
+/* Modern Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--ptw-text-primary);
+}
+
+h1 {
+  font-size: 2.5rem;
+  background: linear-gradient(135deg, var(--ptw-accent-primary), var(--ptw-accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+h2 {
+  font-size: 2rem;
+  color: var(--ptw-accent-primary);
+}
+
+h3 {
+  font-size: 1.5rem;
+  color: var(--ptw-text-primary);
+}
+
+p {
+  color: var(--ptw-text-secondary);
+  line-height: 1.7;
+}
+
+/* Modern Form Components */
 @layer components {
-  .form-input {
-    @apply w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  .ptw-card {
+    @apply bg-white border border-gray-200 rounded-xl;
+    @apply shadow-lg backdrop-blur-sm;
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  .ptw-card:hover {
+    @apply shadow-xl border-gray-300;
+    box-shadow: var(--ptw-shadow-primary), var(--ptw-shadow-secondary);
+  }
+
+  .ptw-input {
+    @apply w-full px-4 py-3 bg-white border border-gray-300 rounded-lg;
+    @apply text-gray-900 placeholder-gray-500;
+    @apply focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent;
+    @apply transition-all duration-200 ease-in-out;
+    @apply text-base;
+  }
+
+  .ptw-input:focus {
+    @apply bg-white border-red-500;
+    box-shadow: var(--ptw-glow-primary);
+  }
+
+  .ptw-button {
+    @apply px-6 py-3 bg-gradient-to-r from-red-500 to-red-600;
+    @apply text-white font-semibold rounded-lg;
+    @apply border border-red-500;
+    @apply hover:from-red-600 hover:to-red-700;
+    @apply focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white;
+    @apply transition-all duration-200 ease-in-out;
+    @apply text-base;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ptw-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
+
+  .ptw-button:hover::before {
+    left: 100%;
+  }
+
+  .ptw-button-primary {
+    @apply ptw-button;
+  }
+
+  .ptw-button-secondary {
+    @apply ptw-button;
+    @apply bg-gradient-to-r from-blue-600 to-blue-700 border-blue-600;
+    @apply hover:from-blue-700 hover:to-blue-800;
+    @apply focus:ring-blue-500;
   }
 }
 
-/* Glassmorphism Style */
-.glassmorphism {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
-  padding: 2.5rem;
-  max-width: 500px;
-  margin: 0 auto;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* Modern Card for Auth Forms */
+.ptw-auth-card {
+  @apply ptw-card;
+  @apply p-8 max-w-lg mx-auto;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 249, 250, 0.95));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(254, 88, 77, 0.2);
+  position: relative;
+  overflow: hidden;
 }
 
-.glassmorphism:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+.ptw-auth-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--ptw-accent-primary), var(--ptw-accent-secondary));
 }
 
-/* Background Gradient - PowerToWork style */
-.bg-gradient {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+.ptw-auth-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ptw-border-primary), transparent);
+}
+
+/* Modern Background */
+.ptw-bg {
+  background: var(--ptw-bg-primary);
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Inter', system-ui, sans-serif;
-  color: #303030;
-  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
 }
 
-/* Form Inputs */
+.ptw-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    radial-gradient(circle at 20% 80%, rgba(254, 88, 77, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(35, 59, 97, 0.05) 0%, transparent 50%);
+  animation: ptw-bg-float 20s ease-in-out infinite;
+}
+
+@keyframes ptw-bg-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-5px) rotate(0.5deg); }
+  66% { transform: translateY(5px) rotate(-0.5deg); }
+}
+
+/* Legacy Form Inputs - Updated for PowerToWork Theme */
 .form-input {
-  width: 100%;
-  padding: 14px 16px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  color: #1f2937;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  @apply ptw-input;
 }
 
-.form-input:focus {
-  outline: none;
-  border-color: #4361ee;
-  box-shadow: 0 0 5px rgba(67, 97, 238, 0.4);
-}
-
-/* Buttons - PowerToWork style */
+/* Legacy Buttons - Updated for PowerToWork Theme */
 .button-style {
-  width: 100%;
-  padding: 14px 18px;
-  background: #4361ee;
-  border: none;
-  border-radius: 8px;
-  text-align: center;
-  color: #fff;
-  font-weight: 600;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.2s ease;
-}
-
-.button-style:hover {
-  background: #3a56d4;
-  transform: translateY(-2px);
+  @apply ptw-button-primary;
 }
 
 .button-style:disabled {
-  background: #c7d2fe;
-  color: #4361ee;
-  cursor: not-allowed;
+  @apply opacity-50 cursor-not-allowed;
+  background: var(--ptw-bg-tertiary);
 }
 
-/* Suggestions Dropdown for Topics */
+/* Modern Suggestions Dropdown */
 .suggestions-dropdown {
   position: absolute;
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--ptw-bg-secondary);
+  border: 1px solid var(--ptw-border-primary);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  max-height: 200px;
+  box-shadow: var(--ptw-shadow-primary);
+  max-height: 250px;
   overflow-y: auto;
   z-index: 50;
+  backdrop-filter: blur(10px);
 }
 
 .suggestions-dropdown li {
-  padding: 10px 16px;
-  color: #1f2937;
+  padding: 12px 16px;
+  color: var(--ptw-text-primary);
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid var(--ptw-border-primary);
 }
 
 .suggestions-dropdown li:hover {
-  background: #eef2ff;
+  background: var(--ptw-accent-primary);
+  color: white;
 }
 
-/* Selected Topics - PowerToWork style */
+.suggestions-dropdown li:last-child {
+  border-bottom: none;
+}
+
+/* Modern Selected Topics */
 .selected-topic {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  background: #4361ee;
-  color: #fff;
-  border-radius: 16px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, var(--ptw-accent-primary), var(--ptw-accent-secondary));
+  color: white;
+  border-radius: 20px;
   font-size: 0.875rem;
-  font-weight: 500;
-  margin: 4px;
-  transition: background-color 0.2s ease;
+  font-weight: 600;
+  margin: 6px;
+  border: 1px solid var(--ptw-accent-primary);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.selected-topic::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.selected-topic:hover::before {
+  left: 100%;
 }
 
 .selected-topic:hover {
-  background: #3a56d4;
+  transform: translateY(-2px);
+  box-shadow: var(--ptw-glow-primary);
 }
 
 .selected-topic button {
-  margin-left: 8px;
+  margin-left: 10px;
   background: transparent;
   border: none;
-  color: #fff;
+  color: white;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 1.2rem;
   line-height: 1;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
+  padding: 2px;
+  border-radius: 50%;
 }
 
 .selected-topic button:hover {
-  color: #e6f6f9;
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
 }
 
-/* Form Title */
+/* Suggested Topics (blue variant) */
+.selected-topic.bg-blue-100 {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+.selected-topic.bg-blue-100::before {
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+}
+
+.selected-topic.bg-blue-100:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
+}
+
+.selected-topic.bg-blue-100 button {
+  color: #1e40af;
+}
+
+.selected-topic.bg-blue-100 button:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Modern Form Title */
 form h2 {
   font-size: 1.75rem;
   font-weight: bold;
-  color: #303030;
+  color: var(--ptw-accent-primary);
   margin-bottom: 1.5rem;
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
-/* Link Styling - PowerToWork style */
+/* Modern Link Styling */
 .link {
-  color: #4361ee;
+  color: var(--ptw-accent-primary);
   font-weight: 500;
-  text-decoration: underline;
+  text-decoration: none;
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--ptw-accent-primary), var(--ptw-accent-secondary));
+  transition: width 0.3s ease;
+}
+
+.link:hover::after {
+  width: 100%;
 }
 
 .link:hover {
-  color: #3a56d4;
+  color: var(--ptw-accent-secondary);
+}
+
+/* Modern Dashboard Styles */
+.ptw-dashboard {
+  background: var(--ptw-bg-primary);
+  min-height: 100vh;
+  color: var(--ptw-text-primary);
+}
+
+.ptw-dashboard-card {
+  @apply ptw-card;
+  @apply p-6;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 249, 250, 0.9));
+  border: 1px solid rgba(254, 88, 77, 0.1);
+}
+
+.ptw-dashboard-header {
+  @apply flex justify-between items-center mb-6;
+  border-bottom: 1px solid var(--ptw-border-primary);
+  padding-bottom: 1rem;
+}
+
+.ptw-dashboard-header h1 {
+  font-size: 2rem;
+  background: linear-gradient(135deg, var(--ptw-accent-primary), var(--ptw-accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+}
+
+.ptw-sidebar {
+  background: linear-gradient(180deg, var(--ptw-bg-secondary), var(--ptw-bg-tertiary));
+  border-right: 1px solid var(--ptw-border-primary);
+  box-shadow: var(--ptw-shadow-secondary);
+}
+
+.ptw-sidebar-header {
+  background: linear-gradient(135deg, var(--ptw-bg-tertiary), var(--ptw-bg-secondary));
+  border-bottom: 1px solid var(--ptw-border-primary);
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.ptw-sidebar-header h2 {
+  color: var(--ptw-accent-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.ptw-sidebar-header p {
+  color: var(--ptw-text-secondary);
+  font-size: 0.875rem;
+}
+
+.ptw-nav-item {
+  @apply flex items-center px-6 py-4 hover:bg-gray-50;
+  @apply border-l-4 border-transparent hover:border-red-500;
+  @apply transition-all duration-200 ease-in-out;
+  @apply text-base;
+}
+
+.ptw-nav-item.active {
+  @apply bg-red-50 border-red-500;
+  background: linear-gradient(135deg, rgba(254, 88, 77, 0.05), rgba(35, 59, 97, 0.05));
+}
+
+.ptw-nav-item svg {
+  @apply mr-3 text-gray-400;
+  transition: color 0.2s ease;
+}
+
+.ptw-nav-item:hover svg,
+.ptw-nav-item.active svg {
+  color: var(--ptw-accent-primary);
+}
+
+/* Modern Toggle */
+.ptw-toggle {
+  position: relative;
+  display: flex;
+  background: var(--ptw-bg-tertiary);
+  border: 1px solid var(--ptw-border-primary);
+  border-radius: 9999px;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.ptw-toggle-button {
+  position: relative;
+  z-index: 10;
+  padding: 10px 20px;
+  flex: 1;
+  font-weight: 500;
+  text-align: center;
+  border-radius: 9999px;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+}
+
+.ptw-toggle-slider {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 50%;
+  background: linear-gradient(135deg, var(--ptw-accent-primary), var(--ptw-accent-secondary));
+  border-radius: 9999px;
+  transition: all 0.3s ease;
+  box-shadow: var(--ptw-glow-primary);
+}
+
+/* Loading Animation */
+.ptw-loading {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--ptw-border-primary);
+  border-radius: 50%;
+  border-top-color: var(--ptw-accent-primary);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .glassmorphism {
+  .ptw-auth-card {
     padding: 1.5rem;
     max-width: 95%;
   }
 
-  .form-input,
-  .button-style {
+  .ptw-input,
+  .ptw-button {
     font-size: 0.9rem;
   }
 
   form h2 {
     font-size: 1.5rem;
   }
-}
 
-/* PowerToWork specific toggle */
-.pw-toggle {
-  position: relative;
-  display: flex;
-  background-color: #f3f4f6;
-  border-radius: 9999px;
-  padding: 4px;
-  overflow: hidden;
-}
-
-.pw-toggle-button {
-  position: relative;
-  z-index: 10;
-  padding: 8px 16px;
-  flex: 1;
-  font-weight: 500;
-  text-align: center;
-  border-radius: 9999px;
-  transition: color 0.3s ease;
-}
-
-.pw-toggle-slider {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  width: 50%;
-  background-color: #4361ee;
-  border-radius: 9999px;
-  transition: transform 0.3s ease, left 0.3s ease, right 0.3s ease;
+  .ptw-dashboard-header h1 {
+    font-size: 1.5rem;
+  }
 }

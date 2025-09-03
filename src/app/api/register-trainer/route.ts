@@ -19,14 +19,22 @@ export async function POST(req: Request) {
     try {
         // Daten aus dem Request Body lesen
         const body = await req.json();
-        const { firstName, lastName, email, phone, address, topics, bio, profilePicture } = body;
+        const { firstName, lastName, email, phone, address, countryId, topics, bio, profilePicture, isCompany, companyName, topicSuggestions, dailyRate } = body;
 
         console.log('Received registration data:', body);
 
         // Validierung der Eingabedaten
-        if (!firstName || !lastName || !email || !phone || !address) {
+        if (!firstName || !lastName || !email || !phone || !address || !countryId) {
             return NextResponse.json(
-                { message: 'Vorname, Nachname, E-Mail, Telefonnummer und Adresse sind erforderlich.' },
+                { message: 'Vorname, Nachname, E-Mail, Telefonnummer, Adresse und Land sind erforderlich.' },
+                { status: 400 }
+            );
+        }
+
+        // Validierung für Firmenfelder
+        if (isCompany && !companyName) {
+            return NextResponse.json(
+                { message: 'Firmenname ist erforderlich wenn als Firma registriert wird.' },
                 { status: 400 }
             );
         }
@@ -65,10 +73,35 @@ export async function POST(req: Request) {
                 email,
                 phone,
                 address,
+                countryId: parseInt(countryId),
                 bio: bio || null,
                 profilePicture: profilePicture || null,
+                isCompany: isCompany || false,
+                companyName: companyName || null,
+                dailyRate: dailyRate || null,
                 status: 'ACTIVE'
             },
+        });
+
+        // Erstelle erste Version für Versionierung
+        await prisma.trainerProfileVersion.create({
+            data: {
+                trainerId: newTrainer.id,
+                version: 1,
+                firstName,
+                lastName,
+                email,
+                phone,
+                address,
+                countryId: parseInt(countryId),
+                bio,
+                profilePicture,
+                companyName,
+                isCompany,
+                dailyRate,
+                changedFields: JSON.stringify(['firstName', 'lastName', 'email', 'phone', 'address', 'countryId', 'bio', 'profilePicture', 'companyName', 'isCompany', 'dailyRate']),
+                changedBy: 'trainer'
+            }
         });
 
         // TrainerTopic-Einträge erstellen falls topics vorhanden
@@ -79,25 +112,49 @@ export async function POST(req: Request) {
                 const existingTopic = await prisma.topic.findFirst({
                     where: { name: topicName }
                 });
-                
+
                 if (!existingTopic) {
                     await prisma.topic.create({
                         data: { name: topicName }
                     });
                 }
             }
-            
+
             // Dann Verbindungen erstellen
             for (const topicName of topics) {
                 const topic = await prisma.topic.findFirst({
                     where: { name: topicName }
                 });
-                
+
                 if (topic) {
                     await prisma.trainerTopic.create({
                         data: {
                             trainerId: newTrainer.id,
                             topicId: topic.id
+                        }
+                    });
+                }
+            }
+        }
+
+        // TopicSuggestions erstellen falls vorhanden
+        if (topicSuggestions && topicSuggestions.length > 0) {
+            for (const suggestionName of topicSuggestions) {
+                // Check if suggestion already exists (to avoid duplicates)
+                const existingSuggestion = await prisma.topicSuggestion.findFirst({
+                    where: {
+                        trainerId: newTrainer.id,
+                        name: suggestionName,
+                        status: 'PENDING'
+                    }
+                });
+
+                if (!existingSuggestion) {
+                    await prisma.topicSuggestion.create({
+                        data: {
+                            name: suggestionName,
+                            trainerId: newTrainer.id,
+                            status: 'PENDING'
                         }
                     });
                 }
@@ -125,6 +182,9 @@ export async function POST(req: Request) {
             address: newTrainer.address,
             bio: newTrainer.bio || '',
             profilePicture: newTrainer.profilePicture || '',
+            isCompany: newTrainer.isCompany,
+            companyName: newTrainer.companyName || '',
+            dailyRate: newTrainer.dailyRate,
             topics: trainerWithTopics?.topics.map(t => t.topic.name) || [],
             status: newTrainer.status,
             createdAt: newTrainer.createdAt.toISOString(),

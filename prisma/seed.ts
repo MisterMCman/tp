@@ -3,22 +3,113 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Clear existing data
+  // Clear existing data in correct order (delete child records before parent records)
   await prisma.inquiry.deleteMany();
   await prisma.participant.deleteMany();
   await prisma.event.deleteMany();
   await prisma.course.deleteMany();
   await prisma.trainerTopic.deleteMany();
-  await prisma.topic.deleteMany();
   await prisma.loginToken.deleteMany();
+  await prisma.topicSuggestion.deleteMany();
+  await prisma.trainerProfileVersion.deleteMany();
+  await prisma.availability.deleteMany();
+  await prisma.invoice.deleteMany();
   await prisma.trainer.deleteMany();
+  await prisma.topic.deleteMany();
+  await prisma.country.deleteMany();
 
   // Reset auto-increment counters to start from 1
+  await prisma.$executeRaw`ALTER TABLE Country AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Trainer AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Topic AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Course AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Event AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Inquiry AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE TrainerTopic AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE LoginToken AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE TopicSuggestion AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE TrainerProfileVersion AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE Availability AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE Invoice AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE Participant AUTO_INCREMENT = 1`;
+
+  // Create countries (prioritize German-speaking countries first, then alphabetical)
+  const priorityCountries = [
+    { name: 'Deutschland', code: 'DE', phoneCode: '+49' },
+    { name: 'Österreich', code: 'AT', phoneCode: '+43' },
+    { name: 'Schweiz', code: 'CH', phoneCode: '+41' }
+  ];
+
+  const otherCountries = [
+    { name: 'Afghanistan', code: 'AF', phoneCode: '+93' },
+    { name: 'Albanien', code: 'AL', phoneCode: '+355' },
+    { name: 'Algerien', code: 'DZ', phoneCode: '+213' },
+    { name: 'Argentinien', code: 'AR', phoneCode: '+54' },
+    { name: 'Australien', code: 'AU', phoneCode: '+61' },
+    { name: 'Belgien', code: 'BE', phoneCode: '+32' },
+    { name: 'Brasilien', code: 'BR', phoneCode: '+55' },
+    { name: 'Bulgarien', code: 'BG', phoneCode: '+359' },
+    { name: 'Chile', code: 'CL', phoneCode: '+56' },
+    { name: 'China', code: 'CN', phoneCode: '+86' },
+    { name: 'Dänemark', code: 'DK', phoneCode: '+45' },
+    { name: 'Estland', code: 'EE', phoneCode: '+372' },
+    { name: 'Finnland', code: 'FI', phoneCode: '+358' },
+    { name: 'Frankreich', code: 'FR', phoneCode: '+33' },
+    { name: 'Griechenland', code: 'GR', phoneCode: '+30' },
+    { name: 'Indien', code: 'IN', phoneCode: '+91' },
+    { name: 'Indonesien', code: 'ID', phoneCode: '+62' },
+    { name: 'Irland', code: 'IE', phoneCode: '+353' },
+    { name: 'Island', code: 'IS', phoneCode: '+354' },
+    { name: 'Israel', code: 'IL', phoneCode: '+972' },
+    { name: 'Italien', code: 'IT', phoneCode: '+39' },
+    { name: 'Japan', code: 'JP', phoneCode: '+81' },
+    { name: 'Kanada', code: 'CA', phoneCode: '+1' },
+    { name: 'Kolumbien', code: 'CO', phoneCode: '+57' },
+    { name: 'Kroatien', code: 'HR', phoneCode: '+385' },
+    { name: 'Lettland', code: 'LV', phoneCode: '+371' },
+    { name: 'Litauen', code: 'LT', phoneCode: '+370' },
+    { name: 'Luxemburg', code: 'LU', phoneCode: '+352' },
+    { name: 'Malaysia', code: 'MY', phoneCode: '+60' },
+    { name: 'Mexiko', code: 'MX', phoneCode: '+52' },
+    { name: 'Niederlande', code: 'NL', phoneCode: '+31' },
+    { name: 'Norwegen', code: 'NO', phoneCode: '+47' },
+    { name: 'Neuseeland', code: 'NZ', phoneCode: '+64' },
+    { name: 'Peru', code: 'PE', phoneCode: '+51' },
+    { name: 'Philippinen', code: 'PH', phoneCode: '+63' },
+    { name: 'Polen', code: 'PL', phoneCode: '+48' },
+    { name: 'Portugal', code: 'PT', phoneCode: '+351' },
+    { name: 'Rumänien', code: 'RO', phoneCode: '+40' },
+    { name: 'Russland', code: 'RU', phoneCode: '+7' },
+    { name: 'Saudi-Arabien', code: 'SA', phoneCode: '+966' },
+    { name: 'Schweden', code: 'SE', phoneCode: '+46' },
+    { name: 'Singapur', code: 'SG', phoneCode: '+65' },
+    { name: 'Slowakei', code: 'SK', phoneCode: '+421' },
+    { name: 'Slowenien', code: 'SI', phoneCode: '+386' },
+    { name: 'Spanien', code: 'ES', phoneCode: '+34' },
+    { name: 'Südafrika', code: 'ZA', phoneCode: '+27' },
+    { name: 'Südkorea', code: 'KR', phoneCode: '+82' },
+    { name: 'Thailand', code: 'TH', phoneCode: '+66' },
+    { name: 'Tschechien', code: 'CZ', phoneCode: '+420' },
+    { name: 'Türkei', code: 'TR', phoneCode: '+90' },
+    { name: 'Ukraine', code: 'UA', phoneCode: '+380' },
+    { name: 'Ungarn', code: 'HU', phoneCode: '+36' },
+    { name: 'Vereinigte Arabische Emirate', code: 'AE', phoneCode: '+971' },
+    { name: 'Vereinigtes Königreich', code: 'GB', phoneCode: '+44' },
+    { name: 'Vereinigte Staaten', code: 'US', phoneCode: '+1' }
+  ].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+  const countries = [...priorityCountries, ...otherCountries];
+
+  const createdCountries = [];
+  for (const countryData of countries) {
+    const country = await prisma.country.create({
+      data: countryData,
+    });
+    createdCountries.push(country);
+  }
+
+  // Get Germany reference for default selection
+  const germany = createdCountries.find(c => c.code === 'DE');
 
   // Create topics
   const topics = [
@@ -70,6 +161,7 @@ async function main() {
         bankName: 'Commerzbank AG'
       }),
       taxId: 'DE123456789',
+      countryId: germany?.id,
       status: 'ACTIVE'
     }
   });
@@ -82,6 +174,7 @@ async function main() {
       email: 'anna.schmidt@example.com',
       phone: '+49 987 654321',
       bio: 'Spezialistin für Digital Marketing und Content Creation.',
+      countryId: germany?.id,
       status: 'ACTIVE'
     }
   });
@@ -93,6 +186,7 @@ async function main() {
       email: 'thomas.weber@example.com',
       phone: '+49 555 123456',
       bio: 'Projektmanagement-Experte mit Fokus auf agile Methoden.',
+      countryId: germany?.id,
       status: 'ACTIVE'
     }
   });

@@ -1,5 +1,14 @@
 // Shared types for the Trainer Portal application
 
+export interface Country {
+  id: number;
+  name: string;
+  code: string;
+  phoneCode?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Trainer {
   id: number;
   firstName: string;
@@ -11,14 +20,32 @@ export interface Trainer {
   profilePicture?: string;
   bankDetails?: string;
   taxId?: string;
+  companyName?: string;
+  isCompany?: boolean;
+  dailyRate?: number;
   status: 'ACTIVE' | 'INACTIVE';
+  countryId?: number;
+  country?: Country;
   createdAt: string;
   updatedAt: string;
+  topics?: string[];
+  topicSuggestions?: TopicSuggestion[];
+  profileVersions?: TrainerProfileVersion[];
 }
 
 export interface Topic {
   id: number;
   name: string;
+}
+
+export interface TopicSuggestion {
+  id: number;
+  name: string;
+  trainerId: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  updatedAt: string;
+  trainer?: Trainer;
 }
 
 export interface Course {
@@ -111,6 +138,43 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+export interface RegisterResponse {
+  message: string;
+  trainer: Trainer;
+}
+
+export interface LoginResponse {
+  message: string;
+  trainer: Trainer;
+  loginLink?: string; // Only in development
+}
+
+export interface TokenVerificationResponse {
+  message: string;
+  trainer: Trainer;
+}
+
+export interface TrainerProfileVersion {
+  id: number;
+  trainerId: number;
+  version: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  bio?: string;
+  profilePicture?: string;
+  bankDetails?: string;
+  taxId?: string;
+  companyName?: string;
+  isCompany?: boolean;
+  dailyRate?: number;
+  changedFields: string; // JSON string
+  changedBy: string; // 'trainer' or 'admin'
+  createdAt: string;
+}
+
 // Form types
 export interface TrainerRegistrationForm {
   firstName: string;
@@ -120,6 +184,52 @@ export interface TrainerRegistrationForm {
   address: string;
   bio: string;
   topics: string[];
+  isCompany?: boolean;
+  companyName?: string;
+  dailyRate?: number;
+}
+
+export interface LoginFormData {
+  email: string;
+}
+
+export interface RegistrationFormData {
+  salutation: "male" | "female";
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  phoneType: "mobile" | "landline";
+  street: string;
+  zip: string;
+  city: string;
+  addressLine2: string;
+  countryId?: number;
+  isVisitorAddress: boolean;
+  isInvoiceAddress: boolean;
+  isDeliveryAddress: boolean;
+  isHeadquarterAddress: boolean;
+  bio: string;
+  profilePicture: string;
+  topics: string[];
+  isCompany: boolean;
+  companyName: string;
+  dailyRate?: number;
+}
+
+export interface TrainerProfileUpdateData {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  bio?: string;
+  profilePicture?: string;
+  bankDetails?: string;
+  taxId?: string;
+  companyName?: string;
+  isCompany?: boolean;
+  dailyRate?: number;
 }
 
 export interface BankDetails {
