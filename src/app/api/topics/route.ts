@@ -30,7 +30,23 @@ export async function GET(req: Request) {
   const query = searchParams.get("query") || "";
 
   if (!query || query.trim() === '') {
-    return NextResponse.json([], { status: 200 });
+    // Return all topics if no query is provided
+    try {
+      const topics = await prisma.topic.findMany({
+        select: {
+          id: true,
+          name: true,
+        },
+        orderBy: {
+          name: 'asc'
+        }
+      });
+      console.log(`API returning all topics from database:`, topics.length);
+      return NextResponse.json(topics);
+    } catch (dbError) {
+      console.warn("Database error, falling back to mock data:", dbError);
+      return NextResponse.json(mockTopics);
+    }
   }
 
   try {

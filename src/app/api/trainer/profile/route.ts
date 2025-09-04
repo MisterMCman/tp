@@ -27,12 +27,6 @@ export async function GET() {
           where: {
             status: 'PENDING'
           }
-        },
-        profileVersions: {
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 10 // Letzte 10 Versionen
         }
       }
     });
@@ -54,7 +48,7 @@ export async function GET() {
       address: trainer.address,
       bio: trainer.bio,
       profilePicture: trainer.profilePicture,
-      bankDetails: trainer.bankDetails,
+      iban: trainer.iban,
       taxId: trainer.taxId,
       companyName: trainer.companyName,
       isCompany: trainer.isCompany,
@@ -62,7 +56,6 @@ export async function GET() {
       status: trainer.status,
       topics: trainer.topics.map(t => t.topic.name),
       pendingSuggestions: trainer.topicSuggestions.map(s => s.name),
-      profileVersions: trainer.profileVersions,
       createdAt: trainer.createdAt.toISOString(),
       updatedAt: trainer.updatedAt.toISOString(),
     };
@@ -172,7 +165,7 @@ export async function PATCH(request: NextRequest) {
       address: updatedTrainer.address,
       bio: updatedTrainer.bio,
       profilePicture: updatedTrainer.profilePicture,
-      bankDetails: updatedTrainer.bankDetails,
+      iban: updatedTrainer.iban,
       taxId: updatedTrainer.taxId,
       companyName: updatedTrainer.companyName,
       isCompany: updatedTrainer.isCompany,

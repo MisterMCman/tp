@@ -4,16 +4,20 @@ const prisma = new PrismaClient();
 
 async function main() {
   // Clear existing data in correct order (delete child records before parent records)
+  await prisma.trainingRequest.deleteMany();
+  await prisma.training.deleteMany();
   await prisma.inquiry.deleteMany();
   await prisma.participant.deleteMany();
   await prisma.event.deleteMany();
   await prisma.course.deleteMany();
   await prisma.trainerTopic.deleteMany();
   await prisma.loginToken.deleteMany();
+  await prisma.trainingCompanyLoginToken.deleteMany();
   await prisma.topicSuggestion.deleteMany();
   await prisma.trainerProfileVersion.deleteMany();
   await prisma.availability.deleteMany();
   await prisma.invoice.deleteMany();
+  await prisma.trainingCompany.deleteMany();
   await prisma.trainer.deleteMany();
   await prisma.topic.deleteMany();
   await prisma.country.deleteMany();
@@ -27,11 +31,15 @@ async function main() {
   await prisma.$executeRaw`ALTER TABLE Inquiry AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainerTopic AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE LoginToken AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE TrainingCompanyLoginToken AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TopicSuggestion AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainerProfileVersion AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Availability AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Invoice AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Participant AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE TrainingCompany AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE Training AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE TrainingRequest AUTO_INCREMENT = 1`;
 
   // Create countries (prioritize German-speaking countries first, then alphabetical)
   const priorityCountries = [
@@ -154,12 +162,7 @@ async function main() {
       phone: '017670910870',
       address: 'Hermannstraße 3\n33602 Bielefeld\nDeutschland',
       bio: 'Vielseitiger Trainer mit Expertise in Programming, Design und Projektmanagement.',
-      bankDetails: JSON.stringify({
-        accountHolder: 'Lorenz Surkemper',
-        iban: 'DE89 3704 0044 0532 0130 00',
-        bic: 'COBADEFFXXX',
-        bankName: 'Commerzbank AG'
-      }),
+      iban: 'DE89 3704 0044 0532 0130 00',
       taxId: 'DE123456789',
       countryId: germany?.id,
       status: 'ACTIVE'
@@ -268,6 +271,161 @@ async function main() {
       data: { trainerId: trainer3.id, topicId: excelTopic.id }
     });
   }
+
+  // Create test training companies
+  console.log('\\n📍 Creating training companies...');
+
+  const company1 = await prisma.trainingCompany.create({
+    data: {
+      companyName: 'PowerToWork GmbH',
+      contactName: 'Sarah Müller',
+      consultantName: 'Max Bauer',
+      email: 'max.bauer@powertowork.de',
+      phone: '+49 30 12345678',
+      address: 'Friedrichstraße 123\\n10117 Berlin\\nDeutschland',
+      bio: 'PowerToWork ist ein führendes Unternehmen für Personalentwicklung und Schulungen in der DACH-Region. Wir bieten maßgeschneiderte Trainingslösungen für Unternehmen jeder Größe.',
+      website: 'https://www.powertowork.de',
+      industry: 'consulting',
+      employees: '51-200',
+      status: 'ACTIVE',
+      countryId: germany?.id,
+    }
+  });
+
+  const company2 = await prisma.trainingCompany.create({
+    data: {
+      companyName: 'TechAcademy Solutions',
+      contactName: 'Dr. Klaus Weber',
+      consultantName: 'Lisa Schneider',
+      email: 'lisa.schneider@techacademy.de',
+      phone: '+49 89 98765432',
+      address: 'Maximilianstraße 45\\n80539 München\\nDeutschland',
+      bio: 'TechAcademy Solutions ist spezialisiert auf IT-Schulungen und digitale Transformation. Wir vermitteln die besten Trainer für moderne Technologien und agile Methoden.',
+      website: 'https://www.techacademy.de',
+      industry: 'it',
+      employees: '11-50',
+      status: 'ACTIVE',
+      countryId: germany?.id,
+    }
+  });
+
+  const company3 = await prisma.trainingCompany.create({
+    data: {
+      companyName: 'Global Learning Partners',
+      contactName: 'Anna Fischer',
+      consultantName: 'Thomas Richter',
+      email: 'thomas.richter@globallearning.de',
+      phone: '+49 69 55566677',
+      address: 'Mainzer Landstraße 567\\n60327 Frankfurt am Main\\nDeutschland',
+      bio: 'Global Learning Partners verbindet internationale Expertise mit lokalen Trainern. Wir organisieren Schulungen in mehreren Sprachen und unterstützen multinationale Unternehmen.',
+      website: 'https://www.globallearning.de',
+      industry: 'education',
+      employees: '201-500',
+      status: 'ACTIVE',
+      countryId: germany?.id,
+    }
+  });
+
+  console.log('✅ Training companies created:');
+  console.log(`  - Company 1 (ID: ${company1.id}): PowerToWork GmbH`);
+  console.log(`  - Company 2 (ID: ${company2.id}): TechAcademy Solutions`);
+  console.log(`  - Company 3 (ID: ${company3.id}): Global Learning Partners`);
+
+  // Create sample trainings for testing the new training system
+  console.log('\\n📍 Creating sample trainings...');
+
+  const training1 = await prisma.training.create({
+    data: {
+      title: 'Python Grundlagen Workshop',
+      topicId: pythonTopic?.id || 1,
+      companyId: company2.id, // TechAcademy Solutions
+      startDate: new Date('2024-02-15'),
+      endDate: new Date('2024-02-15'),
+      startTime: '09:00',
+      endTime: '16:00',
+      location: 'Online (Zoom)',
+      participants: 12,
+      dailyRate: 450,
+      description: 'Umfassender Python-Workshop für Anfänger. Wir behandeln Grundlagen der Programmierung, Datenstrukturen und erste praktische Projekte.',
+      status: 'PUBLISHED'
+    }
+  });
+
+  const training2 = await prisma.training.create({
+    data: {
+      title: 'Projektmanagement mit agilen Methoden',
+      topicId: projectTopic?.id || 1,
+      companyId: company1.id, // PowerToWork GmbH
+      startDate: new Date('2024-03-10'),
+      endDate: new Date('2024-03-11'),
+      startTime: '09:00',
+      endTime: '17:00',
+      location: 'Berlin, Friedrichstraße 123',
+      participants: 15,
+      dailyRate: 550,
+      description: 'Zweitägiger Workshop zu modernem Projektmanagement mit Fokus auf Scrum und Kanban-Methoden.',
+      status: 'PUBLISHED'
+    }
+  });
+
+  const training3 = await prisma.training.create({
+    data: {
+      title: 'UI/UX Design Grundlagen',
+      topicId: figmaTopic?.id || 1,
+      companyId: company3.id, // Global Learning Partners
+      startDate: new Date('2024-04-05'),
+      endDate: new Date('2024-04-05'),
+      startTime: '10:00',
+      endTime: '15:00',
+      location: 'München, Maximilianstraße 45',
+      participants: 8,
+      dailyRate: 400,
+      description: 'Einführung in UI/UX Design Prinzipien mit praktischen Übungen in Figma.',
+      status: 'DRAFT'
+    }
+  });
+
+  console.log('✅ Sample trainings created:');
+  console.log(`  - Training 1 (ID: ${training1.id}): Python Grundlagen Workshop`);
+  console.log(`  - Training 2 (ID: ${training2.id}): Projektmanagement Workshop`);
+  console.log(`  - Training 3 (ID: ${training3.id}): UI/UX Design Workshop`);
+
+  // Create training requests (some accepted, some pending)
+  console.log('\\n📍 Creating training requests...');
+
+  // Training 1: Python Workshop - request to main trainer (Lorenz)
+  const request1 = await prisma.trainingRequest.create({
+    data: {
+      trainingId: training1.id,
+      trainerId: mainTrainer.id,
+      status: 'ACCEPTED',
+      message: 'Interesse an diesem Python-Workshop. Ich habe bereits Erfahrung mit Python-Schulungen.'
+    }
+  });
+
+  // Training 2: Project Management - request to main trainer
+  const request2 = await prisma.trainingRequest.create({
+    data: {
+      trainingId: training2.id,
+      trainerId: mainTrainer.id,
+      status: 'PENDING',
+      message: 'Ich würde mich freuen, diesen Workshop zu leiten.'
+    }
+  });
+
+  // Training 3: UI/UX - request to trainer2 (design focus)
+  const request3 = await prisma.trainingRequest.create({
+    data: {
+      trainingId: training3.id,
+      trainerId: trainer2.id,
+      status: 'PENDING'
+    }
+  });
+
+  console.log('✅ Training requests created:');
+  console.log(`  - Request 1: Python Workshop → Lorenz (ACCEPTED)`);
+  console.log(`  - Request 2: Project Management → Lorenz (PENDING)`);
+  console.log(`  - Request 3: UI/UX Design → Trainer 2 (PENDING)`);
 
   // Create courses for different trainers
   const pythonCourse = await prisma.course.create({
@@ -704,6 +862,9 @@ async function main() {
   console.log(`    - Tax ID: DE123456789`);
   console.log(`  - Trainer 2 (ID: ${trainer2.id}): Anna Schmidt - Design/Marketing`);
   console.log(`  - Trainer 3 (ID: ${trainer3.id}): Thomas Weber - Project Management`);
+  console.log(`  - Company 1 (ID: ${company1.id}): PowerToWork GmbH`);
+  console.log(`  - Company 2 (ID: ${company2.id}): TechAcademy Solutions`);
+  console.log(`  - Company 3 (ID: ${company3.id}): Global Learning Partners`);
   console.log('- Courses created: 8 courses with variety of topics');
   console.log('- Events created: Multiple events spanning past, present, and future');
   console.log('- Training requests (inquiries) created - ALL assigned to Lorenz Surkemper:');

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
+import { getTrainerData } from "@/lib/session";
+import Link from "next/link";
 
 interface Training {
   id: number;
@@ -26,23 +28,42 @@ export default function TrainingsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
   const [activeTraining, setActiveTraining] = useState<Training | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    // Load user data
+    const currentUser = getTrainerData();
+    setUser(currentUser);
+
     // Fetch actual trainings data from API
     const fetchTrainings = async () => {
       try {
-        // Fetch upcoming trainings
-        const upcomingResponse = await fetch('/api/trainings?trainerId=1&type=upcoming');
-        const pastResponse = await fetch('/api/trainings?trainerId=1&type=past');
-        
-        if (upcomingResponse.ok && pastResponse.ok) {
-          const upcomingData = await upcomingResponse.json();
-          const pastData = await pastResponse.json();
-          
-          setTrainings(upcomingData);
-          setPastTrainings(pastData);
-        } else {
-          console.error('Failed to fetch trainings data');
+        if (currentUser) {
+          let upcomingUrl = '/api/trainings?type=upcoming';
+          let pastUrl = '/api/trainings?type=past';
+
+          if (currentUser.userType === 'TRAINER') {
+            upcomingUrl += `&trainerId=${currentUser.id}`;
+            pastUrl += `&trainerId=${currentUser.id}`;
+          } else {
+            // For companies, get trainings they created
+            upcomingUrl += `&companyId=${currentUser.id}`;
+            pastUrl += `&companyId=${currentUser.id}`;
+          }
+
+          // Fetch upcoming trainings
+          const upcomingResponse = await fetch(upcomingUrl);
+          const pastResponse = await fetch(pastUrl);
+
+          if (upcomingResponse.ok && pastResponse.ok) {
+            const upcomingData = await upcomingResponse.json();
+            const pastData = await pastResponse.json();
+
+            setTrainings(upcomingData);
+            setPastTrainings(pastData);
+          } else {
+            console.error('Failed to fetch trainings data');
+          }
         }
       } catch (error) {
         console.error('Error fetching trainings:', error);
@@ -50,7 +71,7 @@ export default function TrainingsPage() {
         setLoading(false);
       }
     };
-    
+
     fetchTrainings();
   }, []);
 
@@ -298,7 +319,22 @@ export default function TrainingsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Meine Trainings</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">
+          {user?.userType === 'TRAINING_COMPANY' ? 'Geplante Trainings' : 'Meine Trainings'}
+        </h1>
+        {user?.userType === 'TRAINING_COMPANY' && (
+          <Link
+            href="/dashboard/trainings/create"
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 flex items-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+            </svg>
+            Neues Training erstellen
+          </Link>
+        )}
+      </div>
       
       {/* View Mode Selector */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">

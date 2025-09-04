@@ -11,6 +11,7 @@ export interface Country {
 
 export interface Trainer {
   id: number;
+  userType?: 'TRAINER' | 'TRAINING_COMPANY';
   firstName: string;
   lastName: string;
   email: string;
@@ -18,7 +19,7 @@ export interface Trainer {
   address?: string;
   bio?: string;
   profilePicture?: string;
-  bankDetails?: string;
+  iban?: string;
   taxId?: string;
   companyName?: string;
   isCompany?: boolean;
@@ -30,7 +31,27 @@ export interface Trainer {
   updatedAt: string;
   topics?: string[];
   topicSuggestions?: TopicSuggestion[];
-  profileVersions?: TrainerProfileVersion[];
+}
+
+export interface TrainingCompany {
+  id: number;
+  userType?: 'TRAINER' | 'TRAINING_COMPANY';
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  address?: string;
+  bio?: string;
+  logo?: string;
+  website?: string;
+  industry?: string;
+  employees?: string;
+  consultantName?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  countryId?: number;
+  country?: Country;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Topic {
@@ -165,7 +186,7 @@ export interface TrainerProfileVersion {
   address?: string;
   bio?: string;
   profilePicture?: string;
-  bankDetails?: string;
+  iban?: string;
   taxId?: string;
   companyName?: string;
   isCompany?: boolean;
@@ -225,7 +246,7 @@ export interface TrainerProfileUpdateData {
   address?: string;
   bio?: string;
   profilePicture?: string;
-  bankDetails?: string;
+  iban?: string;
   taxId?: string;
   companyName?: string;
   isCompany?: boolean;

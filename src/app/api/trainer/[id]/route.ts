@@ -53,7 +53,7 @@ export async function GET(
       profilePicture: trainer.profilePicture,
       taxId: trainer.taxId,
       topics: trainer.topics.map((tt: TrainerTopicWithTopic) => tt.topic.name),
-      bankDetails: trainer.bankDetails ? JSON.parse(trainer.bankDetails as string) : null
+      iban: trainer.iban
     };
 
     return NextResponse.json(transformedTrainer);
@@ -95,7 +95,7 @@ export async function PUT(
         bio: updateData.bio,
         profilePicture: updateData.profilePicture,
         taxId: updateData.taxId,
-        bankDetails: updateData.bankDetails ? JSON.stringify(updateData.bankDetails) : null,
+        iban: updateData.iban,
       }
     });
 
@@ -154,7 +154,7 @@ export async function PUT(
       profilePicture: finalTrainer!.profilePicture,
       taxId: finalTrainer!.taxId,
       topics: finalTrainer!.topics.map((tt: TrainerTopicWithTopic) => tt.topic.name),
-      bankDetails: finalTrainer!.bankDetails ? JSON.parse(finalTrainer!.bankDetails as string) : null
+      iban: finalTrainer!.iban
     };
 
     return NextResponse.json(transformedTrainer);

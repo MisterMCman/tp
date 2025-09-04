@@ -40,6 +40,66 @@ export default function RequestsPage() {
   const fetchRequests = async () => {
     try {
       setLoading(true);
+
+      // Get user data to determine if it's a trainer or company
+      const userData = localStorage.getItem('trainer_data');
+      if (!userData) {
+        console.error('No user data found');
+        setLoading(false);
+        return;
+      }
+
+      const user = JSON.parse(userData);
+
+      if (user.userType === 'TRAINER') {
+        // For trainers, fetch training requests from the new system
+        try {
+          const response = await fetch('/api/training-requests?trainerId=' + user.id);
+          if (response.ok) {
+            const trainingRequests = await response.json();
+
+            // Transform training requests to match the existing interface
+            const mapped: TrainingRequest[] = trainingRequests.map((request: any) => ({
+              id: request.id,
+              courseTitle: request.training.title,
+              topicName: request.training.topic.name,
+              date: request.training.startDate,
+              endTime: new Date(`${request.training.startDate.split('T')[0]}T${request.training.endTime}`).toISOString(),
+              location: request.training.location,
+              participants: request.training.participants,
+              originalPrice: request.training.dailyRate,
+              proposedPrice: request.training.dailyRate,
+              counterPrice: undefined,
+              message: request.message || "",
+              status: request.status.toLowerCase(),
+              createdAt: request.createdAt,
+              updatedAt: request.updatedAt,
+            }));
+
+            setRequests(mapped);
+            setFilteredRequests(mapped);
+          } else {
+            console.error('Failed to fetch training requests');
+          }
+        } catch (error) {
+          console.error('Error fetching training requests:', error);
+          // Fall back to old system if new system fails
+          await fetchLegacyRequests();
+        }
+      } else {
+        // For companies, we don't need to show requests (they create trainings)
+        setRequests([]);
+        setFilteredRequests([]);
+      }
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchLegacyRequests = async () => {
+    try {
       const list = await apiRequestedEvents.list();
       type ProdRequestedEvent = {
         id: number;
@@ -81,49 +141,82 @@ export default function RequestsPage() {
       setRequests(mapped);
       setFilteredRequests(mapped);
     } catch (error) {
-      console.error('Error fetching requests:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching legacy requests:', error);
     }
   };
 
   const updateRequest = async (id: number, updates: Partial<TrainingRequest>) => {
     try {
-      // Get trainer ID from localStorage for security validation
-      const trainerData = localStorage.getItem("trainer");
-      if (!trainerData) {
-        console.error('No trainer data found');
+      // Get user data to determine which system to use
+      const userData = localStorage.getItem("trainer_data");
+      if (!userData) {
+        console.error('No user data found');
         return null;
       }
-      
-      const trainer = JSON.parse(trainerData);
-      
-      const response = await fetch(`/api/requests/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...updates,
-          trainerId: trainer.id // Include trainer ID for security validation
-        }),
-      });
 
-      if (response.ok) {
-        const updatedRequest = await response.json();
-        setRequests(prev => 
-          prev.map(req => 
-            req.id === id ? updatedRequest : req
-          )
-        );
-        return updatedRequest;
-      } else {
-        const errorData = await response.json();
-        console.error('Failed to update request:', errorData.error);
-        if (response.status === 403) {
-          alert('Sie sind nicht berechtigt, diese Anfrage zu bearbeiten.');
+      const user = JSON.parse(userData);
+
+      if (user.userType === 'TRAINER') {
+        // Use new training request system
+        const response = await fetch('/api/training-requests', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            requestId: id,
+            status: updates.status,
+            message: updates.message
+          }),
+        });
+
+        if (response.ok) {
+          const updatedRequest = await response.json();
+          setRequests(prev =>
+            prev.map(req =>
+              req.id === id ? {
+                ...req,
+                status: updatedRequest.status,
+                message: updatedRequest.message,
+                updatedAt: updatedRequest.updatedAt
+              } : req
+            )
+          );
+          return updatedRequest;
+        } else {
+          const errorData = await response.json();
+          console.error('Failed to update training request:', errorData.error);
+          return null;
         }
-        return null;
+      } else {
+        // Use legacy system
+        const response = await fetch(`/api/requests/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...updates,
+            trainerId: user.id
+          }),
+        });
+
+        if (response.ok) {
+          const updatedRequest = await response.json();
+          setRequests(prev =>
+            prev.map(req =>
+              req.id === id ? updatedRequest : req
+            )
+          );
+          return updatedRequest;
+        } else {
+          const errorData = await response.json();
+          console.error('Failed to update legacy request:', errorData.error);
+          if (response.status === 403) {
+            alert('Sie sind nicht berechtigt, diese Anfrage zu bearbeiten.');
+          }
+          return null;
+        }
       }
     } catch (error) {
       console.error('Error updating request:', error);

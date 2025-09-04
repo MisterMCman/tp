@@ -8,17 +8,19 @@ datasource db {
 }
 
 model Country {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  code        String   @unique // ISO 3166-1 alpha-2
-  phoneCode   String?  // International phone code
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  trainers    Trainer[]
+  id                Int               @id @default(autoincrement())
+  name              String            @unique
+  code              String            @unique // ISO 3166-1 alpha-2
+  phoneCode         String?           // International phone code
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  trainers          Trainer[]
+  trainingCompanies TrainingCompany[]
 }
 
 model Trainer {
   id           Int           @id @default(autoincrement())
+  userType     UserType      @default(TRAINER)
   firstName    String
   lastName     String
   email        String        @unique
@@ -26,7 +28,7 @@ model Trainer {
   address      String?       @db.Text
   bio          String?       @db.Text
   profilePicture String?
-  bankDetails  String?       @db.Text  // JSON string with bank info: IBAN, BIC, Bank Name, Account Holder
+  iban         String?       // IBAN for bank transfers
   taxId        String?
   companyName  String?       // Firmenname falls es eine GmbH ist
   isCompany    Boolean       @default(false) // Gibt an ob es sich um eine Firma handelt
@@ -43,8 +45,48 @@ model Trainer {
   topicSuggestions TopicSuggestion[]
   profileVersions TrainerProfileVersion[]
   availabilities Availability[]
+  trainingRequests TrainingRequest[]
 
   @@index([countryId], map: "Trainer_countryId_fkey")
+}
+
+model TrainingCompany {
+  id           Int                  @id @default(autoincrement())
+  userType     UserType             @default(TRAINING_COMPANY)
+  companyName  String               // Company name
+  contactName  String               // Contact person name
+  email        String               @unique
+  phone        String
+  address      String?              @db.Text
+  bio          String?              @db.Text
+  logo         String?              // Company logo URL
+  website      String?              // Company website
+  industry     String?              // Industry/sector
+  employees    String?              // Company size (e.g., "1-10", "11-50", "51-200", "200+")
+  consultantName String?            // Name of the consultant using the platform
+  status       TrainerStatus        @default(ACTIVE)
+  countryId    Int?                 // Reference to Country
+  country      Country?             @relation(fields: [countryId], references: [id])
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  inquiries    Inquiry[]
+  loginTokens  TrainingCompanyLoginToken[]
+  trainings    Training[]
+
+  @@index([countryId], map: "TrainingCompany_countryId_fkey")
+}
+
+model TrainingCompanyLoginToken {
+  id                 Int             @id @default(autoincrement())
+  token              String          @unique
+  trainingCompanyId  Int
+  trainingCompany    TrainingCompany @relation(fields: [trainingCompanyId], references: [id])
+  createdAt          DateTime        @default(now())
+  expiresAt          DateTime
+  used               Boolean         @default(false)
+  usedAt             DateTime?
+
+  @@index([trainingCompanyId], map: "TrainingCompanyLoginToken_trainingCompanyId_fkey")
 }
 
 model LoginToken {
@@ -65,6 +107,7 @@ model Topic {
   name     String    @unique
   trainers TrainerTopic[]
   courses  Course[]
+  trainings Training[]
 }
 
 model TrainerTopic {
@@ -104,7 +147,7 @@ model TrainerProfileVersion {
   countryId     Int?
   bio           String?
   profilePicture String?
-  bankDetails   String?
+  iban          String?
   taxId         String?
   companyName   String?
   isCompany     Boolean?
@@ -118,21 +161,24 @@ model TrainerProfileVersion {
 }
 
 model Inquiry {
-  id            Int           @id @default(autoincrement())
-  trainerId     Int
-  eventId       Int
-  status        InquiryStatus @default(PENDING)
-  originalPrice Float
-  proposedPrice Float
-  counterPrice  Float?
-  message       String?       @db.Text
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  event         Event         @relation(fields: [eventId], references: [id])
-  trainer       Trainer       @relation(fields: [trainerId], references: [id])
+  id                 Int                 @id @default(autoincrement())
+  trainerId          Int
+  trainingCompanyId  Int?
+  eventId            Int
+  status             InquiryStatus       @default(PENDING)
+  originalPrice      Float
+  proposedPrice      Float
+  counterPrice       Float?
+  message            String?             @db.Text
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  event              Event               @relation(fields: [eventId], references: [id])
+  trainer            Trainer             @relation(fields: [trainerId], references: [id])
+  trainingCompany    TrainingCompany?    @relation(fields: [trainingCompanyId], references: [id])
 
   @@index([eventId], map: "Inquiry_eventId_fkey")
   @@index([trainerId], map: "Inquiry_trainerId_fkey")
+  @@index([trainingCompanyId], map: "Inquiry_trainingCompanyId_fkey")
 }
 
 model Event {
@@ -188,6 +234,11 @@ model Invoice {
   @@index([trainerId], map: "Invoice_trainerId_fkey")
 }
 
+enum UserType {
+  TRAINER
+  TRAINING_COMPANY
+}
+
 enum TrainerStatus {
   ACTIVE
   INACTIVE
@@ -229,4 +280,59 @@ enum TopicSuggestionStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+model Training {
+  id                 Int              @id @default(autoincrement())
+  title              String
+  topicId            Int
+  topic              Topic            @relation(fields: [topicId], references: [id])
+  companyId          Int
+  company            TrainingCompany  @relation(fields: [companyId], references: [id])
+  startDate          DateTime
+  endDate            DateTime
+  startTime          String           // Format: "HH:mm"
+  endTime            String           // Format: "HH:mm"
+  location           String
+  participants       Int
+  dailyRate          Float
+  description        String?          @db.Text
+  status             TrainingStatus   @default(DRAFT)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  requests           TrainingRequest[]
+
+  @@index([companyId], map: "Training_companyId_fkey")
+  @@index([topicId], map: "Training_topicId_fkey")
+}
+
+model TrainingRequest {
+  id          Int                @id @default(autoincrement())
+  trainingId  Int
+  training    Training           @relation(fields: [trainingId], references: [id])
+  trainerId   Int
+  trainer     Trainer            @relation(fields: [trainerId], references: [id])
+  status      TrainingRequestStatus @default(PENDING)
+  message     String?            @db.Text
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([trainingId, trainerId])
+  @@index([trainerId], map: "TrainingRequest_trainerId_fkey")
+  @@index([trainingId], map: "TrainingRequest_trainingId_fkey")
+}
+
+enum TrainingStatus {
+  DRAFT
+  PUBLISHED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TrainingRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
 }

@@ -74,18 +74,26 @@ export async function POST(req: Request) {
       }
       
 
-      // Find trainer by email
+      // Find trainer or training company by email
       const trainer = await prisma.trainer.findUnique({
         where: { email }
       });
 
-      // If trainer not found, return error
-      if (!trainer) {
+      const trainingCompany = await prisma.trainingCompany.findUnique({
+        where: { email }
+      });
+
+      // If neither trainer nor training company found, return error
+      if (!trainer && !trainingCompany) {
         return NextResponse.json(
-          { message: 'Kein Trainer mit dieser E-Mail gefunden.' },
+          { message: 'Kein Konto mit dieser E-Mail gefunden.' },
           { status: 401 }
         );
       }
+
+      const user = trainer || trainingCompany;
+      const userType = trainer ? 'trainer' : 'trainingCompany';
+      const userId = user!.id;
 
       // Generate a random token
       const tokenString = crypto.randomBytes(32).toString('hex');
@@ -96,14 +104,25 @@ export async function POST(req: Request) {
       
       // Store the token in database
       try {
-        await prisma.loginToken.create({
-          data: {
-            token: tokenString,
-            trainerId: trainer.id,
-            expiresAt: expiresAt,
-            used: false
-          }
-        });
+        if (userType === 'trainer') {
+          await prisma.loginToken.create({
+            data: {
+              token: tokenString,
+              trainerId: userId,
+              expiresAt: expiresAt,
+              used: false
+            }
+          });
+        } else {
+          await prisma.trainingCompanyLoginToken.create({
+            data: {
+              token: tokenString,
+              trainingCompanyId: userId,
+              expiresAt: expiresAt,
+              used: false
+            }
+          });
+        }
       } catch (createError) {
         console.error('Error creating login token:', createError);
         return NextResponse.json(
@@ -141,7 +160,7 @@ export async function POST(req: Request) {
         );
       }
       
-      // Find token in database
+      // Find token in database (check both trainer and training company tokens)
       const tokenData = await prisma.loginToken.findUnique({
         where: { token },
         include: {
@@ -156,24 +175,39 @@ export async function POST(req: Request) {
           }
         }
       });
-      
+
+      let trainingCompanyTokenData = null;
       if (!tokenData) {
+        trainingCompanyTokenData = await prisma.trainingCompanyLoginToken.findUnique({
+          where: { token },
+          include: {
+            trainingCompany: true
+          }
+        });
+      }
+
+      const finalTokenData = tokenData || trainingCompanyTokenData;
+
+      if (!finalTokenData) {
         return NextResponse.json(
           { message: 'Ungültiger Token.' },
           { status: 401 }
         );
       }
+
+      const user = tokenData ? finalTokenData.trainer : finalTokenData.trainingCompany;
+      const userType = tokenData ? 'trainer' : 'trainingCompany';
       
       // Check if token is expired
-      if (new Date() > tokenData.expiresAt) {
+      if (new Date() > finalTokenData.expiresAt) {
         return NextResponse.json(
           { message: 'Dieser Login-Link ist abgelaufen. Bitte fordern Sie einen neuen an.' },
           { status: 401 }
         );
       }
-      
+
       // Check if token was already used
-      if (tokenData.used) {
+      if (finalTokenData.used) {
         return NextResponse.json(
           { message: 'Dieser Login-Link wurde bereits verwendet.' },
           { status: 401 }
@@ -182,19 +216,38 @@ export async function POST(req: Request) {
       
       // Mark the token as used (with error handling for race conditions)
       try {
-        await prisma.loginToken.update({
-          where: { token },
-          data: {
-            used: true,
-            usedAt: new Date()
-          }
-        });
+        if (userType === 'trainer') {
+          await prisma.loginToken.update({
+            where: { token },
+            data: {
+              used: true,
+              usedAt: new Date()
+            },
+            select: { id: true } // Only select what we need
+          });
+        } else {
+          await prisma.trainingCompanyLoginToken.update({
+            where: { token },
+            data: {
+              used: true,
+              usedAt: new Date()
+            },
+            select: { id: true } // Only select what we need
+          });
+        }
       } catch (updateError) {
         console.warn('Token update failed, checking if already used:', updateError);
         // Check if token was already used by another request
-        const currentToken = await prisma.loginToken.findUnique({
-          where: { token }
-        });
+        let currentToken;
+        if (userType === 'trainer') {
+          currentToken = await prisma.loginToken.findUnique({
+            where: { token }
+          });
+        } else {
+          currentToken = await prisma.trainingCompanyLoginToken.findUnique({
+            where: { token }
+          });
+        }
 
         if (currentToken?.used) {
           return NextResponse.json(
@@ -207,24 +260,48 @@ export async function POST(req: Request) {
         throw updateError;
       }
 
-      // Format the trainer data for the response
-      const trainerResponse = {
-        id: tokenData.trainer.id,
-        firstName: tokenData.trainer.firstName,
-        lastName: tokenData.trainer.lastName,
-        email: tokenData.trainer.email,
-        phone: tokenData.trainer.phone,
-        status: tokenData.trainer.status,
-        topics: tokenData.trainer.topics.map(t => t.topic.name),
-        bio: tokenData.trainer.bio || '',
-        profilePicture: tokenData.trainer.profilePicture || '',
-        isCompany: tokenData.trainer.isCompany,
-        companyName: tokenData.trainer.companyName || '',
-      };
+      // Format the user data for the response
+      let userResponse;
+      if (userType === 'trainer') {
+        const trainerData = finalTokenData as { trainer: any }; // Type assertion for trainer token
+        userResponse = {
+          id: trainerData.trainer.id,
+          userType: 'TRAINER',
+          firstName: trainerData.trainer.firstName,
+          lastName: trainerData.trainer.lastName,
+          email: trainerData.trainer.email,
+          phone: trainerData.trainer.phone,
+          status: trainerData.trainer.status,
+          topics: trainerData.trainer.topics.map((t: { topic: { name: string } }) => t.topic.name),
+          bio: trainerData.trainer.bio || '',
+          profilePicture: trainerData.trainer.profilePicture || '',
+          iban: trainerData.trainer.iban,
+          isCompany: trainerData.trainer.isCompany,
+          companyName: trainerData.trainer.companyName || '',
+        };
+      } else {
+        const companyData = finalTokenData as { trainingCompany: any }; // Type assertion for training company token
+        userResponse = {
+          id: companyData.trainingCompany.id,
+          userType: 'TRAINING_COMPANY',
+          companyName: companyData.trainingCompany.companyName,
+          contactName: companyData.trainingCompany.contactName,
+          email: companyData.trainingCompany.email,
+          phone: companyData.trainingCompany.phone,
+          status: companyData.trainingCompany.status,
+          bio: companyData.trainingCompany.bio || '',
+          logo: companyData.trainingCompany.logo || '',
+          website: companyData.trainingCompany.website || '',
+          industry: companyData.trainingCompany.industry || '',
+          employees: companyData.trainingCompany.employees || '',
+          consultantName: companyData.trainingCompany.consultantName || '',
+        };
+      }
 
       // Set cookies for session management (7 days)
       const cookieStore = await cookies();
-      cookieStore.set('mr_token', 'trainer_' + tokenData.trainer.id, {
+      const tokenValue = userType === 'trainer' ? 'trainer_' + user!.id : 'company_' + user!.id;
+      cookieStore.set('mr_token', tokenValue, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -232,7 +309,7 @@ export async function POST(req: Request) {
         path: '/'
       });
 
-      cookieStore.set('trainer_data', JSON.stringify(trainerResponse), {
+      cookieStore.set('trainer_data', JSON.stringify(userResponse), {
         httpOnly: false, // Allow client-side access
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
@@ -240,10 +317,10 @@ export async function POST(req: Request) {
         path: '/'
       });
 
-      // Return success response with trainer data
+      // Return success response with user data
       return NextResponse.json({
         message: 'Login erfolgreich!',
-        trainer: trainerResponse,
+        trainer: userResponse,
       }, { status: 200 });
     }
 

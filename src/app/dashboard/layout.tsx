@@ -1,25 +1,34 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { clearSession, getTrainerData } from "@/lib/session";
 import Link from "next/link";
 
-// Define trainer type
-interface Trainer {
+// Define user type (trainer or training company)
+interface User {
   id: number;
-  firstName: string;
-  lastName: string;
+  userType: 'TRAINER' | 'TRAINING_COMPANY';
   email: string;
   phone: string;
   address?: string;
   status: string;
-  topics?: string[];
   bio?: string;
   profilePicture?: string;
+  logo?: string;
+  // Trainer-specific fields
+  firstName?: string;
+  lastName?: string;
+  topics?: string[];
   isCompany?: boolean;
   companyName?: string;
   dailyRate?: number;
+  // Training company-specific fields
+  contactName?: string;
+  website?: string;
+  industry?: string;
+  employees?: string;
+  consultantName?: string;
 }
 
 export default function DashboardLayout({
@@ -29,51 +38,41 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [trainer, setTrainer] = useState<Trainer | null>(null);
+  const searchParams = useSearchParams();
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const init = async () => {
       try {
-        // Try to get trainer data from cookies first
-        const trainerData = getTrainerData();
-        if (trainerData) {
-          setTrainer(trainerData as unknown as Trainer);
-        } else {
-          // Fallback to localStorage for backward compatibility
-          const token = localStorage.getItem("mr_token");
-          const instructorId = localStorage.getItem("mr_instructor_id");
-          if (!token || !instructorId) {
-            router.push("/");
-            return;
-          }
-          // Fallback to basic trainer object if no cookie data
-          const basicTrainer: Trainer = {
-            id: Number(instructorId),
-            firstName: "Trainer",
-            lastName: "",
-            email: "",
-            phone: "",
-            address: "",
-            bio: "",
-            profilePicture: "",
-            companyName: "",
-            isCompany: false,
-            dailyRate: undefined,
-            status: "ACTIVE",
-            topics: [],
-          };
-          setTrainer(basicTrainer);
+        // Check if we have a token in URL - let the page handle authentication
+        const token = searchParams.get('token');
+        console.log('Layout: Token in URL:', !!token);
+
+        if (token) {
+          // Token present - let the page handle authentication
+          // Don't set user data or show loading, let page handle it
+          console.log('Layout: Token detected, letting page handle authentication');
+          setLoading(false);
+          return;
         }
-      } catch {
-        clearSession();
-        router.push("/");
+
+        // No token - check if we have existing session
+        const userData = getTrainerData();
+        if (userData) {
+          console.log('Layout: Found existing session, setting user');
+          setUser(userData as unknown as User);
+        } else {
+          console.log('Layout: No session found');
+        }
+      } catch (error) {
+        console.error('Layout: Error during init:', error);
       } finally {
         setLoading(false);
       }
     };
     init();
-  }, [router]);
+  }, [searchParams]); // Include searchParams dependency
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Laden...</div>;
@@ -86,11 +85,19 @@ export default function DashboardLayout({
         <div className="ptw-sidebar-header">
           <h2 className="font-bold">TRAINER PORTAL</h2>
           <p className="text-sm">
-            {trainer?.firstName} {trainer?.lastName}
+            {user?.userType === 'TRAINER'
+              ? `${user.firstName} ${user.lastName}`
+              : user?.companyName || user?.contactName
+            }
           </p>
-          {trainer?.dailyRate && (
+          {user?.userType === 'TRAINER' && user.dailyRate && (
             <p className="text-xs mt-1" style={{ color: 'var(--ptw-accent-primary)' }}>
-              €{trainer.dailyRate}/Tag
+              €{user.dailyRate}/Tag
+            </p>
+          )}
+          {user?.userType === 'TRAINING_COMPANY' && user.industry && (
+            <p className="text-xs mt-1" style={{ color: 'var(--ptw-accent-primary)' }}>
+              {user.industry}
             </p>
           )}
         </div>

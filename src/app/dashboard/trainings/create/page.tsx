@@ -1,0 +1,614 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { getTrainerData } from "@/lib/session";
+import Link from "next/link";
+
+interface Trainer {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  dailyRate: number;
+  profilePicture?: string;
+  topics: string[];
+  bio?: string;
+}
+
+interface Topic {
+  id: number;
+  name: string;
+}
+
+interface TrainingFormData {
+  title: string;
+  topicId: string;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  participants: string;
+  dailyRate: string;
+  description: string;
+  selectedTrainers: number[];
+}
+
+export default function CreateTrainingPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [availableTrainers, setAvailableTrainers] = useState<Trainer[]>([]);
+  const [filteredTrainers, setFilteredTrainers] = useState<Trainer[]>([]);
+  const [showTrainerSelection, setShowTrainerSelection] = useState(false);
+
+  // Topic search state
+  const [topicSearchTerm, setTopicSearchTerm] = useState('');
+  const [topicSuggestions, setTopicSuggestions] = useState<Topic[]>([]);
+  const [showTopicSuggestions, setShowTopicSuggestions] = useState(false);
+
+  const [formData, setFormData] = useState<TrainingFormData>({
+    title: '',
+    topicId: '',
+    startDate: '',
+    endDate: '',
+    startTime: '',
+    endTime: '',
+    location: '',
+    participants: '',
+    dailyRate: '',
+    description: '',
+    selectedTrainers: []
+  });
+
+  useEffect(() => {
+    // Check if user is authenticated and is a company
+    const currentUser = getTrainerData();
+    if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
+      router.push('/dashboard');
+      return;
+    }
+
+    setUser(currentUser);
+    loadTopics();
+    setLoading(false);
+  }, [router]);
+
+  useEffect(() => {
+    // Filter trainers when topic changes
+    if (formData.topicId && formData.topicId !== '0') {
+      filterTrainersByTopic(formData.topicId);
+    } else {
+      setFilteredTrainers([]);
+    }
+  }, [formData.topicId]);
+
+  const loadTopics = async () => {
+    try {
+      const response = await fetch('/api/topics');
+      if (response.ok) {
+        const data = await response.json();
+        setTopics(data);
+      }
+    } catch (error) {
+      console.error('Error loading topics:', error);
+    }
+  };
+
+  const filterTrainersByTopic = async (topicId: string) => {
+    try {
+      const response = await fetch(`/api/trainers/search?topicId=${topicId}&status=ACTIVE`);
+      if (response.ok) {
+        const data = await response.json();
+        const trainers = Array.isArray(data.trainers) ? data.trainers : [];
+        setAvailableTrainers(trainers);
+        setFilteredTrainers(trainers);
+      } else {
+        // If API fails, set empty arrays
+        setAvailableTrainers([]);
+        setFilteredTrainers([]);
+      }
+    } catch (error) {
+      console.error('Error loading trainers:', error);
+      // Set empty arrays on error
+      setAvailableTrainers([]);
+      setFilteredTrainers([]);
+    }
+  };
+
+  const handleTopicSearch = async (term: string) => {
+    setTopicSearchTerm(term);
+
+    if (term.length < 2) {
+      setTopicSuggestions([]);
+      setShowTopicSuggestions(false);
+      return;
+    }
+
+    try {
+      // First try to get topic suggestions
+      const response = await fetch('/api/trainers/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: term })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // The API returns topics array with suggestions
+        const apiTopics = data.topics || [];
+        const filteredTopics = apiTopics
+          .filter((topic: any) => topic && topic.name && topic.name.toLowerCase().includes(term.toLowerCase()))
+          .slice(0, 10);
+
+        setTopicSuggestions(filteredTopics);
+        setShowTopicSuggestions(filteredTopics.length > 0);
+      } else {
+        // Fallback to searching all topics
+        const filteredTopics = topics
+          .filter(topic => topic.name.toLowerCase().includes(term.toLowerCase()))
+          .slice(0, 10);
+
+        setTopicSuggestions(filteredTopics);
+        setShowTopicSuggestions(filteredTopics.length > 0);
+      }
+    } catch (error) {
+      console.error('Error searching topics:', error);
+      // Fallback to local search
+      const filteredTopics = topics
+        .filter(topic => topic.name.toLowerCase().includes(term.toLowerCase()))
+        .slice(0, 10);
+
+      setTopicSuggestions(filteredTopics);
+      setShowTopicSuggestions(filteredTopics.length > 0);
+    }
+  };
+
+  const selectTopic = (topic: Topic) => {
+    setFormData(prev => ({
+      ...prev,
+      topicId: topic.id.toString()
+    }));
+    setTopicSearchTerm(topic.name);
+    setShowTopicSuggestions(false);
+
+    // Filter trainers by selected topic if it has an ID
+    if (topic.id && topic.id > 0) {
+      filterTrainersByTopic(topic.id.toString());
+    } else {
+      // If it's a new topic suggestion, clear trainer list for now
+      setAvailableTrainers([]);
+      setFilteredTrainers([]);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleTrainerSelection = (trainerId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedTrainers: prev.selectedTrainers.includes(trainerId)
+        ? prev.selectedTrainers.filter(id => id !== trainerId)
+        : [...prev.selectedTrainers, trainerId]
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+
+    try {
+      // Check if we have a valid topic ID
+      let topicId = formData.topicId;
+      if (!topicId || topicId === '0') {
+        // If no valid topic ID, try to find or create the topic
+        const selectedTopic = topics.find(t => t.name.toLowerCase() === topicSearchTerm.toLowerCase());
+        if (selectedTopic) {
+          topicId = selectedTopic.id.toString();
+        } else {
+          // For now, require a valid topic - in future we could create new topics
+          alert('Bitte wählen Sie ein gültiges Thema aus der Liste aus.');
+          setSaving(false);
+          return;
+        }
+      }
+
+      // First create the training
+      const trainingResponse = await fetch('/api/trainings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...formData,
+          topicId: topicId,
+          companyId: user.id,
+          selectedTrainers: undefined // Don't send selectedTrainers to training creation
+        }),
+      });
+
+      if (trainingResponse.ok) {
+        const trainingData = await trainingResponse.json();
+
+        // Then send requests to selected trainers
+        if (formData.selectedTrainers.length > 0) {
+          await fetch('/api/training-requests', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              trainingId: trainingData.id,
+              trainerIds: formData.selectedTrainers
+            }),
+          });
+        }
+
+        router.push('/dashboard/trainings');
+      } else {
+        const error = await trainingResponse.json();
+        alert(`Fehler: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error creating training:', error);
+      alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-6">
+        <Link
+          href="/dashboard/trainings"
+          className="inline-flex items-center text-primary-600 hover:text-primary-800 mb-4"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 01.029-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+          </svg>
+          Zurück zu Trainings
+        </Link>
+        <h1 className="text-3xl font-bold text-gray-800">Neues Training erstellen</h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Training Details */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-semibold mb-4">Training Details</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Titel *
+              </label>
+              <input
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="z.B. Projektmanagement Grundlagen"
+              />
+            </div>
+
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Thema *
+              </label>
+              <input
+                type="text"
+                value={topicSearchTerm}
+                onChange={(e) => handleTopicSearch(e.target.value)}
+                onFocus={() => topicSearchTerm.length >= 2 && setShowTopicSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowTopicSuggestions(false), 200)}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="z.B. Projektmanagement, Python, Marketing..."
+              />
+              {topicSearchTerm && (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 absolute right-3 top-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+              )}
+
+              {showTopicSuggestions && topicSuggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {topicSuggestions.map((topic) => (
+                    <div
+                      key={topic.id}
+                      onClick={() => selectTopic(topic)}
+                      className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-900">{topic.name}</span>
+                        {topic.id > 0 && (
+                          <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                            Verfügbar
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {topicSearchTerm.length >= 2 && topicSuggestions.length === 0 && showTopicSuggestions && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+                  <div className="px-4 py-3 text-gray-500">
+                    Keine Themen gefunden für "{topicSearchTerm}"
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Startdatum *
+              </label>
+              <input
+                type="date"
+                name="startDate"
+                value={formData.startDate}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Enddatum *
+              </label>
+              <input
+                type="date"
+                name="endDate"
+                value={formData.endDate}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Startzeit *
+              </label>
+              <input
+                type="time"
+                name="startTime"
+                value={formData.startTime}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Endzeit *
+              </label>
+              <input
+                type="time"
+                name="endTime"
+                value={formData.endTime}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ort *
+              </label>
+              <input
+                type="text"
+                name="location"
+                value={formData.location}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="z.B. Online oder Büroadresse"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Teilnehmeranzahl *
+              </label>
+              <input
+                type="number"
+                name="participants"
+                value={formData.participants}
+                onChange={handleInputChange}
+                required
+                min="1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tagessatz (€) *
+              </label>
+              <input
+                type="number"
+                name="dailyRate"
+                value={formData.dailyRate}
+                onChange={handleInputChange}
+                required
+                min="1"
+                step="0.01"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="z.B. 500"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Beschreibung
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Detaillierte Beschreibung des Trainings..."
+            />
+          </div>
+        </div>
+
+        {/* Trainer Selection */}
+        {formData.topicId && formData.topicId !== '0' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Trainer auswählen</h2>
+              <button
+                type="button"
+                onClick={() => setShowTrainerSelection(!showTrainerSelection)}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+              >
+                {showTrainerSelection ? 'Auswahl ausblenden' : 'Trainer anzeigen'}
+              </button>
+            </div>
+
+            {showTrainerSelection && (
+              <div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Wählen Sie die Trainer aus, die Sie für dieses Training anfragen möchten.
+                  Gefunden: {Array.isArray(filteredTrainers) ? filteredTrainers.length : 0} Trainer
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+                  {Array.isArray(filteredTrainers) && filteredTrainers.map(trainer => (
+                    <div
+                      key={trainer.id}
+                      className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                        formData.selectedTrainers.includes(trainer.id)
+                          ? 'border-primary-500 bg-primary-50'
+                          : 'border-gray-200 hover:border-primary-300'
+                      }`}
+                      onClick={() => handleTrainerSelection(trainer.id)}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0">
+                          {trainer.profilePicture ? (
+                            <img
+                              src={trainer.profilePicture}
+                              alt={`${trainer.firstName} ${trainer.lastName}`}
+                              className="w-12 h-12 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center">
+                              <span className="text-gray-600 font-medium">
+                                {trainer.firstName[0]}{trainer.lastName[0]}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center">
+                            <h3 className="text-sm font-medium text-gray-900">
+                              {trainer.firstName} {trainer.lastName}
+                            </h3>
+                            {formData.selectedTrainers.includes(trainer.id) && (
+                              <svg className="ml-2 h-5 w-5 text-primary-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {trainer.dailyRate}€/Tag
+                          </p>
+                          {trainer.topics && trainer.topics.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {trainer.topics.slice(0, 3).map((topic, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-block px-2 py-1 text-xs bg-primary-100 text-primary-800 rounded-full"
+                                >
+                                  {topic}
+                                </span>
+                              ))}
+                              {trainer.topics.length > 3 && (
+                                <span className="text-xs text-gray-500">
+                                  +{trainer.topics.length - 3} weitere
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                )}
+                {!Array.isArray(filteredTrainers) && (
+                  <div className="text-center text-red-500 py-4">
+                    Fehler beim Laden der Trainer.
+                  </div>
+                )}
+
+                {Array.isArray(filteredTrainers) && filteredTrainers.length === 0 && (
+                  <p className="text-center text-gray-500 py-8">
+                    Keine Trainer für dieses Thema gefunden.
+                  </p>
+                )}
+
+                {formData.selectedTrainers.length > 0 && (
+                  <div className="mt-4 p-4 bg-primary-50 rounded-lg">
+                    <p className="text-sm text-primary-800">
+                      <strong>{formData.selectedTrainers.length} Trainer ausgewählt</strong>
+                      <br />
+                      Nach dem Erstellen werden diesen Trainern automatisch Anfragen gesendet.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Submit Buttons */}
+        <div className="flex justify-end space-x-4">
+          <Link
+            href="/dashboard/trainings"
+            className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+          >
+            Abbrechen
+          </Link>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Erstelle Training...' : 'Training erstellen'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

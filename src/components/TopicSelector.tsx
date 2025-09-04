@@ -7,6 +7,7 @@ interface TopicSelectorProps {
   onRemoveTopic: (topicName: string) => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
+  onSearch?: (term: string) => void;
   suggestions: { id: number; name: string; type?: 'existing' | 'suggestion'; status?: string }[];
 }
 
@@ -17,13 +18,14 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
   onRemoveTopic,
   searchTerm,
   onSearchChange,
+  onSearch,
   suggestions,
 }) => {
   const [isAddingSuggestion, setIsAddingSuggestion] = useState(false);
   const [suggestionMessage, setSuggestionMessage] = useState<string | null>(null);
 
   const handleAddSuggestion = async () => {
-    if (!searchTerm.trim()) return;
+    if (!(searchTerm || '').trim()) return;
 
     setIsAddingSuggestion(true);
 
@@ -34,7 +36,7 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: searchTerm.trim(),
+          name: (searchTerm || '').trim(),
         }),
       });
 
@@ -43,7 +45,7 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
       if (response.ok) {
         // Add the suggested topic using the onAddTopic callback
         // This will be handled by the parent component to add it to topicSuggestions list
-        onAddTopic(searchTerm.trim(), true);
+        onAddTopic((searchTerm || '').trim(), true);
         setSuggestionMessage('Vorschlag erfolgreich hinzugefügt!');
         setTimeout(() => setSuggestionMessage(null), 3000);
         onSearchChange(''); // Clear search
@@ -60,8 +62,8 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
     }
   };
 
-  const hasExactMatch = suggestions && suggestions.length > 0 ? suggestions.some(s => s.name.toLowerCase() === searchTerm.toLowerCase()) : false;
-  const showAddSuggestion = searchTerm.trim() && !hasExactMatch && (!suggestions || suggestions.length === 0);
+  const hasExactMatch = suggestions && suggestions.length > 0 ? suggestions.some(s => s.name.toLowerCase() === (searchTerm || '').toLowerCase()) : false;
+  const showAddSuggestion = (searchTerm || '').trim() && !hasExactMatch && (!suggestions || suggestions.length === 0);
 
   return (
     <div className="space-y-2">
@@ -71,7 +73,15 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
           id="topicSearch"
           placeholder="Python, Marketing, Projektmanagement..."
           value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={(e) => {
+            const newValue = e.target.value;
+            onSearchChange(newValue);
+            if (onSearch && newValue.length >= 2) {
+              onSearch(newValue);
+            } else if (onSearch && newValue.length < 2) {
+              onSearch(''); // Clear suggestions for short terms
+            }
+          }}
           className="form-input pr-10"
         />
         <label htmlFor="topicSearch" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
