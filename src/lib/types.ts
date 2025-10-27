@@ -258,4 +258,33 @@ export interface BankDetails {
   iban: string;
   bic: string;
   bankName: string;
+}
+
+export interface FileAttachment {
+  id: number;
+  inquiryMessageId: number;
+  filename: string;
+  storedFilename: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedAt: string;
+}
+
+export interface InquiryMessage {
+  id: number;
+  trainingRequestId: number;
+  trainingRequest?: TrainingRequest;
+  senderId: number;
+  senderType: 'TRAINER' | 'TRAINING_COMPANY';
+  recipientId: number;
+  recipientType: 'TRAINER' | 'TRAINING_COMPANY';
+  subject: string;
+  message: string;
+  isRead: boolean;
+  attachments?: FileAttachment[];
+  createdAt: string;
+  updatedAt: string;
+  sender?: Trainer | TrainingCompany;
+  recipient?: Trainer | TrainingCompany;
 } 

@@ -35,7 +35,70 @@ export async function GET(request: NextRequest) {
       });
 
       // Transform to match frontend expectations
-      const transformedTrainings = trainings.map(training => ({
+      const transformedTrainings = trainings.map(training => {
+        // Find the accepted trainer request
+        const acceptedRequest = training.requests.find(r => r.status === 'ACCEPTED');
+
+        return {
+          id: training.id,
+          title: training.title,
+          topicName: training.topic.name,
+          date: training.startDate.toISOString(),
+          endTime: new Date(`${training.startDate.toISOString().split('T')[0]}T${training.endTime}`).toISOString(),
+          location: training.location,
+          participants: training.participants,
+          status: training.status.toLowerCase(),
+          description: training.description,
+          trainerNotes: null,
+          materials: [],
+          dailyRate: training.dailyRate,
+          startTime: training.startTime,
+          endDate: training.endDate.toISOString(),
+          requestCount: training.requests.length,
+          acceptedRequests: training.requests.filter(r => r.status === 'ACCEPTED').length,
+          assignedTrainer: acceptedRequest ? {
+            id: acceptedRequest.trainer.id,
+            firstName: acceptedRequest.trainer.firstName,
+            lastName: acceptedRequest.trainer.lastName,
+            fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
+          } : null
+        };
+      });
+
+      return NextResponse.json(transformedTrainings);
+    } else if (type === 'available') {
+      // Get trainings without assigned trainers for sending requests
+      const trainings = await prisma.training.findMany({
+        where: {
+          status: 'PUBLISHED',
+          requests: {
+            none: {
+              status: 'ACCEPTED'
+            }
+          }
+        },
+        include: {
+          topic: true,
+          company: {
+            select: {
+              id: true,
+              companyName: true,
+              contactName: true
+            }
+          },
+          requests: {
+            select: {
+              id: true,
+              status: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      const availableTrainings = trainings.map(training => ({
         id: training.id,
         title: training.title,
         topicName: training.topic.name,
@@ -43,18 +106,13 @@ export async function GET(request: NextRequest) {
         endTime: new Date(`${training.startDate.toISOString().split('T')[0]}T${training.endTime}`).toISOString(),
         location: training.location,
         participants: training.participants,
-        status: training.status.toLowerCase(),
-        description: training.description,
-        trainerNotes: null,
-        materials: [],
         dailyRate: training.dailyRate,
-        startTime: training.startTime,
-        endDate: training.endDate.toISOString(),
-        requestCount: training.requests.length,
-        acceptedRequests: training.requests.filter(r => r.status === 'ACCEPTED').length
+        description: training.description,
+        company: training.company,
+        requestCount: training.requests.length
       }));
 
-      return NextResponse.json(transformedTrainings);
+      return NextResponse.json(availableTrainings);
     } else if (trainerId) {
       // Legacy: Fetch trainings for trainer (old system)
       const now = new Date();

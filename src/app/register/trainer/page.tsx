@@ -336,8 +336,8 @@ function TrainerRegistrationContent() {
 
   // Handler für Themen-Suche
   const handleTopicSearch = async (searchTerm: string) => {
-    // Handle empty search term
-    if (!searchTerm || searchTerm.length < 2) {
+    // Handle empty or short search term
+    if (!searchTerm || searchTerm.length < 3) {
       setTopicSuggestions([]);
       return;
     }
@@ -346,15 +346,28 @@ function TrainerRegistrationContent() {
       const response = await fetch(`/api/topics?search=${encodeURIComponent(searchTerm)}`);
       if (response.ok) {
         const data = await response.json();
-        setTopicSuggestions(data.map((topic: { id: number; name: string; status: string }) => ({
+        
+        // Map the data to include type and status
+        const mappedSuggestions = data.map((topic: { 
+          id: number; 
+          name: string; 
+          short_title?: string;
+          displayName?: string;
+        }) => ({
           id: topic.id,
           name: topic.name,
-          type: 'existing',
-          status: topic.status,
-        })));
+          short_title: topic.short_title,
+          displayName: topic.displayName,
+          type: 'existing' as const,
+          status: 'online'
+        }));
+        
+        setTopicSuggestions(mappedSuggestions);
+        console.log(`Found ${mappedSuggestions.length} topics for "${searchTerm}"`);
       }
     } catch (error) {
       console.error('Error searching topics:', error);
+      setTopicSuggestions([]);
     }
   };
 
@@ -637,12 +650,19 @@ function TrainerRegistrationContent() {
                   value={formData.dailyRate || ''}
                   onChange={handleRegisterChange}
                   className="form-input"
-                  step="0.01"
+                  step="10"
                   min="0"
                 />
                 <label htmlFor="dailyRate" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Tageshonorar (EUR)
+                  Tageshonorar (EUR) - optional
                 </label>
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-800">
+                    💡 <strong>Hinweis:</strong> Dies ist nur ein grober Richtwert für eine Standard-Schulung (9-16 Uhr). 
+                    Sie können verschiedene Tagessätze für unterschiedliche Schulungen vereinbaren und diesen Wert 
+                    jederzeit in Ihren Profil-Einstellungen anpassen.
+                  </p>
+                </div>
               </div>
 
               {/* Topics */}

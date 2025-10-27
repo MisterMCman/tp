@@ -34,6 +34,24 @@ interface PastBooking {
   topicName: string;
 }
 
+interface AvailableTraining {
+  id: number;
+  title: string;
+  topicName: string;
+  date: string;
+  endTime: string;
+  location: string;
+  participants: number;
+  dailyRate: number;
+  description?: string;
+  company: {
+    id: number;
+    companyName: string;
+    contactName: string;
+  };
+  requestCount: number;
+}
+
 export default function TrainerProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -41,8 +59,91 @@ export default function TrainerProfilePage() {
 
   const [trainer, setTrainer] = useState<Trainer | null>(null);
   const [pastBookings, setPastBookings] = useState<PastBooking[]>([]);
+  const [availableTrainings, setAvailableTrainings] = useState<AvailableTraining[]>([]);
+  const [selectedTrainings, setSelectedTrainings] = useState<Set<number>>(new Set());
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [sendingRequests, setSendingRequests] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  const handleOpenRequestModal = async () => {
+    try {
+      const response = await fetch('/api/trainings?type=available');
+      if (!response.ok) {
+        throw new Error('Fehler beim Laden der verfügbaren Schulungen');
+      }
+      const trainings = await response.json();
+      setAvailableTrainings(trainings);
+      setSelectedTrainings(new Set());
+      setShowRequestModal(true);
+    } catch (err) {
+      console.error('Error fetching available trainings:', err);
+      alert('Fehler beim Laden der verfügbaren Schulungen');
+    }
+  };
+
+  const handleTrainingSelection = (trainingId: number) => {
+    const newSelected = new Set(selectedTrainings);
+    if (newSelected.has(trainingId)) {
+      newSelected.delete(trainingId);
+    } else {
+      newSelected.add(trainingId);
+    }
+    setSelectedTrainings(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTrainings.size === availableTrainings.length) {
+      setSelectedTrainings(new Set());
+    } else {
+      setSelectedTrainings(new Set(availableTrainings.map(t => t.id)));
+    }
+  };
+
+  const handleSendRequests = async () => {
+    if (selectedTrainings.size === 0) {
+      alert('Bitte wählen Sie mindestens eine Schulung aus');
+      return;
+    }
+
+    setSendingRequests(true);
+    try {
+      const selectedIds = Array.from(selectedTrainings);
+      const response = await fetch('/api/training-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          trainingIds: selectedIds,
+          trainerId: parseInt(trainerId)
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Fehler beim Senden der Anfragen');
+      }
+
+      const result = await response.json();
+      alert(`Anfragen erfolgreich gesendet! ${selectedIds.length} Schulung(en) wurden angefragt.`);
+
+      setShowRequestModal(false);
+      setSelectedTrainings(new Set());
+    } catch (err) {
+      console.error('Error sending requests:', err);
+      alert('Fehler beim Senden der Anfragen');
+    } finally {
+      setSendingRequests(false);
+    }
+  };
 
   useEffect(() => {
     const fetchTrainerDetails = async () => {
@@ -249,10 +350,126 @@ export default function TrainerProfilePage() {
 
       {/* Contact Button */}
       <div className="mt-6 text-center">
-        <button className="ptw-button-primary">
+        <button
+          onClick={handleOpenRequestModal}
+          className="ptw-button-primary"
+          disabled={!trainer}
+        >
           ANFRAGE SENDEN
         </button>
       </div>
+
+      {/* Training Request Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800">
+                  Schulungen für {trainer?.firstName} {trainer?.lastName} anfragen
+                </h3>
+                <button
+                  onClick={() => setShowRequestModal(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {availableTrainings.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Keine verfügbaren Schulungen gefunden.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Select All Checkbox */}
+                  <div className="mb-4 flex items-center">
+                    <input
+                      type="checkbox"
+                      id="selectAll"
+                      checked={selectedTrainings.size === availableTrainings.length}
+                      onChange={handleSelectAll}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="selectAll" className="ml-2 text-sm font-medium text-gray-700">
+                      Alle auswählen ({availableTrainings.length})
+                    </label>
+                  </div>
+
+                  {/* Training List */}
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {availableTrainings.map((training) => (
+                      <div
+                        key={training.id}
+                        className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                          selectedTrainings.has(training.id)
+                            ? 'border-primary-500 bg-primary-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        onClick={() => handleTrainingSelection(training.id)}
+                      >
+                        <div className="flex items-start">
+                          <input
+                            type="checkbox"
+                            checked={selectedTrainings.has(training.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleTrainingSelection(training.id);
+                            }}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded mt-1"
+                          />
+                          <div className="ml-3 flex-1">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-semibold text-gray-900">{training.title}</h4>
+                                <p className="text-sm text-gray-600">{training.topicName}</p>
+                                <p className="text-sm text-gray-500">{training.company.companyName}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-medium text-gray-900">
+                                  {formatDate(training.date)}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                  {training.participants} Teilnehmer
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-2 flex justify-between items-center text-sm text-gray-500">
+                              <span>{training.location}</span>
+                              <span>€{training.dailyRate}/Tag</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="mt-6 flex justify-end space-x-3">
+                    <button
+                      onClick={() => setShowRequestModal(false)}
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      onClick={handleSendRequests}
+                      disabled={selectedTrainings.size === 0 || sendingRequests}
+                      className="px-4 py-2 bg-primary-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {sendingRequests ? 'Wird gesendet...' : `Anfragen senden (${selectedTrainings.size})`}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

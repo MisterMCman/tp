@@ -206,22 +206,15 @@ export async function POST(req: Request) {
         );
       }
 
-      // Check if token was already used
-      if (finalTokenData.used) {
-        return NextResponse.json(
-          { message: 'Dieser Login-Link wurde bereits verwendet.' },
-          { status: 401 }
-        );
-      }
+      // Note: Tokens are now reusable within their expiration period
       
-      // Mark the token as used (with error handling for race conditions)
+      // Update last used timestamp (don't mark as used for reusable tokens)
       try {
         if (userType === 'trainer') {
           await prisma.loginToken.update({
             where: { token },
             data: {
-              used: true,
-              usedAt: new Date()
+              usedAt: new Date() // Track when it was last used, but keep it reusable
             },
             select: { id: true } // Only select what we need
           });
@@ -229,35 +222,15 @@ export async function POST(req: Request) {
           await prisma.trainingCompanyLoginToken.update({
             where: { token },
             data: {
-              used: true,
-              usedAt: new Date()
+              usedAt: new Date() // Track when it was last used, but keep it reusable
             },
             select: { id: true } // Only select what we need
           });
         }
       } catch (updateError) {
-        console.warn('Token update failed, checking if already used:', updateError);
-        // Check if token was already used by another request
-        let currentToken;
-        if (userType === 'trainer') {
-          currentToken = await prisma.loginToken.findUnique({
-            where: { token }
-          });
-        } else {
-          currentToken = await prisma.trainingCompanyLoginToken.findUnique({
-            where: { token }
-          });
-        }
-
-        if (currentToken?.used) {
-          return NextResponse.json(
-            { message: 'Dieser Login-Link wurde bereits verwendet.' },
-            { status: 401 }
-          );
-        }
-
-        // If it's not used, rethrow the error
-        throw updateError;
+        console.warn('Token update failed:', updateError);
+        // For reusable tokens, we don't need to check if already used
+        // Just log the error and continue
       }
 
       // Format the user data for the response

@@ -8,16 +8,32 @@ interface TrainingCompany {
   id: number;
   userType: 'TRAINING_COMPANY';
   companyName: string;
-  contactName: string;
+  contactName?: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone: string;
   address?: string;
+  street?: string;
+  houseNumber?: string;
+  zipCode?: string;
+  city?: string;
+  countryId?: number;
+  country?: { id: number; name: string; code: string };
+  domain?: string;
   bio?: string;
   logo?: string;
   website?: string;
   industry?: string;
   employees?: string;
   consultantName?: string;
+  vatId?: string;
+  billingEmail?: string;
+  billingNotes?: string;
+  iban?: string;
+  taxId?: string;
+  tags?: string;
+  onboardingStatus?: string;
   status: string;
 }
 
@@ -26,11 +42,25 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<any>({});
+  const [countries, setCountries] = useState<{id: number, name: string, code: string}[]>([]);
 
 
   useEffect(() => {
     loadProfile();
+    loadCountries();
   }, []);
+
+  const loadCountries = async () => {
+    try {
+      const response = await fetch('/api/countries');
+      if (response.ok) {
+        const data = await response.json();
+        setCountries(data.countries || []);
+      }
+    } catch (error) {
+      console.error('Error loading countries:', error);
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -46,15 +76,28 @@ export default function ProfilePage() {
           setFormData({
             companyName: data.company.companyName,
             contactName: data.company.contactName,
+            firstName: data.company.firstName,
+            lastName: data.company.lastName,
             email: data.company.email,
             phone: data.company.phone,
-            address: data.company.address,
+            address: data.company.address, // Legacy
+            street: data.company.street,
+            houseNumber: data.company.houseNumber,
+            zipCode: data.company.zipCode,
+            city: data.company.city,
+            countryId: data.company.country?.id,
             bio: data.company.bio,
             logo: data.company.logo,
             website: data.company.website,
             industry: data.company.industry,
             employees: data.company.employees,
             consultantName: data.company.consultantName,
+            vatId: data.company.vatId,
+            billingEmail: data.company.billingEmail,
+            billingNotes: data.company.billingNotes,
+            iban: data.company.iban,
+            taxId: data.company.taxId,
+            tags: data.company.tags,
           });
         }
       } else {
@@ -68,7 +111,12 @@ export default function ProfilePage() {
             lastName: data.lastName,
             email: data.email,
             phone: data.phone,
-            address: data.address,
+            address: data.address, // Legacy field
+            street: data.street,
+            houseNumber: data.houseNumber,
+            zipCode: data.zipCode,
+            city: data.city,
+            countryId: data.country?.id,
             bio: data.bio,
             profilePicture: data.profilePicture,
             iban: data.iban,
@@ -183,12 +231,12 @@ export default function ProfilePage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ansprechpartner *
+                  Vorname (Ansprechpartner) *
                 </label>
                 <input
                   type="text"
-                  value={formData.contactName || ''}
-                  onChange={(e) => handleInputChange('contactName', e.target.value)}
+                  value={formData.firstName || ''}
+                  onChange={(e) => handleInputChange('firstName', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   required
                 />
@@ -196,13 +244,14 @@ export default function ProfilePage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Branche
+                  Nachname (Ansprechpartner) *
                 </label>
                 <input
                   type="text"
-                  value={formData.industry || ''}
-                  onChange={(e) => handleInputChange('industry', e.target.value)}
+                  value={formData.lastName || ''}
+                  onChange={(e) => handleInputChange('lastName', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
                 />
               </div>
             </>
@@ -263,16 +312,67 @@ export default function ProfilePage() {
             />
           </div>
 
+          {/* Address Fields - Trainer */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Adresse
             </label>
-            <textarea
-              value={formData.address || ''}
-              onChange={(e) => handleInputChange('address', e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Straße"
+                  value={formData.street || ''}
+                  onChange={(e) => handleInputChange('street', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  placeholder="Hausnummer"
+                  value={formData.houseNumber || ''}
+                  onChange={(e) => handleInputChange('houseNumber', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div>
+                <input
+                  type="text"
+                  placeholder="PLZ"
+                  value={formData.zipCode || ''}
+                  onChange={(e) => handleInputChange('zipCode', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Stadt"
+                  value={formData.city || ''}
+                  onChange={(e) => handleInputChange('city', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div className="md:col-span-2">
+                <select
+                  value={formData.countryId || ''}
+                  onChange={(e) => handleInputChange('countryId', parseInt(e.target.value) || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Land auswählen</option>
+                  {countries.map((country) => (
+                    <option key={country.id} value={country.id}>
+                      {country.name} ({country.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Additional Business Data */}
@@ -326,17 +426,36 @@ export default function ProfilePage() {
 
           {user?.userType === 'TRAINING_COMPANY' && (
             <>
+              {/* Additional Company Information */}
+              <div className="md:col-span-2 mt-6">
+                <h2 className="text-lg font-semibold mb-4">Zusätzliche Unternehmensinformationen</h2>
+              </div>
+
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Website
+                  Branche
                 </label>
-                <input
-                  type="url"
-                  value={formData.website || ''}
-                  onChange={(e) => handleInputChange('website', e.target.value)}
-                  placeholder="https://www.example.com"
+                <select
+                  value={formData.industry || ''}
+                  onChange={(e) => handleInputChange('industry', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
+                >
+                  <option value="">Branche auswählen</option>
+                  <option value="it">Informationstechnologie</option>
+                  <option value="finance">Finanzwesen</option>
+                  <option value="healthcare">Gesundheitswesen</option>
+                  <option value="education">Bildung</option>
+                  <option value="manufacturing">Fertigung</option>
+                  <option value="retail">Einzelhandel</option>
+                  <option value="consulting">Beratung</option>
+                  <option value="energy">Energie</option>
+                  <option value="automotive">Automobil</option>
+                  <option value="pharmaceutical">Pharmazeutisch</option>
+                  <option value="construction">Bauwesen</option>
+                  <option value="logistics">Logistik</option>
+                  <option value="telecommunications">Telekommunikation</option>
+                  <option value="other">Sonstige</option>
+                </select>
               </div>
 
               <div>
@@ -352,19 +471,117 @@ export default function ProfilePage() {
                   <option value="1-10">1-10 Mitarbeiter</option>
                   <option value="11-50">11-50 Mitarbeiter</option>
                   <option value="51-200">51-200 Mitarbeiter</option>
-                  <option value="200+">200+ Mitarbeiter</option>
+                  <option value="201-500">201-500 Mitarbeiter</option>
+                  <option value="501-1000">501-1000 Mitarbeiter</option>
+                  <option value="1000+">Über 1000 Mitarbeiter</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Berater-Name
+                  Website
+                </label>
+                <input
+                  type="url"
+                  value={formData.website || ''}
+                  onChange={(e) => handleInputChange('website', e.target.value)}
+                  placeholder="https://www.example.com"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Kundenberater
                 </label>
                 <input
                   type="text"
                   value={formData.consultantName || ''}
                   onChange={(e) => handleInputChange('consultantName', e.target.value)}
-                  placeholder="Name der Person, die das Portal nutzt"
+                  placeholder="Name des zuständigen Beraters"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tags / Stichworte
+                </label>
+                <input
+                  type="text"
+                  value={formData.tags || ''}
+                  onChange={(e) => handleInputChange('tags', e.target.value)}
+                  placeholder="z.B. IT, Schulungen, Remote"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Komma-getrennte Stichworte für bessere Suche</p>
+              </div>
+
+              {/* Financial Data Section for Companies */}
+              <div className="md:col-span-2 mt-6">
+                <h2 className="text-lg font-semibold mb-4">Finanzielle Daten</h2>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Umsatzsteuer-ID
+                </label>
+                <input
+                  type="text"
+                  value={formData.vatId || ''}
+                  onChange={(e) => handleInputChange('vatId', e.target.value)}
+                  placeholder="DE123456789"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rechnungs-E-Mail
+                </label>
+                <input
+                  type="email"
+                  value={formData.billingEmail || ''}
+                  onChange={(e) => handleInputChange('billingEmail', e.target.value)}
+                  placeholder="rechnung@unternehmen.de"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rechnungs-Hinweise
+                </label>
+                <textarea
+                  value={formData.billingNotes || ''}
+                  onChange={(e) => handleInputChange('billingNotes', e.target.value)}
+                  rows={3}
+                  placeholder="Besondere Hinweise für Rechnungen (z.B. Auftragsnummer, Kostenstelle)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  IBAN
+                </label>
+                <input
+                  type="text"
+                  value={formData.iban || ''}
+                  onChange={(e) => handleInputChange('iban', e.target.value)}
+                  placeholder="DE12 3456 7890 1234 5678 90"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Steuernummer
+                </label>
+                <input
+                  type="text"
+                  value={formData.taxId || ''}
+                  onChange={(e) => handleInputChange('taxId', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -473,7 +690,7 @@ export default function ProfilePage() {
                 ) : (
                   // Show upload area
                   <label
-                    htmlFor="profilePictureUpload"
+                    htmlFor={user?.userType === 'TRAINING_COMPANY' ? 'companyLogoUpload' : 'profilePictureUpload'}
                     className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -486,7 +703,7 @@ export default function ProfilePage() {
                       <p className="text-xs text-gray-500">PNG, JPG oder GIF (MAX. 800x400px)</p>
                     </div>
                     <input
-                      id="profilePictureUpload"
+                      id={user?.userType === 'TRAINING_COMPANY' ? 'companyLogoUpload' : 'profilePictureUpload'}
                       type="file"
                       className="hidden"
                       accept="image/*"
@@ -496,7 +713,8 @@ export default function ProfilePage() {
                           // Handle file upload here
                           const reader = new FileReader();
                           reader.onload = (e) => {
-                            handleInputChange('profilePicture', e.target?.result as string);
+                            const fieldName = user?.userType === 'TRAINING_COMPANY' ? 'logo' : 'profilePicture';
+                            handleInputChange(fieldName, e.target?.result as string);
                           };
                           reader.readAsDataURL(file);
                         }
@@ -507,19 +725,19 @@ export default function ProfilePage() {
               </div>
 
               {/* Change image button (only show if image exists) */}
-              {formData.profilePicture && (
+              {(user?.userType === 'TRAINING_COMPANY' ? formData.logo : formData.profilePicture) && (
                 <div className="flex flex-col justify-center">
                   <label
-                    htmlFor="profilePictureUpload"
+                    htmlFor={user?.userType === 'TRAINING_COMPANY' ? 'companyLogoUpload' : 'profilePictureUpload'}
                     className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg cursor-pointer hover:bg-blue-600 transition-colors"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     Bild ändern
-            </label>
-            <input
-                    id="profilePictureUpload"
+                  </label>
+                  <input
+                    id={user?.userType === 'TRAINING_COMPANY' ? 'companyLogoUpload' : 'profilePictureUpload'}
                     type="file"
                     className="hidden"
                     accept="image/*"
@@ -529,7 +747,8 @@ export default function ProfilePage() {
                         // Handle file upload here
                         const reader = new FileReader();
                         reader.onload = (e) => {
-                          handleInputChange('profilePicture', e.target?.result as string);
+                          const fieldName = user?.userType === 'TRAINING_COMPANY' ? 'logo' : 'profilePicture';
+                          handleInputChange(fieldName, e.target?.result as string);
                         };
                         reader.readAsDataURL(file);
                       }

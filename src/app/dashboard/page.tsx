@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { getTrainerData, saveTrainerData } from "@/lib/session";
+import { getTrainerData, saveTrainerData, saveSession } from "@/lib/session";
 
 interface Training {
   id: number;
@@ -86,6 +86,7 @@ export default function Dashboard() {
       if (response.ok) {
         const data = await response.json();
         saveTrainerData(data.trainer);
+        saveSession({ token: token, instructorId: data.trainer.id });
         setUser(data.trainer);
 
         // Fetch dashboard data (this will set loading to false)
@@ -157,7 +158,7 @@ export default function Dashboard() {
           if (trainerData) {
             console.log('Page: Found existing session, loading dashboard...');
             setUser(trainerData);
-            await fetchDashboardData(trainerData.id as number, trainerData.userType);
+            await fetchDashboardData(trainerData.id as number, trainerData.userType as string);
             setInitialized(true);
             hasProcessedAuth.current = true;
           } else {

@@ -13,9 +13,12 @@ export async function GET() {
       );
     }
 
-    // Fetch training company data
+    // Fetch training company data with country relation
     const company = await prisma.trainingCompany.findUnique({
-      where: { id: currentUser.id }
+      where: { id: currentUser.id },
+      include: {
+        country: true
+      }
     });
 
     if (!company) {
@@ -31,15 +34,30 @@ export async function GET() {
         userType: company.userType,
         companyName: company.companyName,
         contactName: company.contactName,
+        firstName: company.firstName,
+        lastName: company.lastName,
         email: company.email,
         phone: company.phone,
         address: company.address,
+        street: company.street,
+        houseNumber: company.houseNumber,
+        zipCode: company.zipCode,
+        city: company.city,
+        country: company.country,
+        domain: company.domain,
         bio: company.bio,
         logo: company.logo,
         website: company.website,
         industry: company.industry,
         employees: company.employees,
         consultantName: company.consultantName,
+        vatId: company.vatId,
+        billingEmail: company.billingEmail,
+        billingNotes: company.billingNotes,
+        iban: company.iban,
+        taxId: company.taxId,
+        tags: company.tags,
+        onboardingStatus: company.onboardingStatus,
         status: company.status
       }
     });
@@ -68,23 +86,48 @@ export async function PATCH(req: Request) {
     const {
       companyName,
       contactName,
+      firstName,
+      lastName,
       email,
       phone,
       address,
+      street,
+      houseNumber,
+      zipCode,
+      city,
+      countryId,
       bio,
       logo,
       website,
       industry,
       employees,
-      consultantName
+      consultantName,
+      vatId,
+      billingEmail,
+      billingNotes,
+      iban,
+      taxId,
+      tags
     } = body;
 
     // Validate required fields
-    if (!companyName || !contactName || !email || !phone) {
+    if (!companyName || !email || !phone) {
       return NextResponse.json(
         { message: 'Alle erforderlichen Felder müssen ausgefüllt werden.' },
         { status: 400 }
       );
+    }
+
+    // If firstName and lastName are provided, update contactName for legacy compatibility
+    let updatedContactName = contactName;
+    if (firstName && lastName) {
+      updatedContactName = `${firstName} ${lastName}`;
+    }
+
+    // If address fields are provided, update address for legacy compatibility
+    let updatedAddress = address;
+    if (street && houseNumber && zipCode && city) {
+      updatedAddress = `${street} ${houseNumber}, ${zipCode} ${city}`;
     }
 
     // Check if email is already taken by another user (excluding current user)
@@ -114,16 +157,32 @@ export async function PATCH(req: Request) {
       where: { id: currentUser.id },
       data: {
         companyName,
-        contactName,
+        contactName: updatedContactName,
+        firstName: firstName || null,
+        lastName: lastName || null,
         email,
         phone,
-        address,
-        bio,
-        logo,
-        website,
-        industry,
-        employees,
-        consultantName
+        address: updatedAddress,
+        street: street || null,
+        houseNumber: houseNumber || null,
+        zipCode: zipCode || null,
+        city: city || null,
+        countryId: countryId || null,
+        bio: bio || null,
+        logo: logo || null,
+        website: website || null,
+        industry: industry || null,
+        employees: employees || null,
+        consultantName: consultantName || null,
+        vatId: vatId || null,
+        billingEmail: billingEmail || null,
+        billingNotes: billingNotes || null,
+        iban: iban || null,
+        taxId: taxId || null,
+        tags: tags || null
+      },
+      include: {
+        country: true
       }
     });
 
@@ -134,15 +193,29 @@ export async function PATCH(req: Request) {
         userType: updatedCompany.userType,
         companyName: updatedCompany.companyName,
         contactName: updatedCompany.contactName,
+        firstName: updatedCompany.firstName,
+        lastName: updatedCompany.lastName,
         email: updatedCompany.email,
         phone: updatedCompany.phone,
         address: updatedCompany.address,
+        street: updatedCompany.street,
+        houseNumber: updatedCompany.houseNumber,
+        zipCode: updatedCompany.zipCode,
+        city: updatedCompany.city,
+        country: updatedCompany.country,
         bio: updatedCompany.bio,
         logo: updatedCompany.logo,
         website: updatedCompany.website,
         industry: updatedCompany.industry,
         employees: updatedCompany.employees,
         consultantName: updatedCompany.consultantName,
+        vatId: updatedCompany.vatId,
+        billingEmail: updatedCompany.billingEmail,
+        billingNotes: updatedCompany.billingNotes,
+        iban: updatedCompany.iban,
+        taxId: updatedCompany.taxId,
+        tags: updatedCompany.tags,
+        onboardingStatus: updatedCompany.onboardingStatus,
         status: updatedCompany.status
       }
     });

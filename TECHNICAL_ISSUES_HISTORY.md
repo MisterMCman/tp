@@ -678,6 +678,271 @@ ps aux | grep next
 lsof -i :3000
 ```
 
+### 13. Training Request Authentication Fix (2024-12-XX)
+**Issue**: Clicking "Vertrag anzeigen" (Accept) on training requests caused 401 Unauthorized and redirected users to login.
+
+**Root Cause**: The requests page was using external API endpoints (`/mr/events/event/...`) which required production authentication tokens, but the local session system wasn't properly configured for external API calls.
+
+**Solution**:
+- Switched from external API client to local API endpoints (`/api/training-requests`)
+- Updated `handleAccept()`, `handleReject()`, and `handleCounterOffer()` to use PATCH requests to local API
+- Removed dependency on `apiRequestedEvents` and `apiEvents` external clients
+- Added proper TypeScript interfaces for API responses
+
+**Files Changed**:
+- `src/app/dashboard/requests/page.tsx` - Complete refactor to use local API
+- Removed legacy fallback system (`fetchLegacyRequests`)
+- Fixed TypeScript type issues
+
+**Prevention**: Always use local API endpoints for internal features instead of external production APIs in development.
+
+### 14. Login Token Reusability Fix (2024-12-XX)
+**Issue**: Login tokens were being marked as "already used" after first login, despite being set to expire in 7 days.
+
+**Root Cause**: The system was designed for one-time use tokens, immediately marking them as `used: true` after successful authentication.
+
+**Solution**:
+- Modified login API to allow token reuse within the 7-day expiration period
+- Removed the check for `used` tokens in validation logic
+- Updated token update logic to only track `usedAt` timestamp, not mark as used
+- Updated Prisma schema comments to clarify reusable token behavior
+
+**Files Changed**:
+- `src/app/api/login/route.ts` - Removed single-use token logic
+- `prisma/schema.prisma` - Updated comments for LoginToken and TrainingCompanyLoginToken models
+
+**Behavior Change**:
+- ✅ **Before**: Tokens could only be used once, then became invalid
+- ✅ **After**: Tokens can be reused multiple times within 7-day expiration period
+- ✅ **Still enforced**: Token expiration after 7 days
+- ✅ **Tracking**: `usedAt` timestamp tracks last usage
+
+**Security Note**: Reusable tokens provide better UX while maintaining expiration security.
+
+### 15. Proper Logout Functionality (2024-12-XX)
+**Issue**: Logout only cleared local session data but didn't invalidate tokens in database, allowing potential token reuse.
+
+**Root Cause**: The logout button only called `clearSession()` which cleared cookies/localStorage but left tokens active in the database.
+
+**Solution**:
+- Created `/api/logout` endpoint that invalidates tokens in database
+- Updated logout button to call API before clearing local session
+- Handles both trainer and company tokens properly
+- Graceful fallback if API call fails
+
+**Files Changed**:
+- `src/app/api/logout/route.ts` - New logout API endpoint
+- `src/app/dashboard/layout.tsx` - Updated logout button with proper API call
+
+**Security Improvements**:
+- ✅ **Token Invalidation**: Database tokens are marked as used/expired
+- ✅ **Session Cleanup**: Local cookies and localStorage are cleared
+- ✅ **Cross-User Safety**: Prevents token reuse by different users
+- ✅ **Fallback Handling**: Logout works even if API call fails
+
+**User Experience**:
+- ✅ **Clean Logout**: No leftover session data
+- ✅ **Account Switching**: Users can login with different accounts immediately
+- ✅ **No Redirect Issues**: Proper session cleanup prevents authentication conflicts
+
+### 16. Assigned Trainer Display in Trainings (2024-12-XX)
+**Issue**: Companies couldn't see which trainer was assigned to their trainings after trainer acceptance.
+
+**Root Cause**: Training API response didn't include assigned trainer information for companies.
+
+**Solution**:
+- Modified `/api/trainings` to include `assignedTrainer` information for trainings with accepted requests
+- Updated trainings overview page to display assigned trainer names with clickable links
+- Updated training details modal to show assigned trainer prominently
+- Trainer profile pages are accessible by companies for viewing trainer details
+
+**Files Changed**:
+- `src/app/api/trainings/route.ts` - Added assignedTrainer to API response
+- `src/app/dashboard/trainings/page.tsx` - Added trainer display in overview and modal
+- Added proper TypeScript interfaces for trainer information
+
+**Features Added**:
+- ✅ **Trainer Names**: Display assigned trainer names in training cards
+- ✅ **Clickable Links**: Direct links to trainer profile pages
+- ✅ **Modal Display**: Enhanced training details with trainer information
+- ✅ **Profile Access**: Companies can view trainer profiles and past bookings
+
+**User Experience**:
+- ✅ **Clear Assignment**: Immediately see which trainer is assigned
+- ✅ **Easy Navigation**: One-click access to trainer profiles
+- ✅ **Complete Information**: View trainer details, contact info, and past collaboration history
+
+### 18. Differentiated Profile Pages for Trainers vs Companies (2024-12-XX)
+**Issue**: Profile pages were generic and didn't provide appropriate fields for different user types.
+
+**Root Cause**: Single profile interface tried to serve both trainer and company users with limited differentiation.
+
+**Solution**:
+- **Trainer Profiles**: Personal info, topics, daily rates, IBAN, tax ID, business data
+- **Company Profiles**: Company name, contact info, website, industry, employees, consultant, IBAN, tax ID
+- **Dynamic UI**: Different form sections based on user type
+- **Proper API Integration**: Separate endpoints for trainers (`/api/trainer/profile`) and companies (`/api/training-company/profile`)
+- **File Upload Handling**: Different image fields (profilePicture vs logo) with proper naming
+
+**Files Changed**:
+- `src/app/dashboard/profile/page.tsx` - Complete refactor with user-type-specific forms
+- `src/app/api/training-company/profile/route.ts` - Added IBAN and taxId support
+- Enhanced form validation and error handling
+
+**Trainer Profile Fields**:
+- ✅ Personal: First/Last name, email, phone, address
+- ✅ Business: Daily rate, IBAN, tax ID, company affiliation
+- ✅ Professional: Bio, topics, profile picture
+- ✅ Financial: Banking information for payments
+
+**Company Profile Fields**:
+- ✅ Company: Company name, contact person, industry, employee count
+- ✅ Contact: Email, phone, address, website
+- ✅ Financial: IBAN, tax ID for invoicing
+- ✅ Administrative: Consultant name, logo upload
+- ✅ Business: Industry classification, company description
+
+**User Experience Improvements**:
+- ✅ **Role-Specific**: Each user type gets relevant fields only
+- ✅ **Clear Labeling**: "Mein Profil" vs "Unternehmensprofil" headers
+- ✅ **Appropriate Sections**: Business data for trainers, company data for companies
+- ✅ **File Upload**: Profile pictures for trainers, logos for companies
+- ✅ **Validation**: Required fields based on user type
+- ✅ **Security**: Proper authorization checks for each endpoint
+
+**API Enhancements**:
+- ✅ **Type Safety**: Proper interfaces for trainer and company data
+- ✅ **Field Support**: IBAN and taxId fields for both user types
+- ✅ **Validation**: Email uniqueness across all user types
+- ✅ **Error Handling**: Comprehensive error messages and validation
+
+### 19. Enhanced Trainer Address Fields (2024-12-XX)
+**Issue**: Trainer address was stored as a single text field, making it difficult to validate and use for forms.
+
+**Root Cause**: Legacy address field design didn't support structured address input with proper validation.
+
+**Solution**:
+- **Database Schema**: Added separate fields for street, houseNumber, zipCode, city
+- **API Updates**: Enhanced trainer profile API to handle structured address data
+- **Form UI**: Replaced single address textarea with organized input fields
+- **Country Integration**: Added country dropdown using existing Country model
+- **Backward Compatibility**: Maintained legacy address field for existing data
+
+**Database Changes**:
+```sql
+-- New fields added to Trainer model
+street       String?       // Straße
+houseNumber  String?       // Hausnummer
+zipCode      String?       // PLZ
+city         String?       // Stadt
+```
+
+**API Enhancements**:
+- ✅ **Structured Data**: Separate address components in API responses
+- ✅ **Country Integration**: Include country relationship in trainer queries
+- ✅ **Migration Support**: Legacy address field preserved for existing data
+- ✅ **Validation Ready**: Individual fields can be validated separately
+
+**User Experience Improvements**:
+- ✅ **Clear Structure**: Street, house number, ZIP, city, country in organized layout
+- ✅ **Better Input**: Separate fields prevent formatting errors
+- ✅ **Country Selection**: Dropdown with country codes for clarity
+- ✅ **Responsive Design**: Fields adapt to different screen sizes
+- ✅ **Validation**: Individual field validation possible
+- ✅ **Auto-complete Ready**: Structured data supports future enhancements
+
+**Form Layout**:
+```
+┌─ Adresse ──────────────────────────────────────┐
+│ Straße:     [____________________] Hausnr: [_] │
+│ PLZ:        [____] Stadt:        [____________] │
+│ Land:       [Deutschland (DE) ▼]               │
+└─────────────────────────────────────────────────┘
+```
+
+**Technical Implementation**:
+- ✅ **Schema Migration**: Added new address fields to Trainer model
+- ✅ **API Routes**: Updated GET/PATCH trainer profile with new fields
+- ✅ **Frontend Forms**: Structured input fields with proper validation
+- ✅ **Country API**: New `/api/countries` endpoint for dropdown data
+- ✅ **TypeScript Support**: Proper typing for address components
+- ✅ **Backward Compatibility**: Legacy address field maintained
+
+### 17. Multi-Select Training Requests from Trainer Profile (2024-12-XX)
+**Issue**: No way for companies to send training requests directly from trainer profiles.
+
+**Root Cause**: Trainer profile pages only showed information but lacked interaction capabilities for companies.
+
+**Solution**:
+- Added "ANFRAGE SENDEN" button functionality to trainer profiles
+- Created modal showing all available trainings (without assigned trainers)
+- Implemented multi-select functionality with checkboxes
+- Added "Select All" feature for convenience
+- Enhanced training-requests API to handle multiple trainings for one trainer
+- Added comprehensive error handling and loading states
+
+**Files Changed**:
+- `src/app/dashboard/trainer/[id]/page.tsx` - Complete modal implementation with multi-select
+- `src/app/api/trainings/route.ts` - Added `type=available` endpoint for trainings without trainers
+- `src/app/api/training-requests/route.ts` - Enhanced to support multiple trainings per trainer
+
+**New Features**:
+- ✅ **Modal Interface**: Clean, responsive modal for training selection
+- ✅ **Multi-Select**: Individual checkboxes + "Select All" functionality
+- ✅ **Training Details**: Shows company, date, participants, location, pricing
+- ✅ **Visual Feedback**: Selected trainings highlighted with different styling
+- ✅ **Batch Requests**: Send multiple training requests in one action
+- ✅ **Progress Feedback**: Loading states and success/error messages
+
+**User Experience**:
+- ✅ **One-Click Access**: Direct from trainer profile to request creation
+- ✅ **Efficient Selection**: Multi-select with visual feedback
+- ✅ **Batch Processing**: Send multiple requests simultaneously
+- ✅ **Clear Feedback**: Success/error messages with request counts
+- ✅ **Responsive Design**: Works on all screen sizes
+
+**API Enhancements**:
+- ✅ **New Endpoint**: `/api/trainings?type=available` for available trainings
+- ✅ **Backward Compatibility**: Maintains existing single-request functionality
+- ✅ **Batch Support**: Handles multiple training IDs in single API call
+- ✅ **Status Updates**: Automatically publishes trainings when requested
+
+**Codebase Review Results**: ✅ **No additional issues found**. All components now use local APIs:
+- ✅ `/api/training-requests` - For training request management
+- ✅ `/api/trainings` - For training CRUD operations
+- ✅ `/api/trainer` - For trainer profile management
+- ✅ `/api/auth` - For authentication
+- ✅ PDF generation is done client-side with jsPDF (no external API calls)
+
+**Remaining External API References**: Only in `src/lib/apiClient.ts` (legacy code, not used by any component)
+
+## API Architecture Guidelines
+
+### ✅ Local-First Development Strategy
+
+**Always prioritize local API endpoints over external APIs:**
+
+1. **Create Local API Routes First**: `/src/app/api/[endpoint]/route.ts`
+2. **Use Prisma ORM**: For database operations with type safety
+3. **Client-Side Operations**: Use jsPDF, localStorage, etc. for client-only features
+4. **External APIs Only When Necessary**: For production services (payments, email, etc.)
+
+### Current API Endpoints (All Local)
+
+- `POST /api/auth/login` - User authentication
+- `GET|PATCH /api/trainer/profile` - Trainer profile management
+- `GET|POST /api/trainings` - Training CRUD operations
+- `GET|PATCH /api/training-requests` - Training request management
+- `GET /api/topics` - Topic management
+- `POST /api/seed` - Database seeding
+
+### Legacy Code Cleanup
+
+**Safe to remove from `src/lib/apiClient.ts`:**
+- `apiRequestedEvents` functions (replaced by `/api/training-requests`)
+- `apiEvents` functions (replaced by `/api/trainings`)
+- External API configuration (DEFAULT_BASE_URL, DEFAULT_PROXY_PATH)
+
 ## Future Prevention Strategies
 
 1. **Automated Testing**: Add unit and integration tests
@@ -686,6 +951,7 @@ lsof -i :3000
 4. **Documentation**: Keep this file updated with new issues
 5. **Error Monitoring**: Implement error tracking in production
 6. **Performance Monitoring**: Track slow queries and endpoints
+7. **API-First Development**: Always implement local APIs before UI components
 
 ---
 

@@ -95,6 +95,9 @@ The application will be available at [http://localhost:3000](http://localhost:30
 This Next.js application can be deployed on Vercel or any other hosting platform that supports Next.js.
 
 ```bash
+# Run application for development with live changes
+npm run dev
+
 # Build the application
 npm run build
 

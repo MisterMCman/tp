@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { clearSession, getTrainerData } from "@/lib/session";
+import { clearSession, getTrainerData, getToken } from "@/lib/session";
 import Link from "next/link";
 
 // Define user type (trainer or training company)
@@ -41,6 +41,31 @@ export default function DashboardLayout({
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const handleLogout = async () => {
+    try {
+      const token = getToken();
+      if (token) {
+        // Call logout API to invalidate token in database
+        await fetch('/api/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token }),
+        });
+      }
+    } catch (error) {
+      console.warn('Error during logout API call:', error);
+      // Continue with local logout even if API call fails
+    }
+
+    // Clear local session data
+    clearSession();
+
+    // Redirect to home page
+    router.push("/");
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -182,6 +207,50 @@ export default function DashboardLayout({
             </svg>
             ANFRAGEN
           </Link>
+          {user?.userType === 'TRAINER' && (
+            <Link
+              href="/dashboard/chat"
+              className={`ptw-nav-item ${pathname === "/dashboard/chat" ? "active" : ""}`}
+            >
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+              CHAT
+            </Link>
+          )}
+          {user?.userType === 'TRAINING_COMPANY' && (
+            <Link
+              href="/dashboard/messages"
+              className={`ptw-nav-item ${pathname === "/dashboard/messages" ? "active" : ""}`}
+            >
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+              NACHRICHTEN
+            </Link>
+          )}
           <Link
             href="/dashboard/invoices"
             className={`ptw-nav-item ${pathname === "/dashboard/invoices" ? "active" : ""}`}
@@ -205,10 +274,7 @@ export default function DashboardLayout({
         </nav>
         <div className="absolute bottom-0 w-64 border-t" style={{ borderColor: 'var(--ptw-border-primary)' }}>
           <button
-            onClick={() => {
-              clearSession();
-              router.push("/");
-            }}
+            onClick={handleLogout}
             className="ptw-nav-item w-full justify-start"
           >
             <svg

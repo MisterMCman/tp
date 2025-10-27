@@ -242,7 +242,7 @@ p {
   border: 1px solid var(--ptw-border-primary);
   border-radius: 8px;
   box-shadow: var(--ptw-shadow-primary);
-  max-height: 250px;
+  max-height: 400px; /* Increased from 250px to show more results */
   overflow-y: auto;
   z-index: 50;
   backdrop-filter: blur(10px);
@@ -263,6 +263,22 @@ p {
 
 .suggestions-dropdown li:last-child {
   border-bottom: none;
+}
+
+/* Animation for feedback messages */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
 }
 
 /* Modern Selected Topics */

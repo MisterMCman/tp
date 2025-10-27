@@ -27,7 +27,8 @@ export async function GET() {
           where: {
             status: 'PENDING'
           }
-        }
+        },
+        country: true
       }
     });
 
@@ -45,7 +46,12 @@ export async function GET() {
       lastName: trainer.lastName,
       email: trainer.email,
       phone: trainer.phone,
-      address: trainer.address,
+      address: trainer.address, // Legacy field
+      street: trainer.street,
+      houseNumber: trainer.houseNumber,
+      zipCode: trainer.zipCode,
+      city: trainer.city,
+      country: trainer.country,
       bio: trainer.bio,
       profilePicture: trainer.profilePicture,
       iban: trainer.iban,
@@ -151,7 +157,8 @@ export async function PATCH(request: NextRequest) {
           where: {
             status: 'PENDING'
           }
-        }
+        },
+        country: true
       }
     });
 
@@ -162,7 +169,12 @@ export async function PATCH(request: NextRequest) {
       lastName: updatedTrainer.lastName,
       email: updatedTrainer.email,
       phone: updatedTrainer.phone,
-      address: updatedTrainer.address,
+      address: updatedTrainer.address, // Legacy field
+      street: updatedTrainer.street,
+      houseNumber: updatedTrainer.houseNumber,
+      zipCode: updatedTrainer.zipCode,
+      city: updatedTrainer.city,
+      country: updatedTrainer.country,
       bio: updatedTrainer.bio,
       profilePicture: updatedTrainer.profilePicture,
       iban: updatedTrainer.iban,

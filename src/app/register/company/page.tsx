@@ -7,15 +7,14 @@ import { useToast } from "@/components/Toast";
 
 interface CompanyFormData {
   companyName: string;
-  contactName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
-  address: string;
-  bio: string;
-  website: string;
-  industry: string;
-  employees: string;
-  consultantName: string;
+  street: string;
+  houseNumber: string;
+  zipCode: string;
+  city: string;
   countryId: number | undefined;
 }
 
@@ -29,15 +28,14 @@ function CompanyRegistrationContent() {
   // State for company registration data
   const [companyFormData, setCompanyFormData] = useState<CompanyFormData>({
     companyName: '',
-    contactName: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
-    address: '',
-    bio: '',
-    website: '',
-    industry: '',
-    employees: '',
-    consultantName: '',
+    street: '',
+    houseNumber: '',
+    zipCode: '',
+    city: '',
     countryId: 1, // Default to Germany (ID 1)
   });
 
@@ -297,16 +295,15 @@ function CompanyRegistrationContent() {
         },
         body: JSON.stringify({
           companyName: companyFormData.companyName,
-          contactName: companyFormData.contactName,
+          firstName: companyFormData.firstName,
+          lastName: companyFormData.lastName,
           email: companyFormData.email,
           phone: companyFormData.phone,
-          address: companyFormData.address,
+          street: companyFormData.street,
+          houseNumber: companyFormData.houseNumber,
+          zipCode: companyFormData.zipCode,
+          city: companyFormData.city,
           countryId: companyFormData.countryId,
-          bio: companyFormData.bio,
-          website: companyFormData.website,
-          industry: companyFormData.industry,
-          employees: companyFormData.employees,
-          consultantName: companyFormData.consultantName,
         }),
       });
 
@@ -321,7 +318,7 @@ function CompanyRegistrationContent() {
       saveTrainerData(registerData.company);
 
       // Show success message
-      setSuccessMessage('Unternehmensregistrierung erfolgreich! Überprüfen Sie Ihre E-Mail für den Login-Link.');
+      setSuccessMessage('Unternehmensregistrierung erfolgreich! Überprüfen Sie Ihre E-Mail für den Login-Link. Nach dem Login können Sie Ihr Profil in den Einstellungen vervollständigen.');
       addToast('Registrierung erfolgreich! Sie können sich jetzt einloggen.', 'success');
 
       // Redirect to login page after short delay
@@ -345,6 +342,11 @@ function CompanyRegistrationContent() {
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Unternehmensregistrierung</h1>
             <p className="text-gray-600">Registrieren Sie Ihr Unternehmen und finden Sie qualifizierte Trainer</p>
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Hinweis:</strong> Weitere Informationen wie Unternehmensbeschreibung, Branche, Website und Mitarbeiterzahl können Sie nach der Registrierung bequem in Ihren Profil-Einstellungen ergänzen.
+              </p>
+            </div>
           </div>
 
           {/* Error/Success Messages */}
@@ -378,129 +380,48 @@ function CompanyRegistrationContent() {
                   required
                 />
                 <label htmlFor="companyName" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Unternehmensname
-                </label>
-              </div>
-
-              <div className="relative mb-4">
-                <input
-                  type="text"
-                  name="contactName"
-                  id="contactName"
-                  placeholder="Ansprechpartner"
-                  value={companyFormData.contactName}
-                  onChange={handleInputChange}
-                  className="form-input"
-                  required
-                />
-                <label htmlFor="contactName" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Ansprechpartner
-                </label>
-              </div>
-
-              <div className="relative mb-4">
-                <input
-                  type="text"
-                  name="consultantName"
-                  id="consultantName"
-                  placeholder="Kundenberater"
-                  value={companyFormData.consultantName}
-                  onChange={handleInputChange}
-                  className="form-input"
-                  required
-                />
-                <label htmlFor="consultantName" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Kundenberater
-                </label>
-              </div>
-
-              <div className="relative mb-4">
-                <select
-                  name="industry"
-                  id="industry"
-                  value={companyFormData.industry}
-                  onChange={handleInputChange}
-                  className="form-input"
-                  required
-                >
-                  <option value="">Branche auswählen</option>
-                  <option value="it">Informationstechnologie</option>
-                  <option value="finance">Finanzwesen</option>
-                  <option value="healthcare">Gesundheitswesen</option>
-                  <option value="education">Bildung</option>
-                  <option value="manufacturing">Fertigung</option>
-                  <option value="retail">Einzelhandel</option>
-                  <option value="consulting">Beratung</option>
-                  <option value="energy">Energie</option>
-                  <option value="automotive">Automobil</option>
-                  <option value="pharmaceutical">Pharmazeutisch</option>
-                  <option value="construction">Bauwesen</option>
-                  <option value="logistics">Logistik</option>
-                  <option value="telecommunications">Telekommunikation</option>
-                  <option value="other">Sonstige</option>
-                </select>
-                <label htmlFor="industry" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Branche
-                </label>
-              </div>
-
-              <div className="relative mb-4">
-                <select
-                  name="employees"
-                  id="employees"
-                  value={companyFormData.employees}
-                  onChange={handleInputChange}
-                  className="form-input"
-                  required
-                >
-                  <option value="">Mitarbeiterzahl auswählen</option>
-                  <option value="1-10">1-10 Mitarbeiter</option>
-                  <option value="11-50">11-50 Mitarbeiter</option>
-                  <option value="51-200">51-200 Mitarbeiter</option>
-                  <option value="201-500">201-500 Mitarbeiter</option>
-                  <option value="501-1000">501-1000 Mitarbeiter</option>
-                  <option value="1000+">Über 1000 Mitarbeiter</option>
-                </select>
-                <label htmlFor="employees" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Mitarbeiterzahl
-                </label>
-              </div>
-
-              <div className="relative mb-4">
-                <textarea
-                  name="bio"
-                  id="bio"
-                  placeholder="Beschreiben Sie Ihr Unternehmen"
-                  value={companyFormData.bio}
-                  onChange={handleInputChange}
-                  className="form-input"
-                  rows={3}
-                  required
-                />
-                <label htmlFor="bio" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Unternehmensbeschreibung
-                </label>
-              </div>
-
-              <div className="relative mb-4">
-                <input
-                  type="url"
-                  name="website"
-                  id="website"
-                  placeholder="https://www.ihr-unternehmen.de"
-                  value={companyFormData.website}
-                  onChange={handleInputChange}
-                  className="form-input"
-                />
-                <label htmlFor="website" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Website (optional)
+                  Unternehmensname *
                 </label>
               </div>
             </div>
 
-            {/* Contact Information */}
+            {/* Contact Person */}
             <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Kontaktdaten</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Ansprechpartner</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="firstName"
+                    id="firstName"
+                    placeholder="Vorname"
+                    value={companyFormData.firstName}
+                    onChange={handleInputChange}
+                    className="form-input"
+                    required
+                  />
+                  <label htmlFor="firstName" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                    Vorname *
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="lastName"
+                    id="lastName"
+                    placeholder="Nachname"
+                    value={companyFormData.lastName}
+                    onChange={handleInputChange}
+                    className="form-input"
+                    required
+                  />
+                  <label htmlFor="lastName" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                    Nachname *
+                  </label>
+                </div>
+              </div>
 
               <div className="relative mb-4">
                 <input
@@ -514,11 +435,12 @@ function CompanyRegistrationContent() {
                   required
                 />
                 <label htmlFor="email" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  E-Mail-Adresse
+                  E-Mail-Adresse *
                 </label>
+                <p className="text-xs text-gray-500 mt-1">Die Domain wird automatisch aus Ihrer E-Mail-Adresse extrahiert</p>
               </div>
 
-              <div className="relative mb-4">
+              <div className="relative">
                 <input
                   type="tel"
                   name="phone"
@@ -530,24 +452,81 @@ function CompanyRegistrationContent() {
                   required
                 />
                 <label htmlFor="phone" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Telefonnummer
+                  Telefonnummer *
                 </label>
               </div>
+            </div>
 
-              <div className="relative mb-4">
-                <input
-                  type="text"
-                  name="address"
-                  id="address"
-                  placeholder="Straße, PLZ Ort"
-                  value={companyFormData.address}
-                  onChange={handleInputChange}
-                  className="form-input"
-                  required
-                />
-                <label htmlFor="address" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Adresse
-                </label>
+            {/* Address Information */}
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Adresse</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="relative md:col-span-2">
+                  <input
+                    type="text"
+                    name="street"
+                    id="street"
+                    placeholder="Straße"
+                    value={companyFormData.street}
+                    onChange={handleInputChange}
+                    className="form-input"
+                    required
+                  />
+                  <label htmlFor="street" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                    Straße *
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="houseNumber"
+                    id="houseNumber"
+                    placeholder="Hausnummer"
+                    value={companyFormData.houseNumber}
+                    onChange={handleInputChange}
+                    className="form-input"
+                    required
+                  />
+                  <label htmlFor="houseNumber" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                    Hausnummer *
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="zipCode"
+                    id="zipCode"
+                    placeholder="PLZ"
+                    value={companyFormData.zipCode}
+                    onChange={handleInputChange}
+                    className="form-input"
+                    required
+                  />
+                  <label htmlFor="zipCode" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                    PLZ *
+                  </label>
+                </div>
+
+                <div className="relative md:col-span-2">
+                  <input
+                    type="text"
+                    name="city"
+                    id="city"
+                    placeholder="Ort"
+                    value={companyFormData.city}
+                    onChange={handleInputChange}
+                    className="form-input"
+                    required
+                  />
+                  <label htmlFor="city" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                    Ort *
+                  </label>
+                </div>
               </div>
 
               <div className="relative">
@@ -567,7 +546,7 @@ function CompanyRegistrationContent() {
                   ))}
                 </select>
                 <label htmlFor="countryId" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Land
+                  Land *
                 </label>
               </div>
             </div>
@@ -581,6 +560,7 @@ function CompanyRegistrationContent() {
               >
                 {loading ? 'Registrierung läuft...' : 'Als Unternehmen registrieren'}
               </button>
+              <p className="text-xs text-gray-500 text-center mt-3">* Pflichtfelder</p>
             </div>
           </form>
 

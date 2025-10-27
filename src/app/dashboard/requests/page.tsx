@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import jsPDF from 'jspdf';
-import { apiRequestedEvents, apiEvents } from "@/lib/apiClient";
+import { getTrainerData } from "../../../lib/session";
 
 interface TrainingRequest {
   id: number;
+  trainingId: number;
   courseTitle: string;
   topicName: string;
   date: string;
@@ -21,6 +23,31 @@ interface TrainingRequest {
   updatedAt: string;
 }
 
+interface ApiTrainingRequest {
+  id: number;
+  trainingId: number;
+  trainerId: number;
+  status: string;
+  message: string | null;
+  counterPrice: number | null;
+  createdAt: string;
+  updatedAt: string;
+  training: {
+    id: number;
+    title: string;
+    topic: {
+      name: string;
+    };
+    startDate: string;
+    endDate: string;
+    startTime: string;
+    endTime: string;
+    location: string;
+    participants: number;
+    dailyRate: number;
+  };
+}
+
 type FilterStatus = "all" | "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
 
 export default function RequestsPage() {
@@ -32,6 +59,11 @@ export default function RequestsPage() {
   const [showModal, setShowModal] = useState(false);
   const [showContract, setShowContract] = useState(false);
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+  const [showInquiryModal, setShowInquiryModal] = useState(false);
+  const [inquirySubject, setInquirySubject] = useState("");
+  const [inquiryMessage, setInquiryMessage] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     fetchRequests();
@@ -42,14 +74,13 @@ export default function RequestsPage() {
       setLoading(true);
 
       // Get user data to determine if it's a trainer or company
-      const userData = localStorage.getItem('trainer_data');
-      if (!userData) {
+      const user = getTrainerData();
+
+      if (!user) {
         console.error('No user data found');
         setLoading(false);
         return;
       }
-
-      const user = JSON.parse(userData);
 
       if (user.userType === 'TRAINER') {
         // For trainers, fetch training requests from the new system
@@ -59,8 +90,9 @@ export default function RequestsPage() {
             const trainingRequests = await response.json();
 
             // Transform training requests to match the existing interface
-            const mapped: TrainingRequest[] = trainingRequests.map((request: any) => ({
+            const mapped: TrainingRequest[] = (trainingRequests as ApiTrainingRequest[]).map((request: ApiTrainingRequest) => ({
               id: request.id,
+              trainingId: request.trainingId,
               courseTitle: request.training.title,
               topicName: request.training.topic.name,
               date: request.training.startDate,
@@ -69,9 +101,9 @@ export default function RequestsPage() {
               participants: request.training.participants,
               originalPrice: request.training.dailyRate,
               proposedPrice: request.training.dailyRate,
-              counterPrice: undefined,
+              counterPrice: request.counterPrice || undefined,
               message: request.message || "",
-              status: request.status.toLowerCase(),
+              status: request.status.toLowerCase() as "pending" | "accepted" | "rejected" | "abgesagt" | "completed",
               createdAt: request.createdAt,
               updatedAt: request.updatedAt,
             }));
@@ -83,8 +115,7 @@ export default function RequestsPage() {
           }
         } catch (error) {
           console.error('Error fetching training requests:', error);
-          // Fall back to old system if new system fails
-          await fetchLegacyRequests();
+          setLoading(false);
         }
       } else {
         // For companies, we don't need to show requests (they create trainings)
@@ -98,52 +129,6 @@ export default function RequestsPage() {
     }
   };
 
-  const fetchLegacyRequests = async () => {
-    try {
-      const list = await apiRequestedEvents.list();
-      type ProdRequestedEvent = {
-        id: number;
-        key?: string;
-        status?: string;
-        course?: { id: number; title: string };
-        title?: string;
-        description?: string;
-        training_type?: string;
-        event_dates?: { id: number; day: string; time_start: string; time_end: string };
-        event_fee?: number;
-        participants?: Array<{
-          id: number;
-          salutation?: string;
-          title?: string;
-          first_name?: string;
-          last_name?: string;
-        }>;
-        location_classroom?: { id: number; label: string };
-      };
-
-      // @ts-expect-error - Relaxed typing for development flexibility
-      const mapped: TrainingRequest[] = (list?.events ?? list ?? []).map((e: ProdRequestedEvent) => ({
-        id: e.id,
-        courseTitle: e.course?.title ?? e.title ?? "",
-        topicName: e.course?.title ?? "",
-        date: e.event_dates?.day ? `${e.event_dates.day}T${e.event_dates.time_start}` : new Date().toISOString(),
-        endTime: e.event_dates?.day ? `${e.event_dates.day}T${e.event_dates.time_end}` : new Date().toISOString(),
-        location: e.location_classroom?.label ?? e.training_type ?? "",
-        participants: (e.participants?.length ?? 0) || 0,
-        originalPrice: e.event_fee ?? 0,
-        proposedPrice: e.event_fee ?? 0,
-        counterPrice: undefined,
-        message: e.description ?? "",
-        status: (e.status as "pending" | "accepted" | "rejected" | "abgesagt" | "completed") ?? "pending",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }));
-      setRequests(mapped);
-      setFilteredRequests(mapped);
-    } catch (error) {
-      console.error('Error fetching legacy requests:', error);
-    }
-  };
 
   const updateRequest = async (id: number, updates: Partial<TrainingRequest>) => {
     try {
@@ -268,11 +253,6 @@ export default function RequestsPage() {
     }).format(amount);
   };
 
-  const openRequestDetails = (request: TrainingRequest) => {
-    setActiveRequest(request);
-    setCounterPrice(request.counterPrice?.toString() || request.proposedPrice.toString());
-    setShowModal(true);
-  };
 
   const handleAcceptClick = () => {
     setShowContract(true);
@@ -414,19 +394,28 @@ export default function RequestsPage() {
 
   const handleAccept = async (id: number) => {
     try {
-      await apiRequestedEvents.sendDecision(id, undefined, { state_key: "request-accepted" });
-      // Download contract from production API
-      const blob = await apiEvents.downloadContract(id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Dozentenvertrag_${id}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Update the training request status using local API
+      const response = await fetch('/api/training-requests', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestId: id,
+          status: 'ACCEPTED'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to accept training request');
+      }
+
+      // Refresh the requests list
       await fetchRequests();
+      alert('Training-Anfrage erfolgreich angenommen!');
     } catch (e) {
       console.error('Error accepting request:', e);
-      alert('Fehler beim Bestätigen.');
+      alert('Fehler beim Bestätigen der Training-Anfrage.');
     }
     setShowContract(false);
     setShowModal(false);
@@ -434,11 +423,28 @@ export default function RequestsPage() {
 
   const handleReject = async (id: number) => {
     try {
-      await apiRequestedEvents.sendDecision(id, undefined, { state_key: "request-declined" });
+      // Update the training request status using local API
+      const response = await fetch('/api/training-requests', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestId: id,
+          status: 'DECLINED'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reject training request');
+      }
+
+      // Refresh the requests list
       await fetchRequests();
+      alert('Training-Anfrage erfolgreich abgelehnt.');
     } catch (e) {
       console.error('Error rejecting request:', e);
-      alert('Fehler beim Ablehnen.');
+      alert('Fehler beim Ablehnen der Training-Anfrage.');
     }
     setShowModal(false);
   };
@@ -460,8 +466,26 @@ export default function RequestsPage() {
     const price = parseFloat(counterPrice);
     if (isNaN(price) || price <= 0) return;
     try {
-      await apiRequestedEvents.sendDecision(id, undefined, { state_key: "counteroffer-sent", instructor_fee: Math.round(price) });
+      // Send counteroffer using local API
+      const response = await fetch('/api/training-requests', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestId: id,
+          status: 'PENDING', // Keep as pending but update the counter price
+          counterPrice: price,
+          message: `Gegenvorschlag: €${Math.round(price)}`
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send counteroffer');
+      }
+
       await fetchRequests();
+      alert('Gegenvorschlag erfolgreich gesendet!');
     } catch (e) {
       console.error('Error sending counter offer:', e);
       alert('Fehler beim Senden des Gegenvorschlags.');
@@ -522,40 +546,130 @@ Mit freundlichen Grüßen
 - Auch ohne Unterschrift gültig`;
   };
 
-  const sendInquiryEmail = (request: TrainingRequest) => {
-    // Get trainer ID from localStorage (in a real app this would be more securely handled)
-    const trainerData = localStorage.getItem("trainer");
-    let trainerId = "unknown";
-    
-    if (trainerData) {
-      const trainer = JSON.parse(trainerData);
-      trainerId = trainer.id;
-    }
-    
-    // Format the date for the email
+  const openInquiryModal = (request: TrainingRequest) => {
+    // Open inquiry modal with pre-filled training info
+    setActiveRequest(request);
+    // Pre-fill subject with training info
     const formattedDate = formatDate(request.date);
-    
-    // Create email subject
-    const subject = `Rückfrage zu Training: ${request.courseTitle} (ID: ${request.id} /T${trainerId})`;
-    
-    // Create email body
-    const body = `Liebes powertowork Team,
-
-folgende Frage habe ich zu Ihrer Anfrage vom ${formattedDate}:
-
-[Ihre Frage hier eingeben]
-
-
-Mit freundlichen Grüßen,`
-;
-    
-    // Encode subject and body for mailto link
-    const encodedSubject = encodeURIComponent(subject);
-    const encodedBody = encodeURIComponent(body);
-    
-    // Open default email client with pre-populated fields
-    window.location.href = `mailto:info@powertowork.com?subject=${encodedSubject}&body=${encodedBody}`;
+    setInquirySubject(`Rückfrage zu Training: ${request.courseTitle} vom ${formattedDate}`);
+    setInquiryMessage("");
+    setAttachedFiles([]);
+    setShowInquiryModal(true);
   };
+
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files) return;
+
+    const newFiles = Array.from(files);
+    const totalFiles = attachedFiles.length + newFiles.length;
+
+    if (totalFiles > 5) {
+      alert('Sie können maximal 5 Dateien anhängen.');
+      return;
+    }
+
+    // Validate file types and sizes
+    for (const file of newFiles) {
+      if (file.size > 10 * 1024 * 1024) { // 10MB
+        alert(`Die Datei "${file.name}" ist zu groß. Maximale Größe: 10MB`);
+        return;
+      }
+
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain',
+        'text/csv',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'application/zip',
+        'application/x-rar-compressed',
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        alert(`Der Dateityp von "${file.name}" wird nicht unterstützt.`);
+        return;
+      }
+    }
+
+    setAttachedFiles(prev => [...prev, ...newFiles]);
+  };
+
+  const removeFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const sendInquiry = async () => {
+    if (!activeRequest || !inquirySubject.trim() || !inquiryMessage.trim()) {
+      alert('Bitte füllen Sie Betreff und Nachricht aus.');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      let response;
+
+      if (attachedFiles.length > 0) {
+        // Use FormData for multipart upload
+        const formData = new FormData();
+        formData.append('trainingRequestId', activeRequest.id.toString());
+        formData.append('subject', inquirySubject);
+        formData.append('message', inquiryMessage);
+
+        // Add files to form data
+        attachedFiles.forEach((file) => {
+          formData.append('attachments', file);
+        });
+
+        response = await fetch('/api/inquiry-messages', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        // Use JSON for simple message without attachments
+        response = await fetch('/api/inquiry-messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            trainingRequestId: activeRequest.id,
+            subject: inquirySubject,
+            message: inquiryMessage
+          }),
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to send inquiry');
+      }
+
+      alert('Ihre Rückfrage wurde erfolgreich gesendet!');
+      setShowInquiryModal(false);
+      setInquirySubject("");
+      setInquiryMessage("");
+      setAttachedFiles([]);
+    } catch (error) {
+      console.error('Error sending inquiry:', error);
+      alert('Fehler beim Senden der Rückfrage. Bitte versuchen Sie es erneut.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
 
   return (
     <div>
@@ -727,7 +841,7 @@ Mit freundlichen Grüßen,`
                 
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => sendInquiryEmail(request)}
+                    onClick={() => openInquiryModal(request)}
                     className="px-3 py-1 bg-blue-50 border border-blue-300 rounded text-sm font-medium text-blue-700 hover:bg-blue-100 flex items-center"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
@@ -735,12 +849,16 @@ Mit freundlichen Grüßen,`
                     </svg>
                     Rückfrage
                   </button>
-                  <button
-                    onClick={() => openRequestDetails(request)}
-                    className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  <Link
+                    href={`/dashboard/training/${request.trainingId}`}
+                    className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center"
                   >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                      <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                    </svg>
                     Details
-                  </button>
+                  </Link>
                   {(request.status === "accepted" || request.status === "completed") && (
                     <button
                       onClick={() => downloadContract(request)}
@@ -887,7 +1005,7 @@ Mit freundlichen Grüßen,`
               
               <div className="flex justify-end space-x-3 border-t pt-4 mt-6">
                 <button
-                  onClick={() => sendInquiryEmail(activeRequest)}
+                  onClick={() => openInquiryModal(activeRequest)}
                   className="px-4 py-2 bg-blue-50 border border-blue-300 rounded-md text-blue-700 hover:bg-blue-100 flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -1000,6 +1118,165 @@ Mit freundlichen Grüßen,`
                   className="px-6 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600"
                 >
                   Vertrag akzeptieren und PDF herunterladen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inquiry Modal */}
+      {showInquiryModal && activeRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800">Rückfrage senden</h3>
+                <button
+                  onClick={() => setShowInquiryModal(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Betreff
+                </label>
+                <input
+                  type="text"
+                  value={inquirySubject}
+                  onChange={(e) => setInquirySubject(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Betreff eingeben..."
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nachricht
+                </label>
+                <textarea
+                  value={inquiryMessage}
+                  onChange={(e) => setInquiryMessage(e.target.value)}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ihre Rückfrage hier eingeben..."
+                />
+              </div>
+
+              {/* File Attachments */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dateianhänge (optional)
+                </label>
+                <div className="space-y-3">
+                  {/* File Input */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.zip,.rar"
+                      onChange={(e) => handleFileSelect(e.target.files)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={attachedFiles.length >= 5}
+                    />
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-8 w-8 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p className="text-sm text-gray-600">
+                        {attachedFiles.length >= 5
+                          ? "Maximale Anzahl von Dateien erreicht"
+                          : "Klicken Sie hier, um Dateien auszuwählen"
+                        }
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Max. 10MB pro Datei • Unterstützt: PDF, DOC, XLS, Bilder, ZIP
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Attached Files List */}
+                  {attachedFiles.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-gray-700">Angehängte Dateien:</p>
+                      {attachedFiles.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="text-lg">
+                              {file.type.startsWith('image/') ? '🖼️' :
+                               file.type.includes('pdf') ? '📄' :
+                               file.type.includes('word') || file.type.includes('document') ? '📝' :
+                               file.type.includes('excel') || file.type.includes('spreadsheet') ? '📊' :
+                               file.type.includes('zip') || file.type.includes('rar') ? '📦' : '📎'}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {file.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {formatFileSize(file.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => removeFile(index)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-md mb-6">
+                <h4 className="text-sm font-medium text-blue-800 mb-2">Training-Details:</h4>
+                <div className="text-sm text-blue-700">
+                  <p><strong>Titel:</strong> {activeRequest.courseTitle}</p>
+                  <p><strong>Datum:</strong> {formatDate(activeRequest.date)}</p>
+                  <p><strong>Ort:</strong> {activeRequest.location}</p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowInquiryModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={sendInquiry}
+                  disabled={isUploading}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed flex items-center"
+                >
+                  {isUploading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Wird gesendet...
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M2.94 6.412A2 2 0 002 8.108V16a2 2 0 002 2h12a2 2 0 002-2V8.108a2 2 0 00-.94-1.696l-6-3.75a2 2 0 00-2.12 0l-6 3.75zm2.615 2.423a1 1 0 10-1.11 1.664l5 3.333a1 1 0 001.11 0l5-3.333a1 1 0 00-1.11-1.664L10 11.798 5.555 8.835z" clipRule="evenodd" />
+                      </svg>
+                      Rückfrage senden
+                    </>
+                  )}
                 </button>
               </div>
             </div>

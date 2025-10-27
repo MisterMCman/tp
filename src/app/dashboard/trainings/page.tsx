@@ -17,6 +17,16 @@ interface Training {
   description?: string;
   trainerNotes?: string;
   materials?: string[];
+  assignedTrainer?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+  } | null;
+}
+
+interface User {
+  userType: 'TRAINER' | 'TRAINING_COMPANY';
 }
 
 type ViewMode = "upcoming" | "history";
@@ -26,14 +36,12 @@ export default function TrainingsPage() {
   const [pastTrainings, setPastTrainings] = useState<Training[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
-  const [activeTraining, setActiveTraining] = useState<Training | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     // Load user data
     const currentUser = getTrainerData();
-    setUser(currentUser);
+    setUser(currentUser as unknown as User | null);
 
     // Fetch actual trainings data from API
     const fetchTrainings = async () => {
@@ -92,10 +100,6 @@ export default function TrainingsPage() {
     }).format(date);
   };
 
-  const openTrainingDetails = (training: Training) => {
-    setActiveTraining(training);
-    setShowModal(true);
-  };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -410,6 +414,26 @@ export default function TrainingsPage() {
                     <span className="font-medium">{training.participants}</span>
                   </div>
                 </div>
+
+                {/* Show assigned trainer if one is assigned */}
+                {training.assignedTrainer && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="block text-xs text-gray-500">Zugewiesener Trainer</span>
+                        <Link
+                          href={`/dashboard/trainer/${training.assignedTrainer.id}`}
+                          className="font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                        >
+                          {training.assignedTrainer.fullName}
+                        </Link>
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-600" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="p-5 flex justify-end space-x-2">
@@ -439,8 +463,8 @@ export default function TrainingsPage() {
                   </button>
                 )}
                 
-                <button
-                  onClick={() => openTrainingDetails(training)}
+                <Link
+                  href={`/dashboard/training/${training.id}`}
                   className="px-3 py-1 bg-primary-500 rounded text-sm font-medium text-white hover:bg-primary-600 flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
@@ -448,7 +472,7 @@ export default function TrainingsPage() {
                     <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
                   </svg>
                   Details
-                </button>
+                </Link>
               </div>
             </div>
           ))}
@@ -463,121 +487,6 @@ export default function TrainingsPage() {
         </div>
       )}
       
-      {/* Training Details Modal */}
-      {showModal && activeTraining && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-800">Training Details</h3>
-                <button 
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6">
-              <div className="flex justify-between mb-4">
-                <h4 className="text-lg font-semibold">{activeTraining.title}</h4>
-                <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusClass(activeTraining.status)}`}>
-                  {getStatusLabel(activeTraining.status)}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <span className="block text-sm text-gray-500">Thema</span>
-                  <span className="font-medium">{activeTraining.topicName}</span>
-                </div>
-                <div>
-                  <span className="block text-sm text-gray-500">Datum & Zeit</span>
-                  <span className="font-medium">
-                    {formatDate(activeTraining.date)}, {formatTime(activeTraining.date)} - {formatTime(activeTraining.endTime)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-sm text-gray-500">Ort</span>
-                  <span className="font-medium">{activeTraining.location}</span>
-                </div>
-                <div>
-                  <span className="block text-sm text-gray-500">Teilnehmer</span>
-                  <span className="font-medium">{activeTraining.participants}</span>
-                </div>
-              </div>
-              
-              {activeTraining.description && (
-                <div className="mb-6">
-                  <span className="block text-sm text-gray-500 mb-1">Beschreibung</span>
-                  <p className="p-3 bg-gray-50 rounded border">{activeTraining.description}</p>
-                </div>
-              )}
-              
-              {activeTraining.trainerNotes && (
-                <div className="mb-6">
-                  <span className="block text-sm text-gray-500 mb-1">Notizen für Trainer</span>
-                  <p className="p-3 bg-yellow-50 rounded border border-yellow-200 text-yellow-800">{activeTraining.trainerNotes}</p>
-                </div>
-              )}
-              
-              {activeTraining.materials && activeTraining.materials.length > 0 && (
-                <div className="mb-6">
-                  <span className="block text-sm text-gray-500 mb-1">Materialien</span>
-                  <ul className="p-3 bg-gray-50 rounded border">
-                    {activeTraining.materials.map((material, index) => (
-                      <li key={index} className="mb-1 last:mb-0 flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-primary-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                        </svg>
-                        {material}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
-              <div className="flex justify-end space-x-3 border-t pt-4 mt-6">
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                >
-                  Schließen
-                </button>
-                
-                {/* Show Calendar button only for upcoming trainings */}
-                {viewMode === "upcoming" && (
-                  <button
-                    onClick={() => downloadCalendarEntry(activeTraining)}
-                    className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 flex items-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                    </svg>
-                    Zum Kalender hinzufügen
-                  </button>
-                )}
-                
-                {/* Show Contract download button for past trainings OR confirmed upcoming trainings */}
-                {(viewMode === "history" || (viewMode === "upcoming" && activeTraining.status === "confirmed")) && (
-                  <button
-                    onClick={() => downloadContract(activeTraining)}
-                    className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                    Vertrag downloaden
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 } 

@@ -25,7 +25,11 @@ model Trainer {
   lastName     String
   email        String        @unique
   phone        String
-  address      String?       @db.Text
+  address      String?       @db.Text // Legacy field, kept for backward compatibility
+  street       String?       // Straße
+  houseNumber  String?       // Hausnummer
+  zipCode      String?       // PLZ
+  city         String?       // Stadt
   bio          String?       @db.Text
   profilePicture String?
   iban         String?       // IBAN for bank transfers
@@ -54,16 +58,28 @@ model TrainingCompany {
   id           Int                  @id @default(autoincrement())
   userType     UserType             @default(TRAINING_COMPANY)
   companyName  String               // Company name
-  contactName  String               // Contact person name
+  contactName  String?              // Contact person name (legacy, kept for backward compatibility)
+  firstName    String?              // Contact person first name
+  lastName     String?              // Contact person last name
   email        String               @unique
   phone        String
-  address      String?              @db.Text
+  address      String?              @db.Text // Legacy field, kept for backward compatibility
+  street       String?              // Straße
+  houseNumber  String?              // Hausnummer
+  zipCode      String?              // PLZ
+  city         String?              // Stadt
+  domain       String?              // Extracted from email for company identification
   bio          String?              @db.Text
   logo         String?              // Company logo URL
   website      String?              // Company website
   industry     String?              // Industry/sector
   employees    String?              // Company size (e.g., "1-10", "11-50", "51-200", "200+")
+  vatId        String?              // Umsatzsteuer-ID
   consultantName String?            // Name of the consultant using the platform
+  billingEmail String?              // Separate billing email
+  billingNotes String?              @db.Text // Additional billing notes
+  tags         String?              @db.Text // Tags/Keywords (JSON or comma-separated)
+  onboardingStatus String?          // Onboarding status (e.g., "Profil unvollständig")
   status       TrainerStatus        @default(ACTIVE)
   countryId    Int?                 // Reference to Country
   country      Country?             @relation(fields: [countryId], references: [id])
@@ -83,8 +99,9 @@ model TrainingCompanyLoginToken {
   trainingCompany    TrainingCompany @relation(fields: [trainingCompanyId], references: [id])
   createdAt          DateTime        @default(now())
   expiresAt          DateTime
-  used               Boolean         @default(false)
-  usedAt             DateTime?
+  // Note: Tokens are now reusable within expiration period
+  used               Boolean         @default(false) // For future use, currently not enforced
+  usedAt             DateTime?       // Tracks last usage timestamp
 
   @@index([trainingCompanyId], map: "TrainingCompanyLoginToken_trainingCompanyId_fkey")
 }
@@ -96,18 +113,33 @@ model LoginToken {
   trainer   Trainer  @relation(fields: [trainerId], references: [id])
   createdAt DateTime @default(now())
   expiresAt DateTime
-  used      Boolean  @default(false)
-  usedAt    DateTime?
+  // Note: Tokens are now reusable within expiration period
+  used      Boolean  @default(false) // For future use, currently not enforced
+  usedAt    DateTime? // Tracks last usage timestamp
 
   @@index([trainerId], map: "LoginToken_trainerId_fkey")
 }
 
 model Topic {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  trainers TrainerTopic[]
-  courses  Course[]
-  trainings Training[]
+  id            Int              @id @default(autoincrement())
+  state         String           @default("online") // online/offline
+  slug          String           @unique
+  name          String           // title from CSV
+  short_title   String?
+  icon          String?
+  novelty_order Int?
+  featured_order Int?
+  teaser_title  String?
+  teaser_text   String?          @db.Text
+  detail_title  String?
+  detail_text   String?          @db.Text
+  seo_text      String?          @db.Text
+  order         Int?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  trainers      TrainerTopic[]
+  courses       Course[]
+  trainings     Training[]
 }
 
 model TrainerTopic {
@@ -314,8 +346,10 @@ model TrainingRequest {
   trainer     Trainer            @relation(fields: [trainerId], references: [id])
   status      TrainingRequestStatus @default(PENDING)
   message     String?            @db.Text
+  counterPrice Float?            // Counter offer price from trainer
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
+  inquiryMessages InquiryMessage[]
 
   @@unique([trainingId, trainerId])
   @@index([trainerId], map: "TrainingRequest_trainerId_fkey")
@@ -335,4 +369,38 @@ enum TrainingRequestStatus {
   ACCEPTED
   DECLINED
   WITHDRAWN
+}
+
+model FileAttachment {
+  id                 Int             @id @default(autoincrement())
+  inquiryMessageId   Int
+  inquiryMessage     InquiryMessage  @relation(fields: [inquiryMessageId], references: [id], onDelete: Cascade)
+  filename           String          // Original filename
+  storedFilename     String          // Unique filename on disk
+  filePath           String          // Full path to file on disk
+  fileSize           Int             // File size in bytes
+  mimeType           String          // MIME type (e.g., "application/pdf")
+  uploadedAt         DateTime        @default(now())
+
+  @@index([inquiryMessageId], map: "FileAttachment_inquiryMessageId_fkey")
+}
+
+model InquiryMessage {
+  id                 Int                 @id @default(autoincrement())
+  trainingRequestId  Int
+  trainingRequest    TrainingRequest     @relation(fields: [trainingRequestId], references: [id])
+  senderId           Int                 // Can be trainer or company ID
+  senderType         UserType            // TRAINER or TRAINING_COMPANY
+  recipientId        Int                 // Can be trainer or company ID
+  recipientType      UserType            // TRAINER or TRAINING_COMPANY
+  subject            String              // Subject line for the message
+  message            String              @db.Text
+  isRead             Boolean             @default(false)
+  attachments        FileAttachment[]    // File attachments
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([trainingRequestId], map: "InquiryMessage_trainingRequestId_fkey")
+  @@index([senderId], map: "InquiryMessage_senderId_fkey")
+  @@index([recipientId], map: "InquiryMessage_recipientId_fkey")
 }

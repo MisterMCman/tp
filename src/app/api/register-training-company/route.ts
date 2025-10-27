@@ -6,20 +6,29 @@ export async function POST(req: Request) {
     const body = await req.json();
     const {
       companyName,
-      contactName,
+      firstName,
+      lastName,
       email,
       phone,
-      address,
+      street,
+      houseNumber,
+      zipCode,
+      city,
       countryId,
+      // Optional fields
       bio,
       website,
       industry,
       employees,
-      consultantName
+      consultantName,
+      vatId,
+      billingEmail,
+      billingNotes,
+      tags
     } = body;
 
     // Validate required fields
-    if (!companyName || !contactName || !email || !phone || !countryId) {
+    if (!companyName || !firstName || !lastName || !email || !phone || !street || !houseNumber || !zipCode || !city || !countryId) {
       return NextResponse.json(
         { message: 'Alle erforderlichen Felder müssen ausgefüllt werden.' },
         { status: 400 }
@@ -42,21 +51,43 @@ export async function POST(req: Request) {
       );
     }
 
+    // Extract domain from email for company identification
+    const domain = email.split('@')[1];
+
+    // Combine first and last name for legacy contactName field
+    const contactName = `${firstName} ${lastName}`;
+
+    // Combine address fields for legacy address field
+    const address = `${street} ${houseNumber}, ${zipCode} ${city}`;
+
     // Create the training company
     const trainingCompany = await prisma.trainingCompany.create({
       data: {
         userType: 'TRAINING_COMPANY',
         companyName,
-        contactName,
+        firstName,
+        lastName,
+        contactName, // Legacy field
         email,
         phone,
-        address,
+        street,
+        houseNumber,
+        zipCode,
+        city,
+        address, // Legacy field
+        domain,
         countryId,
-        bio,
-        website,
-        industry,
-        employees,
-        consultantName,
+        // Optional fields
+        bio: bio || null,
+        website: website || null,
+        industry: industry || null,
+        employees: employees || null,
+        consultantName: consultantName || null,
+        vatId: vatId || null,
+        billingEmail: billingEmail || null,
+        billingNotes: billingNotes || null,
+        tags: tags || null,
+        onboardingStatus: 'Profil unvollständig',
         status: 'ACTIVE'
       }
     });
@@ -67,16 +98,17 @@ export async function POST(req: Request) {
       company: {
         id: trainingCompany.id,
         companyName: trainingCompany.companyName,
-        contactName: trainingCompany.contactName,
+        firstName: trainingCompany.firstName,
+        lastName: trainingCompany.lastName,
         email: trainingCompany.email,
         phone: trainingCompany.phone,
-        address: trainingCompany.address,
+        street: trainingCompany.street,
+        houseNumber: trainingCompany.houseNumber,
+        zipCode: trainingCompany.zipCode,
+        city: trainingCompany.city,
         countryId: trainingCompany.countryId,
-        bio: trainingCompany.bio,
-        website: trainingCompany.website,
-        industry: trainingCompany.industry,
-        employees: trainingCompany.employees,
-        consultantName: trainingCompany.consultantName,
+        domain: trainingCompany.domain,
+        onboardingStatus: trainingCompany.onboardingStatus,
         status: trainingCompany.status
       }
     }, { status: 201 });

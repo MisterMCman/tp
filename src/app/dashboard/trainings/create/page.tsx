@@ -88,7 +88,7 @@ export default function CreateTrainingPage() {
 
   const loadTopics = async () => {
     try {
-      const response = await fetch('/api/topics');
+      const response = await fetch('/api/topics?all=true');
       if (response.ok) {
         const data = await response.json();
         setTopics(data);
@@ -122,7 +122,7 @@ export default function CreateTrainingPage() {
   const handleTopicSearch = async (term: string) => {
     setTopicSearchTerm(term);
 
-    if (term.length < 2) {
+    if (term.length < 3) {
       setTopicSuggestions([]);
       setShowTopicSuggestions(false);
       return;

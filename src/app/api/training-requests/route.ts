@@ -4,56 +4,118 @@ import { prisma } from '@/lib/prisma';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { trainingId, trainerIds, message } = body;
+    const { trainingId, trainerIds, trainingIds, trainerId, message } = body;
 
-    // Create training requests for all selected trainers
-    const trainingRequests = await Promise.all(
-      trainerIds.map(async (trainerId: number) => {
-        return await prisma.trainingRequest.create({
-          data: {
-            trainingId: parseInt(trainingId),
-            trainerId: trainerId,
-            message: message || null,
-            status: 'PENDING'
-          },
-          include: {
-            trainer: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true
-              }
+    // Handle new format: multiple training IDs for one trainer
+    if (trainingIds && trainerId) {
+      const trainingRequests = await Promise.all(
+        trainingIds.map(async (trainingId: number) => {
+          return await prisma.trainingRequest.create({
+            data: {
+              trainingId: trainingId,
+              trainerId: parseInt(trainerId),
+              message: message || null,
+              status: 'PENDING'
             },
-            training: {
-              include: {
-                topic: true,
-                company: {
-                  select: {
-                    id: true,
-                    companyName: true,
-                    contactName: true,
-                    email: true
+            include: {
+              trainer: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true
+                }
+              },
+              training: {
+                include: {
+                  topic: true,
+                  company: {
+                    select: {
+                      id: true,
+                      companyName: true,
+                      contactName: true,
+                      email: true
+                    }
                   }
                 }
               }
             }
-          }
-        });
-      })
+          });
+        })
+      );
+
+      // Update training statuses to PUBLISHED when requests are sent
+      await Promise.all(
+        trainingIds.map(async (id: number) => {
+          await prisma.training.update({
+            where: { id: id },
+            data: { status: 'PUBLISHED' }
+          });
+        })
+      );
+
+      return NextResponse.json({
+        success: true,
+        requests: trainingRequests,
+        message: `Training requests sent for ${trainingIds.length} training(s)`
+      });
+    }
+
+    // Handle old format: single training ID for multiple trainers
+    if (trainingId && trainerIds) {
+      const trainingRequests = await Promise.all(
+        trainerIds.map(async (trainerId: number) => {
+          return await prisma.trainingRequest.create({
+            data: {
+              trainingId: parseInt(trainingId),
+              trainerId: trainerId,
+              message: message || null,
+              status: 'PENDING'
+            },
+            include: {
+              trainer: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true
+                }
+              },
+              training: {
+                include: {
+                  topic: true,
+                  company: {
+                    select: {
+                      id: true,
+                      companyName: true,
+                      contactName: true,
+                      email: true
+                    }
+                  }
+                }
+              }
+            }
+          });
+        })
+      );
+
+      // Update training status to PUBLISHED when requests are sent
+      await prisma.training.update({
+        where: { id: parseInt(trainingId) },
+        data: { status: 'PUBLISHED' }
+      });
+
+      return NextResponse.json({
+        success: true,
+        requests: trainingRequests,
+        message: `Training requests sent to ${trainerIds.length} trainer(s)`
+      });
+    }
+
+    return NextResponse.json(
+      { error: 'Invalid request format. Either provide trainingIds+trainerId or trainingId+trainerIds' },
+      { status: 400 }
     );
-
-    // Update training status to PUBLISHED when requests are sent
-    await prisma.training.update({
-      where: { id: parseInt(trainingId) },
-      data: { status: 'PUBLISHED' }
-    });
-
-    return NextResponse.json({
-      success: true,
-      requests: trainingRequests,
-      message: `Training requests sent to ${trainerIds.length} trainer(s)`
-    });
   } catch (error) {
     console.error('Error creating training requests:', error);
     return NextResponse.json(
@@ -140,13 +202,14 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { requestId, status, message } = body;
+    const { requestId, status, message, counterPrice } = body;
 
     const updatedRequest = await prisma.trainingRequest.update({
       where: { id: parseInt(requestId) },
       data: {
         status: status,
-        message: message || undefined
+        message: message || undefined,
+        counterPrice: counterPrice !== undefined ? parseFloat(counterPrice) : undefined
       },
       include: {
         training: {
