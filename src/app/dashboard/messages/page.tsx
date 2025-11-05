@@ -26,7 +26,7 @@ export default function MessagesPage() {
         return;
       }
 
-      const response = await fetch(`/api/inquiry-messages?userId=${userData.id}&userType=${userData.userType}`);
+      const response = await fetch(`/api/training-request-messages?userId=${userData.id}&userType=${userData.userType}`);
       if (response.ok) {
         const messagesData = await response.json();
         setMessages(messagesData);
@@ -43,12 +43,12 @@ export default function MessagesPage() {
 
   const markAsRead = async (messageId: number) => {
     try {
-      const response = await fetch(`/api/inquiry-messages/${messageId}`, {
+      const response = await fetch(`/api/training-request-messages`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ isRead: true }),
+        body: JSON.stringify({ messageId, isRead: true }),
       });
 
       if (response.ok) {
@@ -62,8 +62,9 @@ export default function MessagesPage() {
   };
 
   const handleReply = async (message: MessageItem) => {
-    // Navigate to chat with this training request
-    window.location.href = `/dashboard/chat?trainingId=${message.trainingRequestId}`;
+    // Navigate to chat with this inquiry or training request
+    const id = message.inquiryId || message.trainingRequestId;
+    window.location.href = `/dashboard/chat?trainingId=${id}`;
   };
 
   return (

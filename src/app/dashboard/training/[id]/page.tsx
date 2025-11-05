@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getTrainerData, getCompanyData } from "@/lib/session";
 import TrainingDetails, { TrainingData } from "@/components/shared/TrainingDetails";
 
@@ -13,12 +13,14 @@ interface User {
 export default function TrainingDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [training, setTraining] = useState<TrainingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
 
   const trainingId = params.id as string;
+  const from = searchParams.get('from'); // Get the referrer URL
 
   useEffect(() => {
     const currentUser = getTrainerData() || getCompanyData();
@@ -66,6 +68,7 @@ export default function TrainingDetailsPage() {
       onInquiry={handleInquiry}
       loading={loading}
       error={error}
+      backHref={from || undefined} // Pass the referrer URL if available
     />
   );
 }

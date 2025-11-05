@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { saveTrainerData } from "@/lib/session";
 import { useToast } from "@/components/Toast";
+import { sortCountries } from "@/lib/countrySort";
 
 interface CompanyFormData {
   companyName: string;
@@ -46,6 +47,19 @@ function CompanyRegistrationContent() {
   // Load countries on component mount
   useEffect(() => {
     const loadCountries = async () => {
+      try {
+        // Try to fetch from API first
+        const response = await fetch('/api/countries');
+        if (response.ok) {
+          const data = await response.json();
+          setCountries(data.countries || []);
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching countries from API, using fallback:', error);
+      }
+      
+      // Fallback to hardcoded data (if API call failed or returned non-ok)
       try {
         const hardcodedCountries = [
           { id: 1, name: 'Deutschland', code: 'DE' },
@@ -264,7 +278,7 @@ function CompanyRegistrationContent() {
           { id: 214, name: 'Südafrika', code: 'ZA' },
           { id: 215, name: 'Namibia', code: 'NA' },
         ];
-        setCountries(hardcodedCountries);
+        setCountries(sortCountries(hardcodedCountries));
       } catch (error) {
         console.error('Error loading countries:', error);
       }

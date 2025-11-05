@@ -45,6 +45,7 @@ interface TrainingDetailsProps {
   onInquiry?: () => void;
   loading?: boolean;
   error?: string | null;
+  backHref?: string; // Optional back navigation URL
 }
 
 export default function TrainingDetails({
@@ -52,9 +53,18 @@ export default function TrainingDetails({
   userType,
   onInquiry,
   loading = false,
-  error = null
+  error = null,
+  backHref
 }: TrainingDetailsProps) {
   const router = useRouter();
+  
+  const handleBack = () => {
+    if (backHref) {
+      router.push(backHref);
+    } else {
+      router.back();
+    }
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -205,7 +215,9 @@ export default function TrainingDetails({
     if (trainerData) {
       const trainer = JSON.parse(trainerData);
       const trainerName = `${trainer.firstName} ${trainer.lastName}`;
-      const trainerAddress = trainer.address || "[Adresse nicht hinterlegt]";
+      const trainerAddress = trainer.street && trainer.zipCode && trainer.city 
+        ? `${trainer.street}${trainer.houseNumber ? ' ' + trainer.houseNumber : ''}, ${trainer.zipCode} ${trainer.city}`
+        : "[Adresse nicht hinterlegt]";
       trainerInfo = `${trainerName}, ${trainerAddress}`;
     }
 
@@ -351,15 +363,15 @@ export default function TrainingDetails({
             <div className="flex justify-between items-start">
               <div>
                 <div className="flex items-center space-x-3 mb-2">
-                  <Link
-                    href={userType === 'TRAINER' ? '/dashboard/trainings' : '/dashboard/requests'}
+                  <button
+                    onClick={handleBack}
                     className="inline-flex items-center space-x-2 hover:bg-slate-100 px-3 py-2 rounded-lg transition-colors text-slate-600 hover:text-slate-800"
                   >
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                     <span className="text-sm font-medium">Zurück</span>
-                  </Link>
+                  </button>
                 </div>
                 <h1 className="text-3xl font-bold text-slate-800 mb-2">{training.title}</h1>
                 <div className="flex items-center space-x-4">
@@ -415,6 +427,54 @@ export default function TrainingDetails({
               </div>
             )}
 
+            {/* Trainer Assignment Section for Companies */}
+            {userType === 'TRAINING_COMPANY' && (
+              <div className="mb-8">
+                <h3 className="text-xl font-bold text-slate-800 mb-4">Zugewiesener Trainer</h3>
+                {training.assignedTrainer ? (
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="block text-sm text-green-600 font-semibold mb-2">Trainer zugewiesen</span>
+                        <Link
+                          href={`/dashboard/trainer/${training.assignedTrainer.id}`}
+                          className="text-2xl font-bold text-slate-800 hover:text-green-600 hover:underline"
+                        >
+                          {training.assignedTrainer.fullName}
+                        </Link>
+                        <p className="text-sm text-green-600 mt-1">Klicken Sie auf den Namen, um das Profil anzuzeigen</p>
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-50 rounded-xl border border-yellow-200 p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="block text-sm text-yellow-600 font-semibold mb-2">Kein Trainer zugewiesen</span>
+                        <p className="text-slate-700 mb-4">Dieses Training hat noch keinen zugewiesenen Trainer. Suchen Sie einen passenden Trainer.</p>
+                        <Link
+                          href={`/dashboard/trainer?topic=${encodeURIComponent(training.topicName)}`}
+                          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                          Trainer suchen
+                        </Link>
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-600" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Requested Trainers Section for Companies */}
             {userType === 'TRAINING_COMPANY' && training.requestedTrainers && training.requestedTrainers.length > 0 && (
               <div className="mb-8">
                 <h3 className="text-xl font-bold text-slate-800 mb-4">Angefragte Trainer</h3>

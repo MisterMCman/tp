@@ -20,6 +20,9 @@ interface Trainer {
     code: string;
   };
   topics: string[];
+  topicsWithLevels?: Array<{ name: string; level: 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE' }>;
+  offeredTrainingTypes?: string[];
+  travelRadius?: number;
   isCompany: boolean;
   companyName?: string;
   status: string;
@@ -47,7 +50,8 @@ interface AvailableTraining {
   company: {
     id: number;
     companyName: string;
-    contactName: string;
+    firstName: string;
+    lastName: string;
   };
   requestCount: number;
 }
@@ -213,7 +217,7 @@ export default function TrainerProfilePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <Link
-          href="/dashboard"
+          href="/dashboard/trainer"
           className="text-sm hover:text-red-600 transition-colors"
           style={{ color: 'var(--ptw-accent-primary)' }}
         >
@@ -280,15 +284,28 @@ export default function TrainerProfilePage() {
                 Fachgebiete:
               </h3>
               <div className="flex flex-wrap gap-2">
-                {trainer.topics.map((topic, index) => (
-                  <span
-                    key={index}
-                    className="text-xs px-3 py-1 rounded-full font-semibold"
-                    style={{ background: 'var(--ptw-accent-primary)', color: 'white' }}
-                  >
-                    {topic}
-                  </span>
-                ))}
+                {(trainer.topicsWithLevels || trainer.topics.map((name: string) => ({ name, level: 'GRUNDLAGE' as const }))).map((topic: string | { name: string; level: 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE' }, index: number) => {
+                  const topicName = typeof topic === 'string' ? topic : topic.name;
+                  const topicLevel = typeof topic === 'string' ? 'GRUNDLAGE' : topic.level;
+                  const levelColors = {
+                    'GRUNDLAGE': 'bg-blue-100 text-blue-800 border border-blue-300',
+                    'FORTGESCHRITTEN': 'bg-yellow-100 text-yellow-800 border border-yellow-300',
+                    'EXPERTE': 'bg-green-100 text-green-800 border border-green-300'
+                  };
+                  const levelLabels = {
+                    'GRUNDLAGE': 'Grundlage',
+                    'FORTGESCHRITTEN': 'Fortgeschritten',
+                    'EXPERTE': 'Experte'
+                  };
+                  return (
+                    <span
+                      key={index}
+                      className={`text-xs px-3 py-1 rounded-full font-semibold ${levelColors[topicLevel]}`}
+                    >
+                      {topicName} <span className="text-xs opacity-75">({levelLabels[topicLevel]})</span>
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </div>

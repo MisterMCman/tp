@@ -3,17 +3,16 @@
 import { useState, useEffect } from "react";
 import { saveTrainerData } from "@/lib/session";
 import { Trainer, TrainerProfileUpdateData } from "@/lib/types";
+import { TopicSelector, TopicWithLevel, ExpertiseLevel } from "@/components/TopicSelector";
 
 interface TrainingCompany {
   id: number;
   userType: 'TRAINING_COMPANY';
   companyName: string;
-  contactName?: string;
   firstName?: string;
   lastName?: string;
   email: string;
   phone: string;
-  address?: string;
   street?: string;
   houseNumber?: string;
   zipCode?: string;
@@ -43,6 +42,12 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<any>({});
   const [countries, setCountries] = useState<{id: number, name: string, code: string}[]>([]);
+  
+  // Topic management state
+  const [topics, setTopics] = useState<TopicWithLevel[]>([]);
+  const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
+  const [topicSearch, setTopicSearch] = useState('');
+  const [topicSearchResults, setTopicSearchResults] = useState<{ id: number; name: string; displayName?: string; short_title?: string; type?: 'existing' | 'suggestion'; status?: string }[]>([]);
 
 
   useEffect(() => {
@@ -66,21 +71,104 @@ export default function ProfilePage() {
     try {
       // First, get the current user to determine their type
       const currentUser = JSON.parse(localStorage.getItem('trainer_data') || '{}');
+      console.log('Current user from localStorage:', currentUser);
 
-      if (currentUser.userType === 'TRAINING_COMPANY') {
-        // Load training company profile
-        const response = await fetch('/api/training-company/profile');
-        if (response.ok) {
-          const data = await response.json();
+      // If localStorage is empty, try both APIs to determine user type
+      if (!currentUser.userType || Object.keys(currentUser).length === 0) {
+        console.log('No userType found, trying both APIs...');
+        
+        // Try training company first
+        const companyResponse = await fetch('/api/training-company/profile');
+        if (companyResponse.ok) {
+          const data = await companyResponse.json();
+          console.log('Successfully loaded as Training Company:', data);
           setUser(data.company);
+          // Save to localStorage for next time
+          saveTrainerData(data.company);
           setFormData({
             companyName: data.company.companyName,
-            contactName: data.company.contactName,
             firstName: data.company.firstName,
             lastName: data.company.lastName,
             email: data.company.email,
             phone: data.company.phone,
-            address: data.company.address, // Legacy
+            street: data.company.street,
+            houseNumber: data.company.houseNumber,
+            zipCode: data.company.zipCode,
+            city: data.company.city,
+            countryId: data.company.country?.id,
+            bio: data.company.bio,
+            logo: data.company.logo,
+            website: data.company.website,
+            industry: data.company.industry,
+            employees: data.company.employees,
+            consultantName: data.company.consultantName,
+            vatId: data.company.vatId,
+            billingEmail: data.company.billingEmail,
+            billingNotes: data.company.billingNotes,
+            iban: data.company.iban,
+            taxId: data.company.taxId,
+            tags: data.company.tags,
+          });
+          return; // Exit early
+        }
+        
+        // If not a company, try trainer
+        const trainerResponse = await fetch('/api/trainer/profile');
+        if (trainerResponse.ok) {
+          const data = await trainerResponse.json();
+          console.log('Successfully loaded as Trainer:', data);
+          setUser(data);
+          // Save to localStorage for next time
+          saveTrainerData(data);
+          setFormData({
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            phone: data.phone,
+            street: data.street,
+            houseNumber: data.houseNumber,
+            zipCode: data.zipCode,
+            city: data.city,
+            countryId: data.country?.id,
+            bio: data.bio,
+            profilePicture: data.profilePicture,
+            iban: data.iban,
+            taxId: data.taxId,
+            companyName: data.companyName,
+            isCompany: data.isCompany,
+            dailyRate: data.dailyRate,
+            offeredTrainingTypes: data.offeredTrainingTypes || [],
+            travelRadius: data.travelRadius,
+          });
+          
+          // Load topics and suggestions - handle both old format (string[]) and new format (TopicWithLevel[])
+          const topicsData = data.topics || [];
+          setTopics(topicsData.map((t: string | TopicWithLevel) => 
+            typeof t === 'string' ? { name: t, level: 'GRUNDLAGE' as ExpertiseLevel } : t
+          ));
+          setTopicSuggestions(data.pendingSuggestions || []);
+          return; // Exit early
+        }
+        
+        // If both failed, show error
+        console.error('Failed to load profile from both APIs');
+        return;
+      }
+
+      if (currentUser.userType === 'TRAINING_COMPANY') {
+        // Load training company profile
+        const response = await fetch('/api/training-company/profile');
+        console.log('Training company profile response status:', response.status);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Training company profile data:', data);
+          setUser(data.company);
+          setFormData({
+            companyName: data.company.companyName,
+            firstName: data.company.firstName,
+            lastName: data.company.lastName,
+            email: data.company.email,
+            phone: data.company.phone,
             street: data.company.street,
             houseNumber: data.company.houseNumber,
             zipCode: data.company.zipCode,
@@ -111,7 +199,6 @@ export default function ProfilePage() {
             lastName: data.lastName,
             email: data.email,
             phone: data.phone,
-            address: data.address, // Legacy field
             street: data.street,
             houseNumber: data.houseNumber,
             zipCode: data.zipCode,
@@ -124,7 +211,16 @@ export default function ProfilePage() {
             companyName: data.companyName,
             isCompany: data.isCompany,
             dailyRate: data.dailyRate,
+            offeredTrainingTypes: data.offeredTrainingTypes || [],
+            travelRadius: data.travelRadius,
           });
+          
+          // Load topics and suggestions - handle both old format (string[]) and new format (TopicWithLevel[])
+          const topicsData = data.topics || [];
+          setTopics(topicsData.map((t: string | TopicWithLevel) => 
+            typeof t === 'string' ? { name: t, level: 'GRUNDLAGE' as ExpertiseLevel } : t
+          ));
+          setTopicSuggestions(data.pendingSuggestions || []);
         }
       }
     } catch (error) {
@@ -140,6 +236,10 @@ export default function ProfilePage() {
 
     try {
       let apiEndpoint = '/api/trainer/profile';
+      const bodyData = user?.userType !== 'TRAINING_COMPANY' 
+        ? { ...formData, topics: topics.map(t => t.name), topicsWithLevels: topics, topicSuggestions }
+        : { ...formData };
+      
       if (user?.userType === 'TRAINING_COMPANY') {
         apiEndpoint = '/api/training-company/profile';
       }
@@ -149,17 +249,28 @@ export default function ProfilePage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(bodyData),
       });
 
       if (response.ok) {
         const data = await response.json();
         if (user?.userType === 'TRAINING_COMPANY') {
           setUser(data.company);
+          saveTrainerData(data.company);
         } else {
           setUser(data.trainer);
+          saveTrainerData(data.trainer);
+          // Reload topics and suggestions after save - handle both formats
+          if (data.trainer.topics) {
+            const topicsData = data.trainer.topics;
+            setTopics(topicsData.map((t: string | TopicWithLevel) => 
+              typeof t === 'string' ? { name: t, level: 'GRUNDLAGE' as ExpertiseLevel } : t
+            ));
+          }
+          if (data.trainer.pendingSuggestions) {
+            setTopicSuggestions(data.trainer.pendingSuggestions);
+          }
         }
-        saveTrainerData(user?.userType === 'TRAINING_COMPANY' ? data.company : data.trainer);
         alert('Profil erfolgreich aktualisiert!');
       } else {
         const error = await response.json();
@@ -175,6 +286,58 @@ export default function ProfilePage() {
 
   const handleInputChange = (field: string, value: string | number | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Topic handlers
+  const handleTopicAdd = (topicName: string, level: ExpertiseLevel, isSuggestion?: boolean) => {
+    if (isSuggestion) {
+      if (!topicSuggestions.includes(topicName)) {
+        setTopicSuggestions(prev => [...prev, topicName]);
+      }
+    } else {
+      if (!topics.some(t => t.name === topicName)) {
+        setTopics(prev => [...prev, { name: topicName, level }]);
+      }
+    }
+  };
+
+  const handleTopicRemove = (topicName: string, isSuggestion?: boolean) => {
+    if (isSuggestion) {
+      setTopicSuggestions(prev => prev.filter(t => t !== topicName));
+    } else {
+      setTopics(prev => prev.filter(t => t.name !== topicName));
+    }
+  };
+
+  const handleTopicSearch = async (searchTerm: string) => {
+    if (!searchTerm || searchTerm.length < 3) {
+      setTopicSearchResults([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/topics?search=${encodeURIComponent(searchTerm)}`);
+      if (response.ok) {
+        const data = await response.json();
+        const mappedSuggestions = data.map((topic: { 
+          id: number; 
+          name: string; 
+          short_title?: string;
+          displayName?: string;
+        }) => ({
+          id: topic.id,
+          name: topic.name,
+          short_title: topic.short_title,
+          displayName: topic.displayName,
+          type: 'existing' as const,
+          status: 'online'
+        }));
+        setTopicSearchResults(mappedSuggestions);
+      }
+    } catch (error) {
+      console.error('Error searching topics:', error);
+      setTopicSearchResults([]);
+    }
   };
 
   if (loading) {
@@ -421,6 +584,88 @@ export default function ProfilePage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
+
+              {/* Training Types Offered */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Angebotene Trainingstypen *
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={(formData.offeredTrainingTypes || []).includes('ONLINE')}
+                      onChange={(e) => {
+                        const current = formData.offeredTrainingTypes || [];
+                        if (e.target.checked) {
+                          handleInputChange('offeredTrainingTypes', [...current, 'ONLINE']);
+                        } else {
+                          handleInputChange('offeredTrainingTypes', current.filter((t: string) => t !== 'ONLINE'));
+                        }
+                      }}
+                      className="mr-2"
+                    />
+                    Online
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={(formData.offeredTrainingTypes || []).includes('HYBRID')}
+                      onChange={(e) => {
+                        const current = formData.offeredTrainingTypes || [];
+                        if (e.target.checked) {
+                          handleInputChange('offeredTrainingTypes', [...current, 'HYBRID']);
+                        } else {
+                          handleInputChange('offeredTrainingTypes', current.filter((t: string) => t !== 'HYBRID'));
+                        }
+                      }}
+                      className="mr-2"
+                    />
+                    Hybrid
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={(formData.offeredTrainingTypes || []).includes('VOR_ORT')}
+                      onChange={(e) => {
+                        const current = formData.offeredTrainingTypes || [];
+                        if (e.target.checked) {
+                          handleInputChange('offeredTrainingTypes', [...current, 'VOR_ORT']);
+                        } else {
+                          handleInputChange('offeredTrainingTypes', current.filter((t: string) => t !== 'VOR_ORT'));
+                        }
+                      }}
+                      className="mr-2"
+                    />
+                    Vor Ort
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Wählen Sie die Trainingstypen aus, die Sie anbieten können.
+                </p>
+              </div>
+
+              {/* Travel Radius - Only show if HYBRID or VOR_ORT is selected */}
+              {((formData.offeredTrainingTypes || []).includes('HYBRID') || (formData.offeredTrainingTypes || []).includes('VOR_ORT')) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Reiseradius (km) *
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.travelRadius || ''}
+                    onChange={(e) => handleInputChange('travelRadius', parseInt(e.target.value) || 0)}
+                    min="0"
+                    step="50"
+                    required={(formData.offeredTrainingTypes || []).includes('HYBRID') || (formData.offeredTrainingTypes || []).includes('VOR_ORT')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="z.B. 200"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Wie weit sind Sie bereit zu reisen (von Ihrer Adresse aus)?
+                  </p>
+                </div>
+              )}
             </>
           )}
 
@@ -659,6 +904,23 @@ export default function ProfilePage() {
               placeholder="Beschreiben Sie Ihre Erfahrung und Expertise..."
             />
           </div>
+
+          {/* Topics - Only for trainers */}
+          {user?.userType !== 'TRAINING_COMPANY' && (
+            <div className="md:col-span-2">
+              <h2 className="text-lg font-semibold mb-4">Fachgebiete & Kompetenzen</h2>
+              <TopicSelector
+                topics={topics}
+                topicSuggestions={topicSuggestions}
+                onAddTopic={handleTopicAdd}
+                onRemoveTopic={handleTopicRemove}
+                searchTerm={topicSearch}
+                onSearchChange={setTopicSearch}
+                onSearch={handleTopicSearch}
+                suggestions={topicSearchResults}
+              />
+            </div>
+          )}
 
           {/* Profilbild / Firmenlogo */}
           <div className="md:col-span-2">

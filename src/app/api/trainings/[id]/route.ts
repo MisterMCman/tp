@@ -25,13 +25,11 @@ export async function GET(
           select: {
             id: true,
             companyName: true,
-            contactName: true
+            firstName: true,
+            lastName: true
           }
         },
         requests: {
-          where: {
-            status: 'ACCEPTED'
-          },
           include: {
             trainer: {
               select: {
@@ -40,6 +38,9 @@ export async function GET(
                 lastName: true
               }
             }
+          },
+          orderBy: {
+            createdAt: 'desc'
           }
         }
       }
@@ -52,8 +53,25 @@ export async function GET(
       );
     }
 
-    // Find the accepted trainer request
-    const acceptedRequest = training.requests.find(r => r.status === 'ACCEPTED');
+    // Find the accepted trainer request - prioritize ACCEPTED, but also show any request with a trainer
+    // First try to find ACCEPTED request
+    let acceptedRequest = training.requests.find(r => 
+      String(r.status).toUpperCase() === 'ACCEPTED'
+    );
+    
+    // If no ACCEPTED request found, check for any request with a trainer (for display purposes)
+    // This allows companies to see the trainer even if request is still pending
+    // Since requests are already ordered by createdAt desc, we can just take the first one with a trainer
+    if (!acceptedRequest && training.requests.length > 0) {
+      acceptedRequest = training.requests.find(r => r.trainer) || null;
+    }
+    
+    const assignedTrainer = acceptedRequest && acceptedRequest.trainer ? {
+      id: acceptedRequest.trainer.id,
+      firstName: acceptedRequest.trainer.firstName,
+      lastName: acceptedRequest.trainer.lastName,
+      fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
+    } : null;
 
     // Transform to match frontend expectations
     const transformedTraining = {
@@ -63,7 +81,7 @@ export async function GET(
       date: training.startDate.toISOString(),
       endTime: new Date(`${training.startDate.toISOString().split('T')[0]}T${training.endTime}`).toISOString(),
       location: training.location,
-      participants: training.participants,
+      participants: training.participantCount,
       status: training.status.toLowerCase(),
       description: training.description,
       trainerNotes: null, // Not available in current schema
@@ -72,12 +90,7 @@ export async function GET(
       startTime: training.startTime,
       endDate: training.endDate.toISOString(),
       company: training.company,
-      assignedTrainer: acceptedRequest ? {
-        id: acceptedRequest.trainer.id,
-        firstName: acceptedRequest.trainer.firstName,
-        lastName: acceptedRequest.trainer.lastName,
-        fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
-      } : null
+      assignedTrainer: assignedTrainer
     };
 
     return NextResponse.json(transformedTraining);

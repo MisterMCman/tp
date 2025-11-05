@@ -47,7 +47,10 @@ export async function GET(
       lastName: trainer.lastName,
       email: trainer.email,
       phone: trainer.phone,
-      address: trainer.address,
+      street: trainer.street,
+      houseNumber: trainer.houseNumber,
+      zipCode: trainer.zipCode,
+      city: trainer.city,
       status: trainer.status,
       bio: trainer.bio,
       profilePicture: trainer.profilePicture,
@@ -91,7 +94,10 @@ export async function PUT(
         lastName: updateData.lastName,
         email: updateData.email,
         phone: updateData.phone,
-        address: updateData.address,
+        street: updateData.street,
+        houseNumber: updateData.houseNumber,
+        zipCode: updateData.zipCode,
+        city: updateData.city,
         bio: updateData.bio,
         profilePicture: updateData.profilePicture,
         taxId: updateData.taxId,
@@ -115,7 +121,10 @@ export async function PUT(
 
         if (!topic) {
           topic = await prisma.topic.create({
-            data: { name: topicName }
+            data: { 
+              name: topicName,
+              slug: topicName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+            }
           });
         }
 
@@ -148,7 +157,10 @@ export async function PUT(
       lastName: finalTrainer!.lastName,
       email: finalTrainer!.email,
       phone: finalTrainer!.phone,
-      address: finalTrainer!.address,
+      street: finalTrainer!.street,
+      houseNumber: finalTrainer!.houseNumber,
+      zipCode: finalTrainer!.zipCode,
+      city: finalTrainer!.city,
       status: finalTrainer!.status,
       bio: finalTrainer!.bio,
       profilePicture: finalTrainer!.profilePicture,

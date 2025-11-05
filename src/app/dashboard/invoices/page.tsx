@@ -15,7 +15,7 @@ interface AccountingCredit {
   downloadUrl?: string;
 }
 
-interface InquiryData {
+interface TrainingRequestData {
   id: number;
   counterPrice: number | null;
   proposedPrice: number;
@@ -23,14 +23,22 @@ interface InquiryData {
   trainer: {
     firstName: string;
     lastName: string;
-    address: string | null;
+    street: string | null;
+    houseNumber: string | null;
+    zipCode: string | null;
+    city: string | null;
     taxId: string | null;
     bio: string | null;
+    country: {
+      name: string;
+      code: string;
+    } | null;
   };
-  event: {
+  training: {
+    title: string;
     course: {
       title: string;
-    };
+    } | null;
   };
 }
 
@@ -46,39 +54,52 @@ export default function InvoicesPage() {
     try {
       setLoading(true);
       
-      // Get trainer ID from localStorage
-      const trainerData = localStorage.getItem("trainer");
-      if (!trainerData) {
-        console.error('No trainer data found');
+      // Get user data from localStorage (supports both trainer and company)
+      const trainerData = localStorage.getItem("trainer_data");
+      const companyData = localStorage.getItem("company_data");
+      
+      if (!trainerData && !companyData) {
+        console.error('No user data found');
         setLoading(false);
         return;
       }
       
-      const trainer = JSON.parse(trainerData);
+      const user = trainerData ? JSON.parse(trainerData) : JSON.parse(companyData);
       
-      // Fetch real accounting credits from API
-      const response = await fetch(`/api/accounting-credits?trainerId=${trainer.id}`);
+      // Fetch accounting credits/invoices from API based on user type
+      let apiUrl = '';
+      if (user.userType === 'TRAINER') {
+        apiUrl = `/api/accounting-credits?trainerId=${user.id}`;
+      } else if (user.userType === 'TRAINING_COMPANY') {
+        apiUrl = `/api/accounting-credits?companyId=${user.id}`;
+      } else {
+        console.error('Unknown user type');
+        setLoading(false);
+        return;
+      }
+      
+      const response = await fetch(apiUrl);
       
       if (response.ok) {
         const data = await response.json();
         setCredits(data);
       } else {
-        console.error('Failed to fetch accounting credits');
+        console.error('Failed to fetch accounting credits/invoices');
         setCredits([]); // Show empty state if API fails
       }
     } catch (error) {
-      console.error('Error fetching accounting credits:', error);
+      console.error('Error fetching accounting credits/invoices:', error);
       setCredits([]); // Show empty state on error
     } finally {
       setLoading(false);
     }
   };
 
-  const generateAccountingCreditPDF = (inquiry: InquiryData, invoiceNumber: string) => {
+  const generateAccountingCreditPDF = (requestData: TrainingRequestData, invoiceNumber: string) => {
     const doc = new jsPDF();
-    const finalPrice = inquiry.counterPrice || inquiry.proposedPrice;
-    const trainerName = `${inquiry.trainer.firstName} ${inquiry.trainer.lastName}`;
-    const invoiceDate = new Date(inquiry.updatedAt);
+    const finalPrice = requestData.counterPrice || requestData.proposedPrice;
+    const trainerName = `${requestData.trainer.firstName} ${requestData.trainer.lastName}`;
+    const invoiceDate = new Date(requestData.updatedAt);
     const endOfMonth = new Date(invoiceDate.getFullYear(), invoiceDate.getMonth() + 1, 0);
     const formattedInvoiceDate = endOfMonth.toLocaleDateString('de-DE');
     const monthAndYear = invoiceDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
@@ -92,24 +113,32 @@ export default function InvoicesPage() {
     doc.setFont("helvetica", "normal");
     doc.text("powertowork GmbH | Hermannstraße 3 | 33602 Bielefeld | Germany", 20, 20);
     
-    // Trainer address - using real database data
+    // Trainer address - using structured address fields
     doc.setFontSize(10);
     doc.text(`${trainerName}`, 20, 35);
-    if (inquiry.trainer.address) {
-      const addressLines = inquiry.trainer.address.split('\n');
-      addressLines.forEach((line, index) => {
-        doc.text(line, 20, 42 + (index * 7));
-      });
+    
+    let yPosition = 42;
+    if (requestData.trainer.street) {
+      const streetLine = `${requestData.trainer.street}${requestData.trainer.houseNumber ? ' ' + requestData.trainer.houseNumber : ''}`;
+      doc.text(streetLine, 20, yPosition);
+      yPosition += 7;
+    }
+    if (requestData.trainer.zipCode && requestData.trainer.city) {
+      doc.text(`${requestData.trainer.zipCode} ${requestData.trainer.city}`, 20, yPosition);
+      yPosition += 7;
+    }
+    if (requestData.trainer.country) {
+      doc.text(requestData.trainer.country.name, 20, yPosition);
     }
     
     // Dynamic trainer role based on bio, with fallback
-    const trainerRole = inquiry.trainer.bio ? 
-      inquiry.trainer.bio.split('.')[0] + (inquiry.trainer.bio.split('.')[0].endsWith('.') ? '' : '.') : 
+    const trainerRole = requestData.trainer.bio ? 
+      requestData.trainer.bio.split('.')[0] + (requestData.trainer.bio.split('.')[0].endsWith('.') ? '' : '.') : 
       'Professional Trainer';
     doc.text(trainerRole, 20, 63);
     
-    if (inquiry.trainer.taxId) {
-      doc.text(`Tax ID: ${inquiry.trainer.taxId}`, 20, 70);
+    if (requestData.trainer.taxId) {
+      doc.text(`Tax ID: ${requestData.trainer.taxId}`, 20, 70);
     }
     
     // Date (top right)
@@ -150,7 +179,9 @@ export default function InvoicesPage() {
     // Row 1: Training service
     const row1Y = tableStartY + 10;
     doc.text("1", 20, row1Y);
-    doc.text(`Training: ${inquiry.event.course.title} for ${monthAndYear}`, 40, row1Y);
+    // Use training title, fallback to course title if available
+    const trainingTitle = requestData.training.course?.title || requestData.training.title;
+    doc.text(`Training: ${trainingTitle} for ${monthAndYear}`, 40, row1Y);
     doc.text(`Fixed price: ${baseAmountFormatted}`, 40, row1Y + 7);
     doc.text(baseAmountFormatted, 160, row1Y);
     
@@ -218,29 +249,47 @@ export default function InvoicesPage() {
 
   const downloadCredit = async (invoiceNumber: string) => {
     try {
-      // Parse invoice number to get inquiry ID
-      const parts = invoiceNumber.split('-');
-      if (parts.length !== 4 || parts[0] !== 'AC') {
-        alert('Invalid invoice number format');
+      // Get user data from localStorage (supports both trainer and company)
+      const trainerData = localStorage.getItem("trainer_data");
+      const companyData = localStorage.getItem("company_data");
+      
+      if (!trainerData && !companyData) {
+        alert('No user data found. Please log in again.');
         return;
       }
       
-      const inquiryId = parseInt(parts[3]);
-      
-      // Fetch inquiry data
-      const response = await fetch(`/api/requests/${inquiryId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch inquiry data');
+      // For trainers: Parse accounting credit number (AC-YYMMDD-01-XXXX)
+      // For companies: Invoice number might be different format (INV-XXXX)
+      if (invoiceNumber.startsWith('AC-')) {
+        // Trainer accounting credit - fetch training request data
+        const parts = invoiceNumber.split('-');
+        if (parts.length !== 4 || parts[0] !== 'AC') {
+          alert('Invalid invoice number format');
+          return;
+        }
+        
+        const requestId = parseInt(parts[3]);
+        
+        // Fetch full training request data with trainer and training details
+        const response = await fetch(`/api/accounting-credits/${requestId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch training request data');
+        }
+        
+        const requestData: TrainingRequestData = await response.json();
+        
+        // Generate and download PDF using jsPDF
+        const doc = generateAccountingCreditPDF(requestData, invoiceNumber);
+        doc.save(`${invoiceNumber}.pdf`);
+      } else {
+        // Company invoice - TODO: Implement invoice PDF generation for companies
+        // For now, show a message that invoice download needs to be implemented
+        alert('Invoice PDF generation for companies is not yet implemented. Please contact support.');
+        console.log('Company invoice download requested:', invoiceNumber);
       }
       
-      const inquiry: InquiryData = await response.json();
-      
-      // Generate and download PDF using jsPDF (same approach as contract)
-      const doc = generateAccountingCreditPDF(inquiry, invoiceNumber);
-      doc.save(`${invoiceNumber}.pdf`);
-      
     } catch (error) {
-      console.error('Error downloading credit:', error);
+      console.error('Error downloading credit/invoice:', error);
       alert('Fehler beim Herunterladen der Rechnung. Bitte versuchen Sie es erneut.');
     }
   };

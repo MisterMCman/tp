@@ -103,7 +103,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="text-center mt-16 text-gray-500">
-          <p>&copy; 2024 Trainerportal. Alle Rechte vorbehalten.</p>
+          <p>&copy; 2025 Trainerportal. Alle Rechte vorbehalten.</p>
         </footer>
       </div>
     </div>

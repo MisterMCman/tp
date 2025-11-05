@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export interface TrainingCardData {
   id: number;
@@ -39,6 +40,8 @@ export default function TrainingCard({
   onContractClick,
   className = ""
 }: TrainingCardProps) {
+  const pathname = usePathname();
+  
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return new Intl.DateTimeFormat('de-DE', {
@@ -185,7 +188,7 @@ export default function TrainingCard({
 
           {/* Details button */}
           <Link
-            href={`/dashboard/training/${training.id}`}
+            href={`/dashboard/training/${training.id}?from=${encodeURIComponent(pathname)}`}
             onClick={handleDetailsClick}
             className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-1"
           >

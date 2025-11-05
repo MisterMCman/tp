@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { prisma } from '@/lib/prisma';
+import { getTrainerData } from '@/lib/session';
 
 const UPLOAD_DIR = join(process.cwd(), 'uploads');
 
@@ -11,6 +12,15 @@ export async function GET(
 ) {
   try {
     const filename = params.filename;
+    const currentUser = getTrainerData();
+
+    // Authentication check
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'Nicht authentifiziert' },
+        { status: 401 }
+      );
+    }
 
     // Security check: Verify the file belongs to a message that the user has access to
     const attachment = await prisma.fileAttachment.findFirst({
@@ -18,7 +28,7 @@ export async function GET(
         storedFilename: filename,
       },
       include: {
-        inquiryMessage: {
+        trainingRequestMessage: {
           include: {
             trainingRequest: {
               include: {
@@ -42,8 +52,17 @@ export async function GET(
       );
     }
 
-    // TODO: Add user authentication and authorization check here
-    // For now, we'll allow access to all uploaded files
+    // Authorization check: User must be either the trainer or the company involved
+    const trainingRequest = attachment.trainingRequestMessage.trainingRequest;
+    const isTrainer = currentUser.userType === 'TRAINER' && currentUser.id === trainingRequest.trainerId;
+    const isCompany = currentUser.userType === 'TRAINING_COMPANY' && currentUser.id === trainingRequest.training.companyId;
+
+    if (!isTrainer && !isCompany) {
+      return NextResponse.json(
+        { error: 'Nicht autorisiert - Sie haben keinen Zugriff auf diese Datei' },
+        { status: 403 }
+      );
+    }
 
     const filePath = join(UPLOAD_DIR, filename);
 

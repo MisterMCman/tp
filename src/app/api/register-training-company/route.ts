@@ -54,12 +54,6 @@ export async function POST(req: Request) {
     // Extract domain from email for company identification
     const domain = email.split('@')[1];
 
-    // Combine first and last name for legacy contactName field
-    const contactName = `${firstName} ${lastName}`;
-
-    // Combine address fields for legacy address field
-    const address = `${street} ${houseNumber}, ${zipCode} ${city}`;
-
     // Create the training company
     const trainingCompany = await prisma.trainingCompany.create({
       data: {
@@ -67,14 +61,12 @@ export async function POST(req: Request) {
         companyName,
         firstName,
         lastName,
-        contactName, // Legacy field
         email,
         phone,
         street,
         houseNumber,
         zipCode,
         city,
-        address, // Legacy field
         domain,
         countryId,
         // Optional fields
@@ -97,6 +89,7 @@ export async function POST(req: Request) {
       message: 'Unternehmensregistrierung erfolgreich!',
       company: {
         id: trainingCompany.id,
+        userType: trainingCompany.userType,
         companyName: trainingCompany.companyName,
         firstName: trainingCompany.firstName,
         lastName: trainingCompany.lastName,

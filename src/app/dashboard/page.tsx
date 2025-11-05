@@ -13,6 +13,11 @@ interface Training {
   status: string;
 }
 
+interface TopicWithLevel {
+  name: string;
+  level: 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE';
+}
+
 interface TrainerSearchResult {
   id: number;
   firstName: string;
@@ -27,6 +32,7 @@ interface TrainerSearchResult {
     code: string;
   };
   topics: string[];
+  topicsWithLevels?: TopicWithLevel[];
   completedTrainings: number;
   isCompany: boolean;
   companyName?: string;
@@ -43,20 +49,6 @@ export default function Dashboard() {
   const hasProcessedAuth = useRef(false);
   const [authInProgress, setAuthInProgress] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
-
-  // Search state for training companies
-  const [searchResults, setSearchResults] = useState<TrainerSearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchFilters, setSearchFilters] = useState({
-    topic: '',
-    location: '',
-    minPrice: '',
-    maxPrice: ''
-  });
-
-  // Topic suggestions state
-  const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
-  const [showTopicSuggestions, setShowTopicSuggestions] = useState(false);
 
   const verifyTokenAndLogin = useCallback(async (token: string) => {
     console.log('Page: verifyTokenAndLogin called with token:', token.substring(0, 10) + '...');
@@ -85,12 +77,23 @@ export default function Dashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        saveTrainerData(data.trainer);
-        saveSession({ token: token, instructorId: data.trainer.id });
-        setUser(data.trainer);
+        
+        // Handle both trainer and company responses
+        const userData = data.trainer || data.company;
+        if (!userData) {
+          console.error('No user data in response:', data);
+          setErrorMessage('Login fehlgeschlagen. Bitte versuchen Sie es erneut.');
+          setAuthInProgress(false);
+          setLoading(false);
+          return;
+        }
+        
+        saveTrainerData(userData);
+        saveSession({ token: token, instructorId: userData.id });
+        setUser(userData);
 
         // Fetch dashboard data (this will set loading to false)
-        await fetchDashboardData(data.trainer.id as number, data.trainer.userType);
+        await fetchDashboardData(userData.id as number, userData.userType);
 
         // Set initialized state AFTER everything is loaded
         setInitialized(true);
@@ -235,80 +238,12 @@ export default function Dashboard() {
     }).format(date);
   };
 
-  // Fetch topic suggestions
-  const fetchTopicSuggestions = useCallback(async (query: string) => {
-    if (query.length < 2) {
-      setTopicSuggestions([]);
-      setShowTopicSuggestions(false);
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/trainers/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const suggestions = data.topics.map((topic: any) => topic.name);
-        setTopicSuggestions(suggestions);
-        setShowTopicSuggestions(true);
-      }
-    } catch (error) {
-      console.error('Error fetching topic suggestions:', error);
-      setTopicSuggestions([]);
-      setShowTopicSuggestions(false);
-    }
-  }, []);
-
-  // Handle topic input change
-  const handleTopicChange = (value: string) => {
-    setSearchFilters({ ...searchFilters, topic: value });
-    fetchTopicSuggestions(value);
-  };
-
-  // Handle topic selection from suggestions
-  const handleTopicSelect = (topic: string) => {
-    setSearchFilters({ ...searchFilters, topic });
-    setShowTopicSuggestions(false);
-    setTopicSuggestions([]);
-  };
-
-  const searchTrainers = async () => {
-    setSearchLoading(true);
-    try {
-      const params = new URLSearchParams();
-
-      if (searchFilters.topic) params.append('topic', searchFilters.topic);
-      if (searchFilters.location) params.append('location', searchFilters.location);
-
-      // Use new price range fields
-      if (searchFilters.minPrice) params.append('minPrice', searchFilters.minPrice);
-      if (searchFilters.maxPrice) params.append('maxPrice', searchFilters.maxPrice);
-
-      const response = await fetch(`/api/trainers/search?${params.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setSearchResults(data.trainers);
-      } else {
-        console.error('Failed to search trainers');
-      }
-    } catch (error) {
-      console.error('Error searching trainers:', error);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
 
   return (
     <div>
       <div className="ptw-dashboard-header">
         <h1 className="text-2xl font-bold">
-          {user?.userType === 'TRAINING_COMPANY' ? 'TRAINER SUCHEN' : 'DASHBOARD'}
+          DASHBOARD
         </h1>
         <Link
           href="/dashboard/profile"
@@ -359,211 +294,97 @@ export default function Dashboard() {
       )}
 
       {user?.userType === 'TRAINING_COMPANY' ? (
-        // Training Company Dashboard - Trainer Search
-        <div className="space-y-6">
+        // Training Company Dashboard - Overview
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          {/* Quick Actions */}
           <div className="ptw-dashboard-card">
-            <h2 className="text-lg font-semibold mb-6" style={{ color: 'var(--ptw-accent-primary)' }}>
-              TRAINER FINDEN
+            <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--ptw-accent-primary)' }}>
+              SCHNELLZUGRIFF
             </h2>
-
-            {/* Search Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Thema suchen..."
-                  value={searchFilters.topic}
-                  onChange={(e) => handleTopicChange(e.target.value)}
-                  onFocus={() => searchFilters.topic.length >= 2 && setShowTopicSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowTopicSuggestions(false), 200)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-                <label className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Thema
-                </label>
-
-                {/* Topic Suggestions Dropdown */}
-                {showTopicSuggestions && topicSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-10 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
-                    {topicSuggestions.map((topic, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleTopicSelect(topic)}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                        style={{ color: 'var(--ptw-text-primary)' }}
-                      >
-                        {topic}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <select
-                  value={searchFilters.location}
-                  onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            <div className="space-y-3">
+              <Link
+                href="/dashboard/trainer"
+                className="flex items-center p-4 rounded-lg border transition-all duration-200 hover:scale-105 group"
+                style={{ background: 'var(--ptw-bg-secondary)', borderColor: 'var(--ptw-border-primary)' }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6 mr-4 transition-colors group-hover:text-red-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  style={{ color: 'var(--ptw-accent-primary)' }}
                 >
-                  <option value="">Alle Standorte</option>
-                  <option value="de">Deutschland</option>
-                  <option value="at">Österreich</option>
-                  <option value="ch">Schweiz</option>
-                </select>
-                <label className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Standort
-                </label>
-              </div>
-
-              <div className="relative">
-                <div className="space-y-2">
-                  <label className="text-xs text-gray-500">
-                    Preis pro Tag: {searchFilters.minPrice || '0'}€ - {searchFilters.maxPrice || '1000+'}€
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      placeholder="Min"
-                      value={searchFilters.minPrice}
-                      onChange={(e) => setSearchFilters({ ...searchFilters, minPrice: e.target.value })}
-                      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
-                      min="0"
-                    />
-                    <span className="text-gray-400">-</span>
-                    <input
-                      type="number"
-                      placeholder="Max"
-                      value={searchFilters.maxPrice}
-                      onChange={(e) => setSearchFilters({ ...searchFilters, maxPrice: e.target.value })}
-                      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
-                      min="0"
-                    />
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="2000"
-                    step="50"
-                    value={searchFilters.maxPrice || '1000'}
-                    onChange={(e) => setSearchFilters({ ...searchFilters, maxPrice: e.target.value })}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                   />
-                </div>
-              </div>
+                </svg>
+                <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>TRAINER SUCHEN</span>
+              </Link>
+              <Link
+                href="/dashboard/trainings"
+                className="flex items-center p-4 rounded-lg border transition-all duration-200 hover:scale-105 group"
+                style={{ background: 'var(--ptw-bg-secondary)', borderColor: 'var(--ptw-border-primary)' }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6 mr-4 transition-colors group-hover:text-red-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  style={{ color: 'var(--ptw-accent-primary)' }}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+                <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>TRAININGSPLAN</span>
+              </Link>
+              <Link
+                href="/dashboard/requests"
+                className="flex items-center p-4 rounded-lg border transition-all duration-200 hover:scale-105 group"
+                style={{ background: 'var(--ptw-bg-secondary)', borderColor: 'var(--ptw-border-primary)' }}
+              >
+                <svg
+                  className="w-6 h-6 mr-4 transition-colors group-hover:text-red-500"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="1.5"
+                  stroke="currentColor"
+                  style={{ color: 'var(--ptw-accent-primary)' }}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.123.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 002.25 2.25h8.25a2.25 2.25 0 002.25-2.25V6.108a2.25 2.25 0 00-2.25-2.25H15c-1.012 0-1.867.668-2.15 1.586z"
+                  />
+                </svg>
+                <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>TRAININGSANFRAGEN</span>
+              </Link>
             </div>
-
-            <button
-              onClick={searchTrainers}
-              disabled={searchLoading}
-              className="ptw-button-primary disabled:opacity-50"
-            >
-              {searchLoading ? 'SUCHE...' : 'TRAINER SUCHEN'}
-            </button>
           </div>
 
-          {/* Search Results */}
+          {/* Info Card */}
           <div className="ptw-dashboard-card">
-            <h3 className="text-md font-semibold mb-4" style={{ color: 'var(--ptw-accent-primary)' }}>
-              SUCHERGEBNISSE {searchResults.length > 0 && `(${searchResults.length} Trainer gefunden)`}
-            </h3>
-
-            {searchLoading ? (
-              <div className="animate-pulse space-y-4">
-                <div className="h-20 rounded" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
-                <div className="h-20 rounded" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
-                <div className="h-20 rounded" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
-              </div>
-            ) : searchResults.length > 0 ? (
-              <div className="space-y-4">
-                {searchResults.map((trainer) => (
-                  <div key={trainer.id} className="flex items-start p-4 rounded-lg border transition-all hover:scale-102" style={{ background: 'var(--ptw-bg-secondary)', borderColor: 'var(--ptw-border-primary)' }}>
-                    <div className="flex-shrink-0 mr-4">
-                      {trainer.profilePicture ? (
-                        <img
-                          src={trainer.profilePicture}
-                          alt={`${trainer.firstName} ${trainer.lastName}`}
-                          className="w-16 h-16 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 rounded-full bg-gray-300 flex items-center justify-center">
-                          <span className="text-gray-600 text-lg font-semibold">
-                            {trainer.firstName[0]}{trainer.lastName[0]}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h4 className="font-semibold text-sm" style={{ color: 'var(--ptw-text-primary)' }}>
-                            {trainer.firstName} {trainer.lastName}
-                            {trainer.isCompany && trainer.companyName && (
-                              <span className="text-xs text-gray-500 ml-2">({trainer.companyName})</span>
-                            )}
-                          </h4>
-                          <p className="text-xs" style={{ color: 'var(--ptw-text-secondary)' }}>
-                            {trainer.location?.name || 'Standort nicht angegeben'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          {trainer.dailyRate && (
-                            <p className="font-semibold text-sm" style={{ color: 'var(--ptw-accent-primary)' }}>
-                              {trainer.dailyRate}€/Tag
-                            </p>
-                          )}
-                          <p className="text-xs" style={{ color: 'var(--ptw-text-secondary)' }}>
-                            {trainer.completedTrainings} abgeschlossene Trainings
-                          </p>
-                        </div>
-                      </div>
-
-                      {trainer.bio && (
-                        <p className="text-sm mb-2" style={{ color: 'var(--ptw-text-secondary)' }}>
-                          {trainer.bio.length > 100 ? `${trainer.bio.substring(0, 100)}...` : trainer.bio}
-                        </p>
-                      )}
-
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {trainer.topics.slice(0, 3).map((topic, index) => (
-                          <span
-                            key={index}
-                            className="text-xs px-2 py-1 rounded-full font-semibold"
-                            style={{ background: 'var(--ptw-accent-primary)', color: 'white' }}
-                          >
-                            {topic}
-                          </span>
-                        ))}
-                        {trainer.topics.length > 3 && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-600">
-                            +{trainer.topics.length - 3} mehr
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <Link
-                          href={`/dashboard/trainer/${trainer.id}`}
-                          className="text-sm hover:text-red-600 transition-colors"
-                          style={{ color: 'var(--ptw-accent-primary)' }}
-                        >
-                          PROFIL ANSEHEN →
-                        </Link>
-                        <button className="ptw-button-primary text-xs px-3 py-1">
-                          ANFRAGE SENDEN
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>
-                  Verwenden Sie die Suchfilter oben, um Trainer zu finden.
-                </p>
-              </div>
-            )}
+            <h2 className="text-lg font-semibold mb-4" style={{ color: 'var(--ptw-accent-primary)' }}>
+              WILLKOMMEN
+            </h2>
+            <p className="text-sm mb-4" style={{ color: 'var(--ptw-text-secondary)' }}>
+              Nutzen Sie das Dashboard, um schnell auf wichtige Funktionen zuzugreifen.
+            </p>
+            <div className="space-y-2 text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>
+              <p>• Trainer suchen und anfragen</p>
+              <p>• Trainings planen und verwalten</p>
+              <p>• Anfragen bearbeiten</p>
+              <p>• Rechnungen einsehen</p>
+            </div>
           </div>
         </div>
       ) : (
@@ -595,7 +416,7 @@ export default function Dashboard() {
                       <h3 className="font-semibold text-sm" style={{ color: 'var(--ptw-text-primary)' }}>{training.title}</h3>
                       <p className="text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>{formatDate(training.date)}</p>
                     </div>
-                    <span className="text-xs px-3 py-1 rounded-full font-semibold" style={{ background: 'var(--ptw-accent-primary)', color: 'white' }}>
+                    <span className="text-xs px-3 py-1 rounded-full font-semibold" style={{ background: '#fee2e1', color: 'var(--ptw-accent-primary)' }}>
                       {training.topicName}
                     </span>
                   </div>
@@ -629,7 +450,7 @@ export default function Dashboard() {
             ) : pendingRequests > 0 ? (
               <div className="text-center py-8">
                 <div className="inline-flex items-center justify-center text-2xl font-bold rounded-full h-16 w-16 mb-4"
-                     style={{ background: 'var(--ptw-accent-primary)', color: 'white' }}>
+                     style={{ background: '#fee2e1', color: 'var(--ptw-accent-primary)' }}>
                   {pendingRequests}
                 </div>
                 <p className="text-sm mb-4" style={{ color: 'var(--ptw-text-secondary)' }}>

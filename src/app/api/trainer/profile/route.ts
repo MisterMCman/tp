@@ -28,6 +28,7 @@ export async function GET() {
             status: 'PENDING'
           }
         },
+        offeredTrainingTypes: true,
         country: true
       }
     });
@@ -46,7 +47,6 @@ export async function GET() {
       lastName: trainer.lastName,
       email: trainer.email,
       phone: trainer.phone,
-      address: trainer.address, // Legacy field
       street: trainer.street,
       houseNumber: trainer.houseNumber,
       zipCode: trainer.zipCode,
@@ -60,7 +60,12 @@ export async function GET() {
       isCompany: trainer.isCompany,
       dailyRate: trainer.dailyRate,
       status: trainer.status,
-      topics: trainer.topics.map(t => t.topic.name),
+      offeredTrainingTypes: trainer.offeredTrainingTypes?.map(tt => tt.type) || [],
+      travelRadius: trainer.travelRadius,
+      topics: trainer.topics.map(t => ({
+        name: t.topic.name,
+        level: t.expertiseLevel
+      })),
       pendingSuggestions: trainer.topicSuggestions.map(s => s.name),
       createdAt: trainer.createdAt.toISOString(),
       updatedAt: trainer.updatedAt.toISOString(),
@@ -89,7 +94,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json() as Record<string, unknown>;
-    const updateData = body;
+    
+    // Extract topics, topicsWithLevels, topicSuggestions, and offeredTrainingTypes separately
+    const { topics: topicsToUpdate, topicsWithLevels: topicsWithLevelsToUpdate, topicSuggestions: suggestionsToUpdate, offeredTrainingTypes: offeredTrainingTypesToUpdate, ...updateData } = body;
 
     // Hole aktuelle Trainer-Daten für Vergleich
     const currentTrainer = await prisma.trainer.findUnique({
@@ -158,35 +165,155 @@ export async function PATCH(request: NextRequest) {
             status: 'PENDING'
           }
         },
+        offeredTrainingTypes: true,
         country: true
       }
     });
 
-    // Formatiere die Antwort
+    // Update topics if provided - use topicsWithLevels if available, otherwise fall back to topics
+    const topicsToProcess = topicsWithLevelsToUpdate || (topicsToUpdate ? topicsToUpdate.map((name: string) => ({ name, level: 'GRUNDLAGE' as const })) : null);
+    
+    if (topicsToProcess && Array.isArray(topicsToProcess) && topicsToProcess.length > 0) {
+      // Delete all existing trainer topics
+      await prisma.trainerTopic.deleteMany({
+        where: { trainerId: trainerData.id as number }
+      });
+
+      // Add new topics with expertise levels
+      for (const topicItem of topicsToProcess) {
+        const topicName = typeof topicItem === 'string' ? topicItem : topicItem.name;
+        const expertiseLevel = typeof topicItem === 'string' ? 'GRUNDLAGE' : (topicItem.level || 'GRUNDLAGE');
+        
+        // Find or create topic
+        let topic = await prisma.topic.findFirst({
+          where: { name: topicName }
+        });
+
+        if (!topic) {
+          // Create topic if it doesn't exist (shouldn't happen with our current flow)
+          topic = await prisma.topic.create({
+            data: { 
+              name: topicName,
+              slug: topicName.toLowerCase().replace(/\s+/g, '-')
+            }
+          });
+        }
+
+        // Create trainer-topic relation with expertise level
+        await prisma.trainerTopic.create({
+          data: {
+            trainerId: trainerData.id as number,
+            topicId: topic.id,
+            expertiseLevel: expertiseLevel as 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE'
+          }
+        });
+      }
+    } else if (topicsToUpdate === null || (Array.isArray(topicsToUpdate) && topicsToUpdate.length === 0)) {
+      // If topics array is explicitly empty, delete all topics
+      await prisma.trainerTopic.deleteMany({
+        where: { trainerId: trainerData.id as number }
+      });
+    }
+
+    // Update topic suggestions if provided
+    if (suggestionsToUpdate && Array.isArray(suggestionsToUpdate)) {
+      // Delete all existing pending suggestions for this trainer
+      await prisma.topicSuggestion.deleteMany({
+        where: { 
+          trainerId: trainerData.id as number,
+          status: 'PENDING'
+        }
+      });
+
+      // Add new suggestions
+      for (const suggestionName of suggestionsToUpdate as string[]) {
+        // Check if topic already exists
+        const existingTopic = await prisma.topic.findFirst({
+          where: { name: suggestionName }
+        });
+
+        if (!existingTopic) {
+          // Create suggestion only if topic doesn't exist
+          await prisma.topicSuggestion.create({
+            data: {
+              name: suggestionName,
+              trainerId: trainerData.id as number,
+              status: 'PENDING'
+            }
+          });
+        }
+      }
+    }
+
+    // Update offered training types if provided
+    if (offeredTrainingTypesToUpdate !== undefined && Array.isArray(offeredTrainingTypesToUpdate)) {
+      // Delete all existing training types for this trainer
+      await prisma.trainerTrainingType.deleteMany({
+        where: { trainerId: trainerData.id as number }
+      });
+
+      // Add new training types
+      for (const trainingType of offeredTrainingTypesToUpdate as string[]) {
+        if (['ONLINE', 'HYBRID', 'VOR_ORT'].includes(trainingType)) {
+          await prisma.trainerTrainingType.create({
+            data: {
+              trainerId: trainerData.id as number,
+              type: trainingType as 'ONLINE' | 'HYBRID' | 'VOR_ORT'
+            }
+          });
+        }
+      }
+    }
+
+    // Reload trainer with updated topics and suggestions
+    const reloadedTrainer = await prisma.trainer.findUnique({
+      where: { id: trainerData.id as number },
+      include: {
+        topics: {
+          include: {
+            topic: true
+          }
+        },
+        topicSuggestions: {
+          where: {
+            status: 'PENDING'
+          }
+        },
+        offeredTrainingTypes: true,
+        country: true
+      }
+    });
+
+    // Formatiere die Antwort mit reloaded data
+    const trainerToReturn = reloadedTrainer || updatedTrainer;
     const response = {
-      id: updatedTrainer.id,
-      firstName: updatedTrainer.firstName,
-      lastName: updatedTrainer.lastName,
-      email: updatedTrainer.email,
-      phone: updatedTrainer.phone,
-      address: updatedTrainer.address, // Legacy field
-      street: updatedTrainer.street,
-      houseNumber: updatedTrainer.houseNumber,
-      zipCode: updatedTrainer.zipCode,
-      city: updatedTrainer.city,
-      country: updatedTrainer.country,
-      bio: updatedTrainer.bio,
-      profilePicture: updatedTrainer.profilePicture,
-      iban: updatedTrainer.iban,
-      taxId: updatedTrainer.taxId,
-      companyName: updatedTrainer.companyName,
-      isCompany: updatedTrainer.isCompany,
-      dailyRate: updatedTrainer.dailyRate,
-      status: updatedTrainer.status,
-      topics: updatedTrainer.topics.map(t => t.topic.name),
-      pendingSuggestions: updatedTrainer.topicSuggestions.map(s => s.name),
-      createdAt: updatedTrainer.createdAt.toISOString(),
-      updatedAt: updatedTrainer.updatedAt.toISOString(),
+      id: trainerToReturn.id,
+      firstName: trainerToReturn.firstName,
+      lastName: trainerToReturn.lastName,
+      email: trainerToReturn.email,
+      phone: trainerToReturn.phone,
+      street: trainerToReturn.street,
+      houseNumber: trainerToReturn.houseNumber,
+      zipCode: trainerToReturn.zipCode,
+      city: trainerToReturn.city,
+      country: trainerToReturn.country,
+      bio: trainerToReturn.bio,
+      profilePicture: trainerToReturn.profilePicture,
+      iban: trainerToReturn.iban,
+      taxId: trainerToReturn.taxId,
+      companyName: trainerToReturn.companyName,
+      isCompany: trainerToReturn.isCompany,
+      dailyRate: trainerToReturn.dailyRate,
+      status: trainerToReturn.status,
+      offeredTrainingTypes: trainerToReturn.offeredTrainingTypes.map(tt => tt.type) || [],
+      travelRadius: trainerToReturn.travelRadius,
+      topics: trainerToReturn.topics.map(t => ({
+        name: t.topic.name,
+        level: t.expertiseLevel
+      })),
+      pendingSuggestions: trainerToReturn.topicSuggestions.map(s => s.name),
+      createdAt: trainerToReturn.createdAt.toISOString(),
+      updatedAt: trainerToReturn.updatedAt.toISOString(),
     };
 
     return NextResponse.json({

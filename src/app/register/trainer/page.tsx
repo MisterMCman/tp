@@ -3,9 +3,10 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { saveTrainerData } from "@/lib/session";
-import { TopicSelector } from "@/components/TopicSelector";
+import { TopicSelector, TopicWithLevel, ExpertiseLevel } from "@/components/TopicSelector";
 import { useToast } from "@/components/Toast";
 import { RegistrationFormData } from "@/lib/types";
+import { sortCountries } from "@/lib/countrySort";
 
 function TrainerRegistrationContent() {
   const router = useRouter();
@@ -31,12 +32,14 @@ function TrainerRegistrationContent() {
     isDeliveryAddress: false,
     isHeadquarterAddress: true,
     bio: "",
-    profilePicture: "",
     topics: [],
     isCompany: false,
     companyName: "",
     dailyRate: undefined,
   });
+
+  // Separate state for topics with levels (for TopicSelector component)
+  const [topicsWithLevels, setTopicsWithLevels] = useState<TopicWithLevel[]>([]);
 
   // Separate state for topic suggestions
   const [topicSuggestionsList, setTopicSuggestionsList] = useState<string[]>([]);
@@ -55,8 +58,21 @@ function TrainerRegistrationContent() {
   useEffect(() => {
     const loadCountries = async () => {
       try {
-        // For now, we'll create a simple countries API endpoint or use hardcoded data
-        // In a real app, you'd fetch this from the API
+        // Try to fetch from API first
+        const response = await fetch('/api/countries');
+        if (response.ok) {
+          const data = await response.json();
+          setCountries(data.countries || []);
+          // Set Germany as default country
+          setFormData(prev => ({ ...prev, countryId: 1 }));
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching countries from API, using fallback:', error);
+      }
+      
+      // Fallback to hardcoded data (if API call failed or returned non-ok)
+      try {
         const hardcodedCountries = [
           { id: 1, name: 'Deutschland', code: 'DE' },
           { id: 2, name: 'Österreich', code: 'AT' },
@@ -274,7 +290,7 @@ function TrainerRegistrationContent() {
           { id: 214, name: 'Südafrika', code: 'ZA' },
           { id: 215, name: 'Namibia', code: 'NA' },
         ];
-        setCountries(hardcodedCountries);
+        setCountries(sortCountries(hardcodedCountries));
 
         // Set Germany as default country (ID 1)
         setFormData(prev => ({ ...prev, countryId: 1 }));
@@ -305,15 +321,17 @@ function TrainerRegistrationContent() {
   };
 
   // Handler für Themen-Auswahl
-  const handleTopicSelect = (topicName: string, isSuggestion?: boolean) => {
+  const handleTopicSelect = (topicName: string, level: ExpertiseLevel, isSuggestion?: boolean) => {
     if (isSuggestion) {
       // Add to topic suggestions list
       if (!topicSuggestionsList.includes(topicName)) {
         setTopicSuggestionsList(prev => [...prev, topicName]);
       }
     } else {
-      // Add to main topics
-      if (!formData.topics.includes(topicName)) {
+      // Add to main topics with level
+      if (!topicsWithLevels.some(t => t.name === topicName)) {
+        setTopicsWithLevels(prev => [...prev, { name: topicName, level }]);
+        // Also update formData for backward compatibility (API might still expect string[])
         setFormData(prev => ({
           ...prev,
           topics: [...prev.topics, topicName],
@@ -327,6 +345,7 @@ function TrainerRegistrationContent() {
     if (isSuggestion) {
       setTopicSuggestionsList(prev => prev.filter(t => t !== topicName));
     } else {
+      setTopicsWithLevels(prev => prev.filter(t => t.name !== topicName));
       setFormData(prev => ({
         ...prev,
         topics: prev.topics.filter(t => t !== topicName),
@@ -390,13 +409,18 @@ function TrainerRegistrationContent() {
           lastName: formData.lastName,
           email: formData.email,
           phone: formData.phone,
-          address: `${formData.street}, ${formData.zip} ${formData.city}`,
+          street: formData.street,
+          houseNumber: formData.addressLine2, // Using addressLine2 as houseNumber
+          zipCode: formData.zip,
+          city: formData.city,
           countryId: formData.countryId,
-          topics: formData.topics,
+          topics: topicsWithLevels.map(t => t.name), // Send topic names for backward compatibility
+          topicsWithLevels: topicsWithLevels, // Send full topic data with levels
           topicSuggestions: topicSuggestionsList,
           bio: formData.bio,
           dailyRate: formData.dailyRate,
-          profilePicture: formData.profilePicture,
+          isCompany: formData.isCompany,
+          companyName: formData.companyName,
         }),
       });
 
@@ -427,23 +451,6 @@ function TrainerRegistrationContent() {
     }
   };
 
-  // Handler für Profilbild-Upload
-  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setFormData(prev => ({ ...prev, profilePicture: result }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Handler für Profilbild-Entfernung
-  const handleRemoveProfilePicture = () => {
-    setFormData(prev => ({ ...prev, profilePicture: '' }));
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 py-8">
@@ -548,23 +555,41 @@ function TrainerRegistrationContent() {
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Adresse</h3>
 
-              <div className="relative mb-4">
-                <input
-                  type="text"
-                  name="street"
-                  id="street"
-                  placeholder="Straße und Hausnummer"
-                  value={formData.street}
-                  onChange={handleRegisterChange}
-                  className="form-input"
-                  required
-                />
-                <label htmlFor="street" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Straße und Hausnummer
-                </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="relative md:col-span-2">
+                  <input
+                    type="text"
+                    name="street"
+                    id="street"
+                    placeholder="Straße"
+                    value={formData.street}
+                    onChange={handleRegisterChange}
+                    className="form-input"
+                    required
+                  />
+                  <label htmlFor="street" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                    Straße *
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="addressLine2"
+                    id="addressLine2"
+                    placeholder="Hausnummer"
+                    value={formData.addressLine2}
+                    onChange={handleRegisterChange}
+                    className="form-input"
+                    required
+                  />
+                  <label htmlFor="addressLine2" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                    Hausnummer *
+                  </label>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div className="relative">
                   <input
                     type="text"
@@ -577,10 +602,10 @@ function TrainerRegistrationContent() {
                     required
                   />
                   <label htmlFor="zip" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    PLZ
+                    PLZ *
                   </label>
                 </div>
-                <div className="relative">
+                <div className="relative md:col-span-2">
                   <input
                     type="text"
                     name="city"
@@ -592,32 +617,30 @@ function TrainerRegistrationContent() {
                     required
                   />
                   <label htmlFor="city" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    Ort
+                    Ort *
                   </label>
                 </div>
               </div>
 
-              <div className="mt-4">
-                <div className="relative">
-                  <select
-                    name="countryId"
-                    id="countryId"
-                    value={formData.countryId || ''}
-                    onChange={handleRegisterChange}
-                    className="form-input"
-                    required
-                  >
-                    <option value="">Land auswählen</option>
-                    {countries.map(country => (
-                      <option key={country.id} value={country.id}>
-                        {country.name}
-                      </option>
-                    ))}
-                  </select>
-                  <label htmlFor="countryId" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    Land
-                  </label>
-                </div>
+              <div className="relative">
+                <select
+                  name="countryId"
+                  id="countryId"
+                  value={formData.countryId || ''}
+                  onChange={handleRegisterChange}
+                  className="form-input"
+                  required
+                >
+                  <option value="">Land auswählen</option>
+                  {countries.map(country => (
+                    <option key={country.id} value={country.id}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
+                <label htmlFor="countryId" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
+                  Land *
+                </label>
               </div>
             </div>
 
@@ -671,7 +694,7 @@ function TrainerRegistrationContent() {
                   Fachgebiete
                 </label>
                 <TopicSelector
-                  topics={formData.topics}
+                  topics={topicsWithLevels}
                   topicSuggestions={topicSuggestionsList}
                   onAddTopic={handleTopicSelect}
                   onRemoveTopic={handleTopicRemove}
@@ -682,44 +705,11 @@ function TrainerRegistrationContent() {
                 />
               </div>
 
-              {/* Profile Picture */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Profilbild
-                </label>
-                <div className="flex items-center space-x-4">
-                  {formData.profilePicture && (
-                    <div className="relative">
-                      <img
-                        src={formData.profilePicture}
-                        alt="Profile preview"
-                        className="w-20 h-20 object-cover rounded-full border"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleRemoveProfilePicture}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex space-x-2">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleProfilePictureChange}
-                      className="hidden"
-                      id="profilePicture"
-                    />
-                    <label
-                      htmlFor="profilePicture"
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-700 text-sm"
-                    >
-                      {formData.profilePicture ? 'Ändern' : 'Hochladen'}
-                    </label>
-                  </div>
-                </div>
+              {/* Profilbild Notice */}
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <p className="text-xs text-gray-600">
+                  💡 <strong>Hinweis:</strong> Ihr Profilbild können Sie nach der Registrierung in Ihren Profil-Einstellungen hochladen.
+                </p>
               </div>
             </div>
 

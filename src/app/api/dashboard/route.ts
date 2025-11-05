@@ -1,56 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getTrainerData } from '@/lib/session';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get trainer ID from query params - in production this would come from session
-    const { searchParams } = new URL(request.url);
-    const trainerId = searchParams.get('trainerId') || '1';
+    // Get authenticated user
+    const currentUser = getTrainerData();
+    
+    if (!currentUser || currentUser.userType !== 'TRAINER') {
+      return NextResponse.json(
+        { error: 'Nicht authentifiziert oder kein Trainer-Account' },
+        { status: 401 }
+      );
+    }
+
+    const trainerId = currentUser.id as number;
 
     const now = new Date();
     
-    // Fetch upcoming trainings (next 3 upcoming trainings)
-    const upcomingTrainings = await prisma.inquiry.findMany({
+    // Fetch upcoming trainings (next 3 upcoming trainings) via TrainingRequest
+    const upcomingTrainings = await prisma.trainingRequest.findMany({
       where: {
-        trainerId: parseInt(trainerId),
+        trainerId: trainerId,
         status: 'ACCEPTED',
-        event: {
-          date: { gte: now }
+        training: {
+          startDate: { gte: now }
         }
       },
       include: {
-        event: {
+        training: {
           include: {
-            course: {
-              include: {
-                topic: true
-              }
-            }
+            topic: true,
+            course: true
           }
         }
       },
       orderBy: {
-        event: {
-          date: 'asc'
+        training: {
+          startDate: 'asc'
         }
       },
       take: 3 // Limit to next 3 trainings for dashboard
     });
 
     // Count pending requests
-    const pendingRequestsCount = await prisma.inquiry.count({
+    const pendingRequestsCount = await prisma.trainingRequest.count({
       where: {
-        trainerId: parseInt(trainerId),
+        trainerId: trainerId,
         status: 'PENDING'
       }
     });
 
     // Transform upcoming trainings data
-    const trainings = upcomingTrainings.map(inquiry => ({
-      id: inquiry.event.id,
-      title: inquiry.event.course.title,
-      topicName: inquiry.event.course.topic?.name || 'Unknown',
-      date: inquiry.event.date.toISOString(),
+    const trainings = upcomingTrainings.map(request => ({
+      id: request.training.id,
+      title: request.training.title,
+      topicName: request.training.topic?.name || 'Unknown',
+      date: request.training.startDate.toISOString(),
       status: 'confirmed'
     }));
 

@@ -25,11 +25,7 @@ export async function GET(
           }
         },
         country: true,
-        inquiries: {
-          include: {
-            trainingCompany: true
-          }
-        }
+        offeredTrainingTypes: true
       }
     });
 
@@ -47,9 +43,10 @@ export async function GET(
       lastName: trainer.lastName,
       email: trainer.email,
       phone: trainer.phone,
-      address: trainer.street && trainer.city
-        ? `${trainer.street}, ${trainer.zip} ${trainer.city}`
-        : null,
+      street: trainer.street,
+      houseNumber: trainer.houseNumber,
+      zipCode: trainer.zipCode,
+      city: trainer.city,
       bio: trainer.bio,
       profilePicture: trainer.profilePicture,
       dailyRate: trainer.dailyRate,
@@ -58,6 +55,12 @@ export async function GET(
         code: trainer.country.code
       } : null,
       topics: trainer.topics?.map(t => t.topic.name) || [],
+      topicsWithLevels: trainer.topics?.map(t => ({
+        name: t.topic.name,
+        level: t.expertiseLevel
+      })) || [],
+      offeredTrainingTypes: trainer.offeredTrainingTypes?.map(tt => tt.type) || [],
+      travelRadius: trainer.travelRadius,
       isCompany: trainer.isCompany,
       companyName: trainer.companyName,
       status: trainer.status,

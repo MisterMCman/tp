@@ -16,15 +16,15 @@ interface User {
   bio?: string;
   profilePicture?: string;
   logo?: string;
-  // Trainer-specific fields
+  // Common fields
   firstName?: string;
   lastName?: string;
+  // Trainer-specific fields
   topics?: string[];
   isCompany?: boolean;
   companyName?: string;
   dailyRate?: number;
   // Training company-specific fields
-  contactName?: string;
   website?: string;
   industry?: string;
   employees?: string;
@@ -112,7 +112,7 @@ export default function DashboardLayout({
           <p className="text-sm">
             {user?.userType === 'TRAINER'
               ? `${user.firstName} ${user.lastName}`
-              : user?.companyName || user?.contactName
+              : user?.companyName || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'Unternehmen')
             }
           </p>
           {user?.userType === 'TRAINER' && user.dailyRate && (
@@ -167,6 +167,28 @@ export default function DashboardLayout({
             </svg>
             PROFIL
           </Link>
+          {user?.userType === 'TRAINING_COMPANY' && (
+            <Link
+              href="/dashboard/trainer"
+              className={`ptw-nav-item ${pathname === "/dashboard/trainer" ? "active" : ""}`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              TRAINER
+            </Link>
+          )}
           <Link
             href="/dashboard/trainings"
             className={`ptw-nav-item ${pathname === "/dashboard/trainings" ? "active" : ""}`}

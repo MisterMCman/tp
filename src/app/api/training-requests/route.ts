@@ -10,6 +10,47 @@ export async function POST(request: NextRequest) {
     if (trainingIds && trainerId) {
       const trainingRequests = await Promise.all(
         trainingIds.map(async (trainingId: number) => {
+          // Check if request already exists
+          const existing = await prisma.trainingRequest.findUnique({
+            where: {
+              trainingId_trainerId: {
+                trainingId: trainingId,
+                trainerId: parseInt(trainerId)
+              }
+            }
+          });
+
+          if (existing) {
+            // Return existing request instead of creating duplicate
+            return await prisma.trainingRequest.findUnique({
+              where: { id: existing.id },
+              include: {
+                trainer: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
+                  }
+                },
+                training: {
+                  include: {
+                    topic: true,
+                    company: {
+                      select: {
+                        id: true,
+                        companyName: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            });
+          }
+
           return await prisma.trainingRequest.create({
             data: {
               trainingId: trainingId,
@@ -33,7 +74,8 @@ export async function POST(request: NextRequest) {
                     select: {
                       id: true,
                       companyName: true,
-                      contactName: true,
+                      firstName: true,
+                      lastName: true,
                       email: true
                     }
                   }
@@ -65,6 +107,47 @@ export async function POST(request: NextRequest) {
     if (trainingId && trainerIds) {
       const trainingRequests = await Promise.all(
         trainerIds.map(async (trainerId: number) => {
+          // Check if request already exists
+          const existing = await prisma.trainingRequest.findUnique({
+            where: {
+              trainingId_trainerId: {
+                trainingId: parseInt(trainingId),
+                trainerId: trainerId
+              }
+            }
+          });
+
+          if (existing) {
+            // Return existing request
+            return await prisma.trainingRequest.findUnique({
+              where: { id: existing.id },
+              include: {
+                trainer: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
+                  }
+                },
+                training: {
+                  include: {
+                    topic: true,
+                    company: {
+                      select: {
+                        id: true,
+                        companyName: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true
+                      }
+                    }
+                  }
+                }
+              }
+            });
+          }
+
           return await prisma.trainingRequest.create({
             data: {
               trainingId: parseInt(trainingId),
@@ -88,7 +171,8 @@ export async function POST(request: NextRequest) {
                     select: {
                       id: true,
                       companyName: true,
-                      contactName: true,
+                      firstName: true,
+                      lastName: true,
                       email: true
                     }
                   }
@@ -145,7 +229,8 @@ export async function GET(request: NextRequest) {
                 select: {
                   id: true,
                   companyName: true,
-                  contactName: true,
+                  firstName: true,
+                  lastName: true,
                   email: true,
                   logo: true
                 }
@@ -175,6 +260,19 @@ export async function GET(request: NextRequest) {
               profilePicture: true,
               dailyRate: true,
               bio: true
+            }
+          },
+          training: {
+            include: {
+              topic: true,
+              company: {
+                select: {
+                  id: true,
+                  companyName: true,
+                  firstName: true,
+                  lastName: true
+                }
+              }
             }
           }
         },

@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function seedDatabase() {
-  console.log('Starting database seeding...');
+  console.log('⚠️  API Seed route is deprecated. Use `npm run seed` instead.');
 
   // Clear existing data in correct order
   await prisma.trainingRequest.deleteMany();
@@ -31,7 +31,7 @@ async function seedDatabase() {
   await prisma.$executeRaw`ALTER TABLE Topic AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Course AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Event AUTO_INCREMENT = 1`;
-  await prisma.$executeRaw`ALTER TABLE Inquiry AUTO_INCREMENT = 1`;
+  // Inquiry table removed - using TrainingRequest instead
   await prisma.$executeRaw`ALTER TABLE TrainerTopic AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE LoginToken AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainingCompanyLoginToken AUTO_INCREMENT = 1`;
@@ -72,7 +72,10 @@ async function seedDatabase() {
       lastName: 'Meier',
       email: 'lorenz.meier@example.com',
       phone: '+49 89 12345678',
-      address: 'Musterstraße 123\\n80331 München\\nDeutschland',
+      street: 'Musterstraße',
+      houseNumber: '123',
+      zipCode: '80331',
+      city: 'München',
       bio: 'Experienced trainer with 10+ years in software development and training. Specializes in Python, data analysis, and machine learning.',
       dailyRate: 500,
       topics: ['Python', 'Data Analysis', 'Machine Learning', 'Projektmanagement'],
@@ -83,7 +86,10 @@ async function seedDatabase() {
       lastName: 'Schmidt',
       email: 'anna.schmidt@example.com',
       phone: '+49 30 87654321',
-      address: 'Kurfürstendamm 45\\n10719 Berlin\\nDeutschland',
+      street: 'Kurfürstendamm',
+      houseNumber: '45',
+      zipCode: '10719',
+      city: 'Berlin',
       bio: 'Frontend development expert with 8+ years experience. Passionate about React, JavaScript, and UI/UX design.',
       dailyRate: 450,
       topics: ['JavaScript', 'React', 'Figma', 'UI/UX Design'],
@@ -94,7 +100,10 @@ async function seedDatabase() {
       lastName: 'Wagner',
       email: 'michael.wagner@example.com',
       phone: '+49 69 55566677',
-      address: 'Zeil 123\\n60313 Frankfurt am Main\\nDeutschland',
+      street: 'Zeil',
+      houseNumber: '123',
+      zipCode: '60313',
+      city: 'Frankfurt am Main',
       bio: 'Full-stack developer and trainer specializing in modern web technologies and DevOps practices.',
       dailyRate: 550,
       topics: ['Node.js', 'Docker', 'Kubernetes', 'DevOps', 'Git'],
@@ -105,7 +114,10 @@ async function seedDatabase() {
       lastName: 'Becker',
       email: 'julia.becker@example.com',
       phone: '+49 221 98765432',
-      address: 'Aachener Straße 567\\n50674 Köln\\nDeutschland',
+      street: 'Aachener Straße',
+      houseNumber: '567',
+      zipCode: '50674',
+      city: 'Köln',
       bio: 'Data science and analytics expert. Helps companies turn data into actionable insights.',
       dailyRate: 480,
       topics: ['Python', 'Data Analysis', 'Machine Learning', 'SQL'],
@@ -116,7 +128,10 @@ async function seedDatabase() {
       lastName: 'Richter',
       email: 'thomas.richter@example.com',
       phone: '+49 211 44455566',
-      address: 'Königsallee 123\\n40210 Düsseldorf\\nDeutschland',
+      street: 'Königsallee',
+      houseNumber: '123',
+      zipCode: '40210',
+      city: 'Düsseldorf',
       bio: 'Agile coach and project management consultant. Certified Scrum Master and Kanban expert.',
       dailyRate: 520,
       topics: ['Projektmanagement', 'Scrum', 'Kanban', 'Agile Methoden'],
@@ -132,7 +147,10 @@ async function seedDatabase() {
         lastName: trainerData.lastName,
         email: trainerData.email,
         phone: trainerData.phone,
-        address: trainerData.address,
+        street: trainerData.street,
+        houseNumber: trainerData.houseNumber,
+        zipCode: trainerData.zipCode,
+        city: trainerData.city,
         bio: trainerData.bio,
         dailyRate: trainerData.dailyRate,
         status: 'ACTIVE',
@@ -166,15 +184,20 @@ async function seedDatabase() {
   const company1 = await prisma.trainingCompany.create({
     data: {
       companyName: 'PowerToWork GmbH',
-      contactName: 'Sarah Müller',
-      consultantName: 'Max Bauer',
-      email: 'max.bauer@powertowork.de',
+      firstName: 'Sarah',
+      lastName: 'Müller',
+      email: 'sarah.mueller@powertowork.de',
       phone: '+49 30 12345678',
-      address: 'Friedrichstraße 123\\n10117 Berlin\\nDeutschland',
+      street: 'Friedrichstraße',
+      houseNumber: '123',
+      zipCode: '10117',
+      city: 'Berlin',
+      domain: 'powertowork.de',
       bio: 'PowerToWork ist ein führendes Unternehmen für Personalentwicklung.',
       website: 'https://www.powertowork.de',
       industry: 'consulting',
       employees: '51-200',
+      consultantName: 'Max Bauer',
       status: 'ACTIVE',
       countryId: germany.id,
     }
@@ -183,15 +206,20 @@ async function seedDatabase() {
   const company2 = await prisma.trainingCompany.create({
     data: {
       companyName: 'TechAcademy Solutions',
-      contactName: 'Dr. Klaus Weber',
-      consultantName: 'Lisa Schneider',
-      email: 'lisa.schneider@techacademy.de',
+      firstName: 'Klaus',
+      lastName: 'Weber',
+      email: 'klaus.weber@techacademy.de',
       phone: '+49 89 98765432',
-      address: 'Maximilianstraße 45\\n80539 München\\nDeutschland',
+      street: 'Maximilianstraße',
+      houseNumber: '45',
+      zipCode: '80539',
+      city: 'München',
+      domain: 'techacademy.de',
       bio: 'TechAcademy Solutions ist spezialisiert auf IT-Schulungen.',
       website: 'https://www.techacademy.de',
       industry: 'it',
       employees: '11-50',
+      consultantName: 'Lisa Schneider',
       status: 'ACTIVE',
       countryId: germany.id,
     }
@@ -295,6 +323,14 @@ async function seedDatabase() {
 }
 
 export async function POST() {
+  // Only allow seeding in development
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({
+      success: false,
+      message: 'Seeding is disabled in production. Use `npm run seed` instead.'
+    }, { status: 403 });
+  }
+
   try {
     const result = await seedDatabase();
 
@@ -317,6 +353,12 @@ export async function POST() {
 }
 
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({
+      message: 'Seed endpoint is disabled in production'
+    }, { status: 403 });
+  }
+
   return NextResponse.json({
     message: 'Use POST method to seed the database',
     usage: 'POST /api/seed'

@@ -51,10 +51,10 @@ function parseCSV(csvContent: string) {
 async function main() {
   console.log('🚀 Starting PowerToWork Demo Database Seed...\n');
 
-  // Clear existing data in correct order (child tables first)
+  // Clear existing data
   console.log('🗑️  Clearing existing data...');
   await prisma.fileAttachment.deleteMany();
-  await prisma.trainingRequestMessage.deleteMany();
+  await prisma.inquiryMessage.deleteMany();
   await prisma.trainingRequest.deleteMany();
   await prisma.participant.deleteMany();
   await prisma.invoice.deleteMany();
@@ -78,18 +78,17 @@ async function main() {
   await prisma.$executeRaw`ALTER TABLE TrainingCompany AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Topic AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainerTopic AUTO_INCREMENT = 1`;
-  await prisma.$executeRaw`ALTER TABLE Course AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Training AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainingRequest AUTO_INCREMENT = 1`;
-  await prisma.$executeRaw`ALTER TABLE TrainingRequestMessage AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE InquiryMessage AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE LoginToken AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainingCompanyLoginToken AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TopicSuggestion AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE Course AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Participant AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Invoice AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Availability AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE FileAttachment AUTO_INCREMENT = 1`;
-  await prisma.$executeRaw`ALTER TABLE Message AUTO_INCREMENT = 1`;
 
   // Create countries
   console.log('🌍 Creating countries...');
@@ -219,12 +218,7 @@ async function main() {
       city: 'Berlin',
       bio: 'Adobe Creative Suite Expertin mit Schwerpunkt auf Photoshop, Illustrator und InDesign.',
       dailyRate: 750.00,
-      topics: [
-        { slug: 'adobe-photoshop', level: 'EXPERTE' },
-        { slug: 'adobe-illustrator', level: 'EXPERTE' },
-        { slug: 'adobe-indesign', level: 'FORTGESCHRITTEN' },
-        { slug: 'figma', level: 'FORTGESCHRITTEN' }
-      ]
+      topics: ['adobe-photoshop', 'adobe-illustrator', 'adobe-indesign', 'figma']
     },
     {
       firstName: 'Thomas',
@@ -237,11 +231,7 @@ async function main() {
       city: 'München',
       bio: 'Projektmanagement-Experte mit Scrum Master und PMP Zertifizierung.',
       dailyRate: 950.00,
-      topics: [
-        { slug: 'agiles-projektmanagement', level: 'EXPERTE' },
-        { slug: 'scrum', level: 'EXPERTE' },
-        { slug: 'kanban', level: 'FORTGESCHRITTEN' }
-      ]
+      topics: ['agiles-projektmanagement', 'scrum', 'kanban']
     },
     {
       firstName: 'Sarah',
@@ -254,11 +244,7 @@ async function main() {
       city: 'Hamburg',
       bio: 'Microsoft Office Spezialistin mit Fokus auf Excel, Power BI und Datenanalyse.',
       dailyRate: 650.00,
-      topics: [
-        { slug: 'microsoft-excel', level: 'EXPERTE' },
-        { slug: 'microsoft-power-bi', level: 'FORTGESCHRITTEN' },
-        { slug: 'microsoft-powerpoint', level: 'GRUNDLAGE' }
-      ]
+      topics: ['microsoft-excel', 'microsoft-power-bi', 'microsoft-powerpoint']
     },
     {
       firstName: 'Michael',
@@ -271,12 +257,7 @@ async function main() {
       city: 'Köln',
       bio: 'Cloud-Architekt mit Expertise in AWS, Azure und DevOps.',
       dailyRate: 1100.00,
-      topics: [
-        { slug: 'aws', level: 'EXPERTE' },
-        { slug: 'microsoft-azure', level: 'EXPERTE' },
-        { slug: 'docker', level: 'FORTGESCHRITTEN' },
-        { slug: 'kubernetes', level: 'GRUNDLAGE' }
-      ]
+      topics: ['aws', 'microsoft-azure', 'docker', 'kubernetes']
     },
   ];
 
@@ -299,18 +280,12 @@ async function main() {
       }
     });
 
-    // Assign topics with expertise levels
-    for (const topicItem of trainerData.topics) {
-      const topicSlug = typeof topicItem === 'string' ? topicItem : topicItem.slug;
-      const expertiseLevel = typeof topicItem === 'string' ? 'GRUNDLAGE' : (topicItem.level || 'GRUNDLAGE');
+    // Assign topics
+    for (const topicSlug of trainerData.topics) {
       const topic = createdTopics.find(t => t.slug === topicSlug);
       if (topic) {
         await prisma.trainerTopic.create({
-          data: { 
-            trainerId: trainer.id, 
-            topicId: topic.id,
-            expertiseLevel: expertiseLevel as 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE'
-          }
+          data: { trainerId: trainer.id, topicId: topic.id }
         });
       }
     }
@@ -319,25 +294,13 @@ async function main() {
     console.log(`  ✓ ${trainer.firstName} ${trainer.lastName}`);
   }
 
-  // Assign topics to Lorenz with mixed expertise levels
-  const lorenzTopics = [
-    { slug: 'python', level: 'EXPERTE' },
-    { slug: 'javascript', level: 'EXPERTE' },
-    { slug: 'react', level: 'EXPERTE' },
-    { slug: 'node-js', level: 'FORTGESCHRITTEN' },
-    { slug: 'typescript', level: 'FORTGESCHRITTEN' },
-    { slug: 'html', level: 'GRUNDLAGE' },
-    { slug: 'css', level: 'GRUNDLAGE' }
-  ];
-  for (const topicItem of lorenzTopics) {
-    const topic = createdTopics.find(t => t.slug === topicItem.slug);
+  // Assign topics to Lorenz
+  const lorenzTopics = ['python', 'javascript', 'react', 'node-js', 'typescript', 'html', 'css'];
+  for (const topicSlug of lorenzTopics) {
+    const topic = createdTopics.find(t => t.slug === topicSlug);
     if (topic) {
       await prisma.trainerTopic.create({
-        data: { 
-          trainerId: lorenz.id, 
-          topicId: topic.id,
-          expertiseLevel: topicItem.level as 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE'
-        }
+        data: { trainerId: lorenz.id, topicId: topic.id }
       });
     }
   }
@@ -399,6 +362,7 @@ async function main() {
       title: 'Python Grundlagen Workshop',
       topicId: pythonTopic?.id || 1,
       companyId: powerToWork.id,
+      trainerId: lorenz.id, // Lorenz is assigned
       startDate: new Date('2024-10-15'),
       endDate: new Date('2024-10-15'),
       startTime: '09:00',
@@ -418,6 +382,7 @@ async function main() {
       title: 'React Advanced Workshop',
       topicId: reactTopic?.id || 1,
       companyId: powerToWork.id,
+      trainerId: lorenz.id,
       startDate: new Date('2024-10-28'),
       endDate: new Date('2024-10-29'),
       startTime: '09:00',
@@ -437,6 +402,7 @@ async function main() {
       title: 'Photoshop Bildbearbeitung',
       topicId: photoshopTopic?.id || 1,
       companyId: powerToWork.id,
+      trainerId: null, // Not yet assigned - waiting for trainer acceptance
       startDate: new Date('2025-11-15'),
       endDate: new Date('2025-11-15'),
       startTime: '10:00',
@@ -456,6 +422,7 @@ async function main() {
       title: 'Excel für Fortgeschrittene',
       topicId: excelTopic?.id || 1,
       companyId: powerToWork.id,
+      trainerId: null,
       startDate: new Date('2025-12-01'),
       endDate: new Date('2025-12-01'),
       startTime: '09:00',
@@ -475,6 +442,7 @@ async function main() {
       title: 'Python für Fortgeschrittene',
       topicId: pythonTopic?.id || 1,
       companyId: powerToWork.id,
+      trainerId: null,
       startDate: new Date('2026-01-20'),
       endDate: new Date('2026-01-20'),
       startTime: '09:00',
@@ -516,24 +484,23 @@ async function main() {
 
   console.log(`  ✓ Created ${training1.participantCount + training2.participantCount} participants`);
 
-  // Create Training Requests (Trainer-Anfragen)
-  console.log('\n📬 Creating training requests (trainer applications)...');
+  // Create Training Requests
+  console.log('\n📬 Creating training requests...');
 
   const annaTrainer = createdTrainers.find(t => t.firstName === 'Anna');
   const sarahTrainer = createdTrainers.find(t => t.firstName === 'Sarah');
 
-  // Training Request 1: Photoshop - Anna (ACCEPTED)
+  // Request 1: Photoshop - Anna (ACCEPTED)
   const request1 = await prisma.trainingRequest.create({
     data: {
       trainingId: training3.id,
       trainerId: annaTrainer?.id || 2,
       status: 'ACCEPTED',
-      counterPrice: training3.dailyRate, // Accepted at original price
       message: 'Ich habe bereits viele Photoshop-Workshops gegeben und würde mich freuen!'
     }
   });
 
-  // Training Request 2: Photoshop - Lorenz (PENDING)
+  // Request 2: Photoshop - Lorenz (PENDING)
   const request2 = await prisma.trainingRequest.create({
     data: {
       trainingId: training3.id,
@@ -543,18 +510,17 @@ async function main() {
     }
   });
 
-  // Training Request 3: Excel - Sarah (PENDING with counter offer)
+  // Request 3: Excel - Sarah (PENDING)
   const request3 = await prisma.trainingRequest.create({
     data: {
       trainingId: training4.id,
       trainerId: sarahTrainer?.id || 3,
       status: 'PENDING',
-      counterPrice: 700, // Sarah wants more (original was 650)
-      message: 'Excel ist mein Spezialgebiet! Ich würde 700€ vorschlagen aufgrund meiner umfangreichen Erfahrung.'
+      message: 'Excel ist mein Spezialgebiet! Würde mich sehr freuen.'
     }
   });
 
-  // Training Request 4: Excel - Lorenz (DECLINED)
+  // Request 4: Excel - Lorenz (DECLINED)
   const request4 = await prisma.trainingRequest.create({
     data: {
       trainingId: training4.id,
@@ -564,26 +530,13 @@ async function main() {
     }
   });
 
-  // Training Request 5: Python COMPLETED (past training with invoice)
-  const request5 = await prisma.trainingRequest.create({
-    data: {
-      trainingId: training1.id,
-      trainerId: lorenz.id,
-      status: 'ACCEPTED', // Was COMPLETED, but TrainingRequest uses ACCEPTED + training.status = COMPLETED
-      counterPrice: training1.dailyRate,
-      message: 'Gerne! Python ist mein Spezialgebiet.',
-      createdAt: new Date('2024-10-01'),
-      updatedAt: new Date('2024-10-16')
-    }
-  });
+  console.log(`  ✓ Created 4 training requests (1 ACCEPTED, 2 PENDING, 1 DECLINED)`);
 
-  console.log(`  ✓ Created 5 training requests (1 ACCEPTED, 2 PENDING, 1 DECLINED, 1 ACCEPTED for completed training)`);
+  // Create Inquiry Messages
+  console.log('\n💬 Creating inquiry messages...');
 
-  // Create Training Request Messages
-  console.log('\n💬 Creating training request messages...');
-
-  // Conversation 1: Photoshop - Anna (request1 - ACCEPTED)
-  await prisma.trainingRequestMessage.create({
+  // Conversation for Photoshop (request1 - ACCEPTED)
+  await prisma.inquiryMessage.create({
     data: {
       trainingRequestId: request1.id,
       senderId: annaTrainer?.id || 2,
@@ -597,7 +550,7 @@ async function main() {
     }
   });
 
-  await prisma.trainingRequestMessage.create({
+  await prisma.inquiryMessage.create({
     data: {
       trainingRequestId: request1.id,
       senderId: powerToWork.id,
@@ -611,8 +564,8 @@ async function main() {
     }
   });
 
-  // Conversation 2: Excel - Sarah (request3 - PENDING with counter offer)
-  await prisma.trainingRequestMessage.create({
+  // Conversation for Excel (request3 - PENDING)
+  await prisma.inquiryMessage.create({
     data: {
       trainingRequestId: request3.id,
       senderId: sarahTrainer?.id || 3,
@@ -620,27 +573,13 @@ async function main() {
       recipientId: powerToWork.id,
       recipientType: 'TRAINING_COMPANY',
       subject: 'Bewerbung Excel Workshop',
-      message: 'Sehr geehrtes PowerToWork Team,\n\nich habe über 500 Excel-Schulungen durchgeführt.\n\nAufgrund meiner Expertise würde ich 700€ vorschlagen statt 650€.\n\nKönnen wir darüber sprechen?\n\nMit freundlichen Grüßen,\nSarah Weber',
+      message: 'Sehr geehrtes PowerToWork Team,\n\nich habe über 500 Excel-Schulungen durchgeführt.\n\nKönnen Sie mir mehr über die Zielgruppe sagen?\n\nMit freundlichen Grüßen,\nSarah Weber',
       isRead: true,
       createdAt: new Date('2024-10-25T09:00:00')
     }
   });
 
-  await prisma.trainingRequestMessage.create({
-    data: {
-      trainingRequestId: request3.id,
-      senderId: powerToWork.id,
-      senderType: 'TRAINING_COMPANY',
-      recipientId: sarahTrainer?.id || 3,
-      recipientType: 'TRAINER',
-      subject: 'Re: Bewerbung Excel Workshop',
-      message: 'Hallo Sarah,\n\nIhr Profil ist sehr beeindruckend! Wir können über 700€ sprechen.\n\nKönnen Sie uns noch ein paar Referenzen schicken?\n\nViele Grüße,\nSarah Müller\nPowerToWork',
-      isRead: false,
-      createdAt: new Date('2024-10-25T14:00:00')
-    }
-  });
-
-  console.log(`  ✓ Created 4 training request messages across 2 conversations`);
+  console.log(`  ✓ Created 3 inquiry messages`);
 
   // Create Invoice for completed training
   console.log('\n💰 Creating invoices...');
@@ -694,28 +633,21 @@ async function main() {
   console.log(`  - ${createdTopics.length} topics from CSV`);
   console.log(`  - 1 Training Company: PowerToWork GmbH`);
   console.log(`  - 5 Trainers (Lorenz Surkemper + 4 others)`);
-  console.log(`  - 4 Courses (templates for recurring trainings)`);
-  console.log(`  - 5 Trainings (concrete course instances):`);
-  console.log(`    • 1 COMPLETED (2024-10-15, mit Invoice)`);
-  console.log(`    • 1 IN_PROGRESS (2024-10-28/29)`);
-  console.log(`    • 2 PUBLISHED (Nov/Dez 2025, mit Training Requests)`);
-  console.log(`    • 1 DRAFT (Jan 2026)`);
+  console.log(`  - 4 Courses (templates)`);
+  console.log(`  - 5 Trainings:`);
+  console.log(`    • 1 COMPLETED (mit Invoice)`);
+  console.log(`    • 1 IN_PROGRESS`);
+  console.log(`    • 2 PUBLISHED (mit Training Requests)`);
+  console.log(`    • 1 DRAFT`);
   console.log(`  - ${training1.participantCount + training2.participantCount} Participants`);
-  console.log(`  - 5 Training Requests (trainer applications):`);
-  console.log(`    • 1 ACCEPTED, 2 PENDING, 1 DECLINED, 1 ACCEPTED (for completed training)`);
-  console.log(`  - 4 Training Request Messages (trainer-company communication)`);
-  console.log(`  - 2 Invoices for Lorenz (completed trainings)`);
-  console.log(`  - 5 Availability slots for Lorenz (Mon-Fri, 9-17)`);
-  console.log('\n🎯 Demo Login Credentials:');
-  console.log(`  Email: surkemper@powertowork.com`);
-  console.log(`  (Works for both Company and Trainer login)`);
-  console.log('\n📋 Test Scenarios:');
-  console.log(`  ✓ View training requests and messages`);
-  console.log(`  ✓ Accept/Reject trainer requests`);
-  console.log(`  ✓ See completed trainings with invoices`);
-  console.log(`  ✓ Check trainer availability`);
-  console.log(`  ✓ View participants`);
-  console.log('\n🎉 Database is ready for comprehensive demo!');
+  console.log(`  - 4 Training Requests`);
+  console.log(`  - 3 Inquiry Messages`);
+  console.log(`  - 2 Invoices for Lorenz`);
+  console.log(`  - 5 Availability slots for Lorenz`);
+  console.log('\n🎯 Demo Login:');
+  console.log(`  Company: surkemper@powertowork.com`);
+  console.log(`  Trainer: surkemper@powertowork.com`);
+  console.log('\n🎉 Database is ready for demo!');
 }
 
 main()

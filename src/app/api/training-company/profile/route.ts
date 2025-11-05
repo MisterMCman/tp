@@ -6,7 +6,10 @@ export async function GET() {
   try {
     // Get current user to identify the training company
     const currentUser = getTrainerData();
+    console.log('[Training Company Profile GET] Current user from session:', currentUser);
+    
     if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
+      console.log('[Training Company Profile GET] Auth failed. UserType:', currentUser?.userType);
       return NextResponse.json(
         { message: 'Nicht autorisiert oder kein Unternehmensaccount' },
         { status: 403 }
@@ -14,31 +17,32 @@ export async function GET() {
     }
 
     // Fetch training company data with country relation
+    console.log('[Training Company Profile GET] Fetching company with ID:', currentUser.id);
     const company = await prisma.trainingCompany.findUnique({
-      where: { id: currentUser.id },
+      where: { id: currentUser.id as number },
       include: {
         country: true
       }
     });
 
     if (!company) {
+      console.log('[Training Company Profile GET] Company not found for ID:', currentUser.id);
       return NextResponse.json(
         { message: 'Unternehmen nicht gefunden' },
         { status: 404 }
       );
     }
 
+    console.log('[Training Company Profile GET] Found company:', company.companyName);
     return NextResponse.json({
       company: {
         id: company.id,
         userType: company.userType,
         companyName: company.companyName,
-        contactName: company.contactName,
         firstName: company.firstName,
         lastName: company.lastName,
         email: company.email,
         phone: company.phone,
-        address: company.address,
         street: company.street,
         houseNumber: company.houseNumber,
         zipCode: company.zipCode,
@@ -85,12 +89,10 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const {
       companyName,
-      contactName,
       firstName,
       lastName,
       email,
       phone,
-      address,
       street,
       houseNumber,
       zipCode,
@@ -116,18 +118,6 @@ export async function PATCH(req: Request) {
         { message: 'Alle erforderlichen Felder müssen ausgefüllt werden.' },
         { status: 400 }
       );
-    }
-
-    // If firstName and lastName are provided, update contactName for legacy compatibility
-    let updatedContactName = contactName;
-    if (firstName && lastName) {
-      updatedContactName = `${firstName} ${lastName}`;
-    }
-
-    // If address fields are provided, update address for legacy compatibility
-    let updatedAddress = address;
-    if (street && houseNumber && zipCode && city) {
-      updatedAddress = `${street} ${houseNumber}, ${zipCode} ${city}`;
     }
 
     // Check if email is already taken by another user (excluding current user)
@@ -157,12 +147,10 @@ export async function PATCH(req: Request) {
       where: { id: currentUser.id },
       data: {
         companyName,
-        contactName: updatedContactName,
         firstName: firstName || null,
         lastName: lastName || null,
         email,
         phone,
-        address: updatedAddress,
         street: street || null,
         houseNumber: houseNumber || null,
         zipCode: zipCode || null,
@@ -192,12 +180,10 @@ export async function PATCH(req: Request) {
         id: updatedCompany.id,
         userType: updatedCompany.userType,
         companyName: updatedCompany.companyName,
-        contactName: updatedCompany.contactName,
         firstName: updatedCompany.firstName,
         lastName: updatedCompany.lastName,
         email: updatedCompany.email,
         phone: updatedCompany.phone,
-        address: updatedCompany.address,
         street: updatedCompany.street,
         houseNumber: updatedCompany.houseNumber,
         zipCode: updatedCompany.zipCode,

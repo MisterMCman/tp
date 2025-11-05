@@ -170,7 +170,9 @@ export default function TrainingsPage() {
     if (trainerData) {
       const trainer = JSON.parse(trainerData);
       const trainerName = `${trainer.firstName} ${trainer.lastName}`;
-      const trainerAddress = trainer.address || "[Adresse nicht hinterlegt]";
+      const trainerAddress = trainer.street && trainer.zipCode && trainer.city 
+        ? `${trainer.street}${trainer.houseNumber ? ' ' + trainer.houseNumber : ''}, ${trainer.zipCode} ${trainer.city}`
+        : "[Adresse nicht hinterlegt]";
       trainerInfo = `${trainerName}, ${trainerAddress}`;
     }
     
@@ -464,7 +466,7 @@ export default function TrainingsPage() {
                 )}
                 
                 <Link
-                  href={`/dashboard/training/${training.id}`}
+                  href={`/dashboard/training/${training.id}?from=${encodeURIComponent('/dashboard/trainings')}`}
                   className="px-3 py-1 bg-primary-500 rounded text-sm font-medium text-white hover:bg-primary-600 flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getTrainerData, getCompanyData } from "@/lib/session";
-import { InquiryMessage } from "@/lib/types";
+import { TrainingRequestMessage } from "@/lib/types";
 import ChatInterface, { Conversation } from "@/components/shared/ChatInterface";
 
 export default function ChatPage() {
@@ -28,12 +28,12 @@ export default function ChatPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/inquiry-messages?userId=${userId}&userType=${userType}`);
+      const response = await fetch(`/api/training-request-messages?userId=${userId}&userType=${userType}`);
       if (!response.ok) {
         throw new Error("Fehler beim Laden der Nachrichten");
       }
 
-      const messages: InquiryMessage[] = await response.json();
+      const messages: TrainingRequestMessage[] = await response.json();
 
       // Group messages by training request
       const conversationMap = new Map<number, Conversation>();
@@ -96,12 +96,12 @@ export default function ChatPage() {
       );
 
       for (const message of unreadMessages) {
-        await fetch(`/api/inquiry-messages/${message.id}`, {
+        await fetch(`/api/training-request-messages`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ isRead: true }),
+          body: JSON.stringify({ messageId: message.id, isRead: true }),
         });
       }
 
@@ -124,7 +124,7 @@ export default function ChatPage() {
     formData.append('subject', `Re: ${selectedConversation?.trainingTitle || 'Training'}`);
     formData.append('message', message);
 
-    const response = await fetch('/api/inquiry-messages', {
+    const response = await fetch('/api/training-request-messages', {
       method: 'POST',
       body: formData,
     });

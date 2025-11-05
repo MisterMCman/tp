@@ -19,14 +19,14 @@ export async function POST(req: Request) {
     try {
         // Daten aus dem Request Body lesen
         const body = await req.json();
-        const { firstName, lastName, email, phone, address, countryId, topics, bio, profilePicture, isCompany, companyName, topicSuggestions, dailyRate } = body;
+        const { firstName, lastName, email, phone, street, houseNumber, zipCode, city, countryId, topics, topicsWithLevels, bio, profilePicture, isCompany, companyName, topicSuggestions, dailyRate } = body;
 
         console.log('Received registration data:', body);
 
         // Validierung der Eingabedaten
-        if (!firstName || !lastName || !email || !phone || !address || !countryId) {
+        if (!firstName || !lastName || !email || !phone || !street || !zipCode || !city || !countryId) {
             return NextResponse.json(
-                { message: 'Vorname, Nachname, E-Mail, Telefonnummer, Adresse und Land sind erforderlich.' },
+                { message: 'Vorname, Nachname, E-Mail, Telefonnummer, Straße, PLZ, Stadt und Land sind erforderlich.' },
                 { status: 400 }
             );
         }
@@ -72,7 +72,10 @@ export async function POST(req: Request) {
                 lastName,
                 email,
                 phone,
-                address,
+                street: street || null,
+                houseNumber: houseNumber || null,
+                zipCode: zipCode || null,
+                city: city || null,
                 countryId: parseInt(countryId),
                 bio: bio || null,
                 profilePicture: profilePicture || null,
@@ -92,36 +95,49 @@ export async function POST(req: Request) {
                 lastName,
                 email,
                 phone,
-                address,
+                street: street || null,
+                houseNumber: houseNumber || null,
+                zipCode: zipCode || null,
+                city: city || null,
                 countryId: parseInt(countryId),
                 bio,
                 profilePicture,
                 companyName,
                 isCompany,
                 dailyRate,
-                changedFields: JSON.stringify(['firstName', 'lastName', 'email', 'phone', 'address', 'countryId', 'bio', 'profilePicture', 'companyName', 'isCompany', 'dailyRate']),
+                changedFields: JSON.stringify(['firstName', 'lastName', 'email', 'phone', 'street', 'houseNumber', 'zipCode', 'city', 'countryId', 'bio', 'profilePicture', 'companyName', 'isCompany', 'dailyRate']),
                 changedBy: 'trainer'
             }
         });
 
         // TrainerTopic-Einträge erstellen falls topics vorhanden
-        if (topics && topics.length > 0) {
+        // Use topicsWithLevels if available, otherwise fall back to topics (backward compatibility)
+        const topicsToProcess = topicsWithLevels || (topics ? topics.map((name: string) => ({ name, level: 'GRUNDLAGE' as const })) : []);
+        
+        if (topicsToProcess && topicsToProcess.length > 0) {
             // Zuerst prüfen, ob alle Topics in der Datenbank existieren
             // Falls nicht, erstellen wir sie
-            for (const topicName of topics) {
+            for (const topicItem of topicsToProcess) {
+                const topicName = typeof topicItem === 'string' ? topicItem : topicItem.name;
                 const existingTopic = await prisma.topic.findFirst({
                     where: { name: topicName }
                 });
 
                 if (!existingTopic) {
                     await prisma.topic.create({
-                        data: { name: topicName }
+                        data: { 
+                            name: topicName,
+                            slug: topicName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+                        }
                     });
                 }
             }
 
-            // Dann Verbindungen erstellen
-            for (const topicName of topics) {
+            // Dann Verbindungen erstellen mit expertise levels
+            for (const topicItem of topicsToProcess) {
+                const topicName = typeof topicItem === 'string' ? topicItem : topicItem.name;
+                const expertiseLevel = typeof topicItem === 'string' ? 'GRUNDLAGE' : (topicItem.level || 'GRUNDLAGE');
+                
                 const topic = await prisma.topic.findFirst({
                     where: { name: topicName }
                 });
@@ -130,7 +146,8 @@ export async function POST(req: Request) {
                     await prisma.trainerTopic.create({
                         data: {
                             trainerId: newTrainer.id,
-                            topicId: topic.id
+                            topicId: topic.id,
+                            expertiseLevel: expertiseLevel as 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE'
                         }
                     });
                 }
@@ -179,13 +196,19 @@ export async function POST(req: Request) {
             lastName: newTrainer.lastName,
             email: newTrainer.email,
             phone: newTrainer.phone,
-            address: newTrainer.address,
+            street: newTrainer.street,
+            houseNumber: newTrainer.houseNumber,
+            zipCode: newTrainer.zipCode,
+            city: newTrainer.city,
             bio: newTrainer.bio || '',
             profilePicture: newTrainer.profilePicture || '',
             isCompany: newTrainer.isCompany,
             companyName: newTrainer.companyName || '',
             dailyRate: newTrainer.dailyRate,
-            topics: trainerWithTopics?.topics.map(t => t.topic.name) || [],
+            topics: trainerWithTopics?.topics.map(t => ({
+                name: t.topic.name,
+                level: t.expertiseLevel
+            })) || [],
             status: newTrainer.status,
             createdAt: newTrainer.createdAt.toISOString(),
         };

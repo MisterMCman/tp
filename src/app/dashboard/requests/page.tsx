@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import jsPDF from 'jspdf';
-import { getTrainerData } from "../../../lib/session";
+import { getTrainerData, getCompanyData } from "../../../lib/session";
 
 interface TrainingRequest {
   id: number;
@@ -21,6 +21,19 @@ interface TrainingRequest {
   status: "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
   createdAt: string;
   updatedAt: string;
+  trainer?: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  company?: {
+    id: number;
+    companyName: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
 }
 
 interface ApiTrainingRequest {
@@ -74,51 +87,160 @@ export default function RequestsPage() {
       setLoading(true);
 
       // Get user data to determine if it's a trainer or company
-      const user = getTrainerData();
+      // Check both trainer and company data
+      const trainerData = getTrainerData();
+      const companyData = getCompanyData();
+      const user = trainerData || companyData;
 
       if (!user) {
         console.error('No user data found');
         setLoading(false);
         return;
       }
+      
+      console.log('Fetching requests for user:', user.userType, user.id);
 
       if (user.userType === 'TRAINER') {
-        // For trainers, fetch training requests from the new system
+        // For trainers, fetch training requests they received (sent to them)
         try {
-          const response = await fetch('/api/training-requests?trainerId=' + user.id);
+          const response = await fetch(`/api/training-requests?trainerId=${user.id}`);
           if (response.ok) {
-            const trainingRequests = await response.json();
+            const requests = await response.json();
 
             // Transform training requests to match the existing interface
-            const mapped: TrainingRequest[] = (trainingRequests as ApiTrainingRequest[]).map((request: ApiTrainingRequest) => ({
-              id: request.id,
-              trainingId: request.trainingId,
-              courseTitle: request.training.title,
-              topicName: request.training.topic.name,
-              date: request.training.startDate,
-              endTime: new Date(`${request.training.startDate.split('T')[0]}T${request.training.endTime}`).toISOString(),
-              location: request.training.location,
-              participants: request.training.participants,
-              originalPrice: request.training.dailyRate,
-              proposedPrice: request.training.dailyRate,
-              counterPrice: request.counterPrice || undefined,
-              message: request.message || "",
-              status: request.status.toLowerCase() as "pending" | "accepted" | "rejected" | "abgesagt" | "completed",
-              createdAt: request.createdAt,
-              updatedAt: request.updatedAt,
+            const mapped: TrainingRequest[] = requests.map((req: any) => ({
+              id: req.id,
+              trainingId: req.trainingId,
+              courseTitle: req.training.title,
+              topicName: req.training.topic.name,
+              date: typeof req.training.startDate === 'string' ? req.training.startDate : req.training.startDate.toISOString(),
+              endTime: typeof req.training.endDate === 'string' 
+                ? new Date(`${req.training.endDate.split('T')[0]}T${req.training.endTime}`).toISOString()
+                : new Date(`${req.training.endDate.toISOString().split('T')[0]}T${req.training.endTime}`).toISOString(),
+              location: req.training.location,
+              participants: req.training.participantCount,
+              originalPrice: req.training.dailyRate || 0,
+              proposedPrice: req.training.dailyRate || 0,
+              counterPrice: req.counterPrice,
+              message: req.message || "",
+              status: (req.status === 'DECLINED' ? 'rejected' : 
+                       req.status === 'WITHDRAWN' ? 'abgesagt' : 
+                       req.status.toLowerCase()) as "pending" | "accepted" | "rejected" | "abgesagt" | "completed",
+              createdAt: typeof req.createdAt === 'string' ? req.createdAt : req.createdAt.toISOString(),
+              updatedAt: typeof req.updatedAt === 'string' ? req.updatedAt : req.updatedAt.toISOString(),
+              company: req.training.company ? {
+                id: req.training.company.id,
+                companyName: req.training.company.companyName || '',
+                firstName: req.training.company.firstName || '',
+                lastName: req.training.company.lastName || '',
+                email: req.training.company.email || ''
+              } : undefined
             }));
 
             setRequests(mapped);
             setFilteredRequests(mapped);
+            console.log('Loaded training requests for trainer:', mapped);
           } else {
-            console.error('Failed to fetch training requests');
+            console.error('Failed to fetch training requests for trainer');
+            setRequests([]);
+            setFilteredRequests([]);
           }
         } catch (error) {
-          console.error('Error fetching training requests:', error);
-          setLoading(false);
+          console.error('Error fetching training requests for trainer:', error);
+          setRequests([]);
+          setFilteredRequests([]);
+        }
+      } else if (user.userType === 'TRAINING_COMPANY') {
+        // For companies, fetch all training requests for their trainings (both upcoming and past)
+        try {
+          // Get both upcoming and past trainings
+          const [upcomingResponse, pastResponse] = await Promise.all([
+            fetch(`/api/trainings?companyId=${user.id}&type=upcoming`),
+            fetch(`/api/trainings?companyId=${user.id}&type=past`)
+          ]);
+          
+          let trainings = [];
+          if (upcomingResponse.ok) {
+            const upcoming = await upcomingResponse.json();
+            trainings.push(...upcoming);
+          }
+          if (pastResponse.ok) {
+            const past = await pastResponse.json();
+            trainings.push(...past);
+          }
+          
+          if (trainings.length > 0) {
+            // Fetch requests for all trainings
+            const allRequests = await Promise.all(
+              trainings.map(async (training: any) => {
+                try {
+                  console.log(`Fetching requests for training ${training.id}: ${training.title}`);
+                  const response = await fetch(`/api/training-requests?trainingId=${training.id}`);
+                  if (response.ok) {
+                    const requests = await response.json();
+                    console.log(`Found ${requests.length} requests for training ${training.id}`);
+                    return requests.map((req: any) => {
+                      // Ensure we have all required data
+                      if (!req.training || !req.training.topic || !req.trainer) {
+                        console.warn('Incomplete request data:', req);
+                      }
+                      return {
+                      id: req.id,
+                      trainingId: req.trainingId,
+                      courseTitle: req.training.title,
+                      topicName: req.training.topic.name,
+                      date: typeof req.training.startDate === 'string' ? req.training.startDate : req.training.startDate.toISOString(),
+                      endTime: typeof req.training.endDate === 'string' 
+                        ? new Date(`${req.training.endDate.split('T')[0]}T${req.training.endTime}`).toISOString()
+                        : new Date(`${req.training.endDate.toISOString().split('T')[0]}T${req.training.endTime}`).toISOString(),
+                      location: req.training.location,
+                      participants: req.training.participantCount,
+                      originalPrice: req.training.dailyRate || 0,
+                      proposedPrice: req.training.dailyRate || 0,
+                      counterPrice: req.counterPrice,
+                      message: req.message || "",
+                      status: (req.status === 'DECLINED' ? 'rejected' : 
+                       req.status === 'WITHDRAWN' ? 'abgesagt' : 
+                       req.status.toLowerCase()) as "pending" | "accepted" | "rejected" | "abgesagt" | "completed",
+                      createdAt: typeof req.createdAt === 'string' ? req.createdAt : req.createdAt.toISOString(),
+                      updatedAt: typeof req.updatedAt === 'string' ? req.updatedAt : req.updatedAt.toISOString(),
+                      trainer: {
+                        id: req.trainer.id,
+                        firstName: req.trainer.firstName,
+                        lastName: req.trainer.lastName,
+                        email: req.trainer.email
+                      }
+                    };
+                    });
+                  } else {
+                    console.error(`Failed to fetch requests for training ${training.id}:`, response.status, response.statusText);
+                    return [];
+                  }
+                } catch (error) {
+                  console.error(`Error fetching requests for training ${training.id}:`, error);
+                  return [];
+                }
+              })
+            );
+            
+            const flattenedRequests = allRequests.flat();
+            console.log('Total requests found:', flattenedRequests.length);
+            console.log('Sample request:', flattenedRequests[0]);
+            setRequests(flattenedRequests);
+            setFilteredRequests(flattenedRequests);
+            console.log('Loaded training requests for company:', flattenedRequests);
+          } else {
+            // No trainings found, but that's okay - just no requests to show
+            setRequests([]);
+            setFilteredRequests([]);
+          }
+        } catch (error) {
+          console.error('Error fetching training requests for company:', error);
+          setRequests([]);
+          setFilteredRequests([]);
         }
       } else {
-        // For companies, we don't need to show requests (they create trainings)
+        // Unknown user type
         setRequests([]);
         setFilteredRequests([]);
       }
@@ -132,76 +254,60 @@ export default function RequestsPage() {
 
   const updateRequest = async (id: number, updates: Partial<TrainingRequest>) => {
     try {
-      // Get user data to determine which system to use
-      const userData = localStorage.getItem("trainer_data");
-      if (!userData) {
+      // Get user data
+      const user = getTrainerData();
+      if (!user) {
         console.error('No user data found');
         return null;
       }
 
-      const user = JSON.parse(userData);
+      // Use TrainingRequest system for both trainers and companies
+      const response = await fetch('/api/training-requests', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestId: id,
+          status: updates.status?.toUpperCase(),
+          counterPrice: updates.counterPrice,
+          message: updates.message
+        }),
+      });
 
-      if (user.userType === 'TRAINER') {
-        // Use new training request system
-        const response = await fetch('/api/training-requests', {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            requestId: id,
-            status: updates.status,
-            message: updates.message
-          }),
-        });
-
-        if (response.ok) {
-          const updatedRequest = await response.json();
-          setRequests(prev =>
-            prev.map(req =>
-              req.id === id ? {
-                ...req,
-                status: updatedRequest.status,
-                message: updatedRequest.message,
-                updatedAt: updatedRequest.updatedAt
-              } : req
-            )
-          );
-          return updatedRequest;
-        } else {
-          const errorData = await response.json();
-          console.error('Failed to update training request:', errorData.error);
-          return null;
-        }
+      if (response.ok) {
+        const updatedRequest = await response.json();
+        setRequests(prev =>
+          prev.map(req =>
+            req.id === id ? {
+              ...req,
+              status: (updatedRequest.status === 'DECLINED' ? 'rejected' : 
+                       updatedRequest.status === 'WITHDRAWN' ? 'abgesagt' : 
+                       updatedRequest.status.toLowerCase()) as any,
+              message: updatedRequest.message || req.message,
+              counterPrice: updatedRequest.counterPrice,
+              updatedAt: updatedRequest.updatedAt
+            } : req
+          )
+        );
+        setFilteredRequests(prev =>
+          prev.map(req =>
+            req.id === id ? {
+              ...req,
+              status: (updatedRequest.status === 'DECLINED' ? 'rejected' : 
+                       updatedRequest.status === 'WITHDRAWN' ? 'abgesagt' : 
+                       updatedRequest.status.toLowerCase()) as any,
+              message: updatedRequest.message || req.message,
+              counterPrice: updatedRequest.counterPrice,
+              updatedAt: updatedRequest.updatedAt
+            } : req
+          )
+        );
+        return updatedRequest;
       } else {
-        // Use legacy system
-        const response = await fetch(`/api/requests/${id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...updates,
-            trainerId: user.id
-          }),
-        });
-
-        if (response.ok) {
-          const updatedRequest = await response.json();
-          setRequests(prev =>
-            prev.map(req =>
-              req.id === id ? updatedRequest : req
-            )
-          );
-          return updatedRequest;
-        } else {
-          const errorData = await response.json();
-          console.error('Failed to update legacy request:', errorData.error);
-          if (response.status === 403) {
-            alert('Sie sind nicht berechtigt, diese Anfrage zu bearbeiten.');
-          }
-          return null;
-        }
+        const errorData = await response.json();
+        console.error('Failed to update training request:', errorData.error);
+        return null;
       }
     } catch (error) {
       console.error('Error updating request:', error);
@@ -307,7 +413,9 @@ export default function RequestsPage() {
     if (trainerData) {
       const trainer = JSON.parse(trainerData);
       const trainerName = `${trainer.firstName} ${trainer.lastName}`;
-      const trainerAddress = trainer.address || "[Adresse nicht hinterlegt]";
+      const trainerAddress = trainer.street && trainer.zipCode && trainer.city 
+        ? `${trainer.street}${trainer.houseNumber ? ' ' + trainer.houseNumber : ''}, ${trainer.zipCode} ${trainer.city}`
+        : "[Adresse nicht hinterlegt]";
       trainerInfo = `${trainerName}, ${trainerAddress}`;
     }
     
@@ -516,7 +624,9 @@ export default function RequestsPage() {
     if (trainerData) {
       const trainer = JSON.parse(trainerData);
       trainerName = `${trainer.firstName} ${trainer.lastName}`;
-      trainerAddress = trainer.address || "[Adresse nicht hinterlegt]";
+      trainerAddress = trainer.street && trainer.zipCode && trainer.city 
+        ? `${trainer.street}${trainer.houseNumber ? ' ' + trainer.houseNumber : ''}, ${trainer.zipCode} ${trainer.city}`
+        : "[Adresse nicht hinterlegt]";
     }
     
     return `Dozentenvertrag
@@ -634,13 +744,13 @@ Mit freundlichen Grüßen
           formData.append('attachments', file);
         });
 
-        response = await fetch('/api/inquiry-messages', {
+        response = await fetch('/api/training-request-messages', {
           method: 'POST',
           body: formData,
         });
       } else {
         // Use JSON for simple message without attachments
-        response = await fetch('/api/inquiry-messages', {
+        response = await fetch('/api/training-request-messages', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -648,7 +758,9 @@ Mit freundlichen Grüßen
           body: JSON.stringify({
             trainingRequestId: activeRequest.id,
             subject: inquirySubject,
-            message: inquiryMessage
+            message: inquiryMessage,
+            senderId: user.id,
+            senderType: user.userType
           }),
         });
       }
@@ -671,9 +783,21 @@ Mit freundlichen Grüßen
   };
 
 
+  // Get user type for context
+  const [userType, setUserType] = useState<'TRAINER' | 'TRAINING_COMPANY' | null>(null);
+
+  useEffect(() => {
+    const user = getTrainerData();
+    if (user) {
+      setUserType(user.userType as 'TRAINER' | 'TRAINING_COMPANY');
+    }
+  }, []);
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Trainingsanfragen</h1>
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">
+        {userType === 'TRAINER' ? 'Meine Trainingsanfragen' : 'Trainingsanfragen'}
+      </h1>
       
       {/* Filter/Search */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -758,13 +882,34 @@ Mit freundlichen Grüßen
             <div key={request.id} className="bg-white rounded-lg shadow overflow-hidden">
               <div className="p-5 border-b">
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex-1">
                     <h3 className="text-lg font-semibold">{request.courseTitle}</h3>
                     <span className="inline-block mt-1 px-2 py-1 text-xs font-medium rounded-full bg-primary-100 text-primary-800">
                       {request.topicName}
                     </span>
+                    {/* Show trainer info for companies, company info for trainers */}
+                    {userType === 'TRAINING_COMPANY' && request.trainer && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        <span className="font-medium">Trainer: </span>
+                        <Link
+                          href={`/dashboard/trainer/${request.trainer.id}`}
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {request.trainer.firstName} {request.trainer.lastName}
+                        </Link>
+                        {request.trainer.email && (
+                          <span className="text-gray-500 ml-2">({request.trainer.email})</span>
+                        )}
+                      </div>
+                    )}
+                    {userType === 'TRAINER' && request.company && (
+                      <div className="mt-2 text-sm text-gray-600">
+                        <span className="font-medium">Firma: </span>
+                        {request.company.companyName || `${request.company.firstName} ${request.company.lastName}`}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right ml-4 flex-shrink-0">
                     <span className="block font-medium text-lg text-gray-900">
                       {formatCurrency(request.counterPrice || request.proposedPrice)}
                     </span>
@@ -850,7 +995,7 @@ Mit freundlichen Grüßen
                     Rückfrage
                   </button>
                   <Link
-                    href={`/dashboard/training/${request.trainingId}`}
+                    href={`/dashboard/training/${request.trainingId}?from=${encodeURIComponent('/dashboard/requests')}`}
                     className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">

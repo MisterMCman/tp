@@ -38,6 +38,13 @@ export async function GET(request: NextRequest) {
       const transformedTrainings = trainings.map(training => {
         // Find the accepted trainer request
         const acceptedRequest = training.requests.find(r => r.status === 'ACCEPTED');
+        
+        const assignedTrainer = acceptedRequest ? {
+          id: acceptedRequest.trainer.id,
+          firstName: acceptedRequest.trainer.firstName,
+          lastName: acceptedRequest.trainer.lastName,
+          fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
+        } : null;
 
         return {
           id: training.id,
@@ -46,7 +53,7 @@ export async function GET(request: NextRequest) {
           date: training.startDate.toISOString(),
           endTime: new Date(`${training.startDate.toISOString().split('T')[0]}T${training.endTime}`).toISOString(),
           location: training.location,
-          participants: training.participants,
+          participants: training.participantCount,
           status: training.status.toLowerCase(),
           description: training.description,
           trainerNotes: null,
@@ -56,12 +63,7 @@ export async function GET(request: NextRequest) {
           endDate: training.endDate.toISOString(),
           requestCount: training.requests.length,
           acceptedRequests: training.requests.filter(r => r.status === 'ACCEPTED').length,
-          assignedTrainer: acceptedRequest ? {
-            id: acceptedRequest.trainer.id,
-            firstName: acceptedRequest.trainer.firstName,
-            lastName: acceptedRequest.trainer.lastName,
-            fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
-          } : null
+          assignedTrainer: assignedTrainer
         };
       });
 
@@ -83,7 +85,8 @@ export async function GET(request: NextRequest) {
             select: {
               id: true,
               companyName: true,
-              contactName: true
+              firstName: true,
+              lastName: true
             }
           },
           requests: {
@@ -105,7 +108,7 @@ export async function GET(request: NextRequest) {
         date: training.startDate.toISOString(),
         endTime: new Date(`${training.startDate.toISOString().split('T')[0]}T${training.endTime}`).toISOString(),
         location: training.location,
-        participants: training.participants,
+        participants: training.participantCount,
         dailyRate: training.dailyRate,
         description: training.description,
         company: training.company,
@@ -114,48 +117,62 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(availableTrainings);
     } else if (trainerId) {
-      // Legacy: Fetch trainings for trainer (old system)
+      // Fetch trainings for trainer via TrainingRequest with ACCEPTED status
       const now = new Date();
 
-      const inquiries = await prisma.inquiry.findMany({
+      const trainingRequests = await prisma.trainingRequest.findMany({
         where: {
           trainerId: parseInt(trainerId),
-          status: type === 'upcoming' ? 'ACCEPTED' : 'COMPLETED',
-          event: type === 'upcoming'
-            ? { date: { gte: now } }
-            : { date: { lt: now } }
+          status: 'ACCEPTED',
+          training: type === 'upcoming'
+            ? { startDate: { gte: now } }
+            : { startDate: { lt: now } }
         },
         include: {
-          event: {
+          training: {
             include: {
-              course: {
-                include: {
-                  topic: true
+              topic: true,
+              company: {
+                select: {
+                  id: true,
+                  companyName: true,
+                  firstName: true,
+                  lastName: true
                 }
               }
             }
           }
         },
         orderBy: {
-          event: {
-            date: type === 'upcoming' ? 'asc' : 'desc'
+          training: {
+            startDate: type === 'upcoming' ? 'asc' : 'desc'
           }
         }
       });
 
       // Transform the data to match frontend expectations
-      const trainings = inquiries.map(inquiry => ({
-        id: inquiry.event.id,
-        title: inquiry.event.course.title,
-        topicName: inquiry.event.course.topic?.name || 'Unknown',
-        date: inquiry.event.date.toISOString(),
-        endTime: inquiry.event.endTime.toISOString(),
-        location: inquiry.event.location,
-        participants: inquiry.event.participants,
+      const trainings = trainingRequests.map(request => ({
+        id: request.training.id,
+        title: request.training.title,
+        topicName: request.training.topic?.name || 'Unknown',
+        date: request.training.startDate.toISOString(),
+        endTime: new Date(`${request.training.endDate.toISOString().split('T')[0]}T${request.training.endTime}`).toISOString(),
+        location: request.training.location,
+        participants: request.training.participantCount,
         status: type === 'upcoming' ? 'confirmed' : 'completed',
-        description: inquiry.event.course.description,
-        trainerNotes: inquiry.message,
-        materials: []
+        description: request.training.description,
+        trainerNotes: request.message,
+        materials: [],
+        dailyRate: request.training.dailyRate,
+        startTime: request.training.startTime,
+        endDate: request.training.endDate.toISOString(),
+        assignedTrainer: {
+          id: parseInt(trainerId),
+          firstName: '',
+          lastName: '',
+          fullName: 'You'
+        },
+        company: request.training.company
       }));
 
       return NextResponse.json(trainings);
@@ -184,7 +201,13 @@ export async function POST(request: NextRequest) {
       endDate,
       startTime,
       endTime,
+      type,
       location,
+      locationStreet,
+      locationHouseNumber,
+      locationZipCode,
+      locationCity,
+      locationCountryId,
       participants,
       dailyRate,
       description,
@@ -201,8 +224,14 @@ export async function POST(request: NextRequest) {
         endDate: new Date(endDate),
         startTime,
         endTime,
+        type: type || 'ONLINE',
         location,
-        participants: parseInt(participants),
+        locationStreet: (type === 'HYBRID' || type === 'VOR_ORT') ? locationStreet : null,
+        locationHouseNumber: (type === 'HYBRID' || type === 'VOR_ORT') ? locationHouseNumber : null,
+        locationZipCode: (type === 'HYBRID' || type === 'VOR_ORT') ? locationZipCode : null,
+        locationCity: (type === 'HYBRID' || type === 'VOR_ORT') ? locationCity : null,
+        locationCountryId: (type === 'HYBRID' || type === 'VOR_ORT') && locationCountryId ? parseInt(locationCountryId) : null,
+        participantCount: parseInt(participants),
         dailyRate: parseFloat(dailyRate),
         description,
         status: 'DRAFT'

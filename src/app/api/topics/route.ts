@@ -1,30 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// Keep the mock data as fallback
-const mockTopics = [
-  { id: 1, name: "Python" },
-  { id: 2, name: "JavaScript" },
-  { id: 3, name: "React" },
-  { id: 4, name: "Node.js" },
-  { id: 5, name: "Machine Learning" },
-  { id: 6, name: "Datenanalyse" },
-  { id: 7, name: "Web Development" },
-  { id: 8, name: "Marketing" },
-  { id: 9, name: "Project Management" },
-  { id: 10, name: "Projektmanagement" },
-  { id: 11, name: "Digital Marketing" },
-  { id: 12, name: "Social Media" },
-  { id: 13, name: "SEO" },
-  { id: 14, name: "Graphic Design" },
-  { id: 15, name: "UI/UX Design" },
-  { id: 16, name: "Business Analysis" },
-  { id: 17, name: "Data Science" },
-  { id: 18, name: "Artificial Intelligence" },
-  { id: 19, name: "Leadership" },
-  { id: 20, name: "Coaching" }
-];
-
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   // Support both 'query' and 'search' parameters for backward compatibility
@@ -49,8 +25,8 @@ export async function GET(req: Request) {
       console.log(`API returning all ${topics.length} online topics`);
       return NextResponse.json(topics);
     } catch (dbError) {
-      console.warn("Database error, falling back to mock data:", dbError);
-      return NextResponse.json(mockTopics);
+      console.error("Database error loading topics:", dbError);
+      return NextResponse.json({ error: 'Fehler beim Laden der Topics' }, { status: 500 });
     }
   }
 
@@ -151,25 +127,8 @@ export async function GET(req: Request) {
       console.log(`API returning ${formattedTopics.length} topics for "${searchTerm}"`);
       return NextResponse.json(formattedTopics);
     } catch (dbError) {
-      console.warn("Database error, falling back to mock data:", dbError);
-      
-      // Fallback to mock data if database connection fails
-      const filteredTopics = mockTopics
-        .filter(topic => topic.name.toLowerCase().includes(searchTerm))
-        .sort((a, b) => {
-          const aLower = a.name.toLowerCase();
-          const bLower = b.name.toLowerCase();
-          
-          if (aLower === searchTerm) return -1;
-          if (bLower === searchTerm) return 1;
-          if (aLower.startsWith(searchTerm) && !bLower.startsWith(searchTerm)) return -1;
-          if (bLower.startsWith(searchTerm) && !aLower.startsWith(searchTerm)) return 1;
-          
-          return aLower.localeCompare(bLower);
-        });
-      
-      console.log(`API returning ${filteredTopics.length} mock topics`);
-      return NextResponse.json(filteredTopics);
+      console.error("Database error searching topics:", dbError);
+      return NextResponse.json({ error: 'Fehler bei der Topic-Suche' }, { status: 500 });
     }
   } catch (error: unknown) {
     if (error instanceof Error) {

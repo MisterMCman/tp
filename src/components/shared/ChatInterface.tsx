@@ -4,16 +4,17 @@ import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import Link from "next/link";
-import { InquiryMessage, FileAttachment } from "@/lib/types";
+import { usePathname } from "next/navigation";
+import { TrainingRequestMessage, FileAttachment } from "@/lib/types";
 
 export type Conversation = {
   trainingRequestId: number;
   trainingTitle: string;
   companyName: string;
   trainerName?: string;
-  lastMessage: InquiryMessage;
+  lastMessage: TrainingRequestMessage;
   unreadCount: number;
-  messages: InquiryMessage[];
+  messages: TrainingRequestMessage[];
 };
 
 interface ChatInterfaceProps {
@@ -37,6 +38,7 @@ export default function ChatInterface({
   loading = false,
   error = null
 }: ChatInterfaceProps) {
+  const pathname = usePathname();
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -187,7 +189,7 @@ export default function ChatInterface({
                   </div>
                   <div className="flex-1 text-center">
                     <Link
-                      href={`/dashboard/training/${selectedConversation.trainingRequestId}`}
+                      href={`/dashboard/training/${selectedConversation.trainingRequestId}?from=${encodeURIComponent(pathname)}`}
                       className="block hover:bg-slate-100 px-4 py-3 rounded-lg transition-colors group"
                     >
                       <h2 className="font-bold text-slate-800 group-hover:text-slate-900 leading-tight">

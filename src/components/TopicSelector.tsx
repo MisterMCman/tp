@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 
+export type ExpertiseLevel = 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE';
+
+export interface TopicWithLevel {
+  name: string;
+  level: ExpertiseLevel;
+}
+
 interface TopicSelectorProps {
-  topics: string[];
+  topics: TopicWithLevel[];
   topicSuggestions?: string[];
-  onAddTopic: (topicName: string, isSuggestion?: boolean) => void;
-  onRemoveTopic: (topicName: string) => void;
+  onAddTopic: (topicName: string, level: ExpertiseLevel, isSuggestion?: boolean) => void;
+  onRemoveTopic: (topicName: string, isSuggestion?: boolean) => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
   onSearch?: (term: string) => void;
@@ -24,16 +31,33 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
   const [isAddingSuggestion, setIsAddingSuggestion] = useState(false);
   const [suggestionMessage, setSuggestionMessage] = useState<string | null>(null);
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
+  const [levelSelectorTopic, setLevelSelectorTopic] = useState<{ name: string; isSuggestion?: boolean } | null>(null);
   
   // Handle adding a topic with visual feedback and clearing search
   const handleAddTopicClick = (topicName: string, isSuggestion?: boolean) => {
-    onAddTopic(topicName, isSuggestion);
-    onSearchChange(''); // Clear search input
-    if (onSearch) onSearch(''); // Clear suggestions
+    // Check if already selected to avoid duplicates
+    if (isTopicSelected(topicName)) {
+      return;
+    }
     
-    // Show brief visual feedback
-    setRecentlyAdded(topicName);
-    setTimeout(() => setRecentlyAdded(null), 2000);
+    // Show level selector modal instead of directly adding
+    setLevelSelectorTopic({ name: topicName, isSuggestion });
+  };
+
+  // Handle level selection
+  const handleLevelSelect = (level: ExpertiseLevel) => {
+    if (levelSelectorTopic) {
+      onAddTopic(levelSelectorTopic.name, level, levelSelectorTopic.isSuggestion);
+      onSearchChange(''); // Clear search input
+      if (onSearch) onSearch(''); // Clear suggestions
+      
+      // Show brief visual feedback
+      setRecentlyAdded(levelSelectorTopic.name);
+      setTimeout(() => setRecentlyAdded(null), 2000);
+      
+      // Close modal
+      setLevelSelectorTopic(null);
+    }
   };
   
   // Handle removing a topic with visual feedback
@@ -44,54 +68,62 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
   
   // Check if a topic is already selected
   const isTopicSelected = (topicName: string): boolean => {
-    return topics.includes(topicName) || topicSuggestions.includes(topicName);
+    return topics.some(t => t.name === topicName) || topicSuggestions.includes(topicName);
   };
 
-  const handleAddSuggestion = async () => {
+  // Get expertise level label
+  const getLevelLabel = (level: ExpertiseLevel): string => {
+    switch (level) {
+      case 'GRUNDLAGE': return 'Grundlage';
+      case 'FORTGESCHRITTEN': return 'Fortgeschritten';
+      case 'EXPERTE': return 'Experte';
+      default: return level;
+    }
+  };
+
+  // Get expertise level color
+  const getLevelColor = (level: ExpertiseLevel): string => {
+    switch (level) {
+      case 'GRUNDLAGE': return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'FORTGESCHRITTEN': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'EXPERTE': return 'bg-green-100 text-green-800 border-green-300';
+      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  const handleAddSuggestion = () => {
     if (!(searchTerm || '').trim()) return;
 
     setIsAddingSuggestion(true);
 
-    try {
-      const response = await fetch('/api/topic-suggestions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: (searchTerm || '').trim(),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Add the suggested topic using the onAddTopic callback
-        const addedTopicName = (searchTerm || '').trim();
-        onAddTopic(addedTopicName, true);
-        setSuggestionMessage('Vorschlag erfolgreich hinzugefügt!');
-        setTimeout(() => setSuggestionMessage(null), 3000);
-        onSearchChange(''); // Clear search
-        if (onSearch) onSearch(''); // Clear suggestions
-        
-        // Show visual feedback
-        setRecentlyAdded(addedTopicName);
-        setTimeout(() => setRecentlyAdded(null), 2000);
-      } else {
-        setSuggestionMessage(data.error || 'Fehler beim Erstellen des Vorschlags');
-        setTimeout(() => setSuggestionMessage(null), 3000);
-      }
-    } catch (error) {
-      console.error('Error adding suggestion:', error);
-      setSuggestionMessage('Netzwerkfehler beim Erstellen des Vorschlags');
+    // Add the suggested topic locally (will be sent to API on form submit)
+    const addedTopicName = (searchTerm || '').trim();
+    
+    // Check if already exists in suggestions
+    if (topicSuggestions.includes(addedTopicName)) {
+      setSuggestionMessage('Dieser Vorschlag wurde bereits hinzugefügt');
       setTimeout(() => setSuggestionMessage(null), 3000);
-    } finally {
       setIsAddingSuggestion(false);
+      return;
     }
+    
+    // Add to suggestions list with default level (will be GRUNDLAGE)
+    onAddTopic(addedTopicName, 'GRUNDLAGE', true); // true = isSuggestion
+    
+    // Clear search and overlays
+    onSearchChange(''); 
+    if (onSearch) onSearch('');
+    
+    // Show success message
+    setSuggestionMessage(`✓ "${addedTopicName}" wurde als Vorschlag hinzugefügt (erscheint in Blau)!`);
+    setTimeout(() => setSuggestionMessage(null), 3000);
+    
+    setIsAddingSuggestion(false);
   };
 
   const hasExactMatch = suggestions && suggestions.length > 0 ? suggestions.some(s => s.name.toLowerCase() === (searchTerm || '').toLowerCase()) : false;
-  const showAddSuggestion = (searchTerm || '').trim().length >= 3 && !hasExactMatch && (!suggestions || suggestions.length === 0);
+  const isAlreadySuggested = topicSuggestions.some(s => s.toLowerCase() === (searchTerm || '').trim().toLowerCase());
+  const showAddSuggestion = (searchTerm || '').trim().length >= 3 && !hasExactMatch && !isAlreadySuggested && (!suggestions || suggestions.length === 0);
 
   return (
     <div className="space-y-3">
@@ -128,7 +160,9 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
       {/* Helpful tip */}
       {!recentlyAdded && (
         <p className="text-xs text-gray-500 ml-1 -mt-1">
-          💡 <strong>Tipp:</strong> Klicken Sie auf <span className="text-green-600 font-medium">+ Verfügbar</span> zum Hinzufügen oder auf <span className="text-red-500 font-medium">− Ausgewählt</span> zum Entfernen
+          💡 <strong>Tipp:</strong> Klicken Sie auf <span className="text-green-600 font-medium">+ Verfügbar</span> zum Hinzufügen, 
+          <span className="text-blue-600 font-medium"> Vorschlag einreichen</span> für neue Themen, 
+          oder <span className="text-red-500 font-medium">− Ausgewählt</span> zum Entfernen
         </p>
       )}
       
@@ -160,7 +194,7 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
             {(() => {
               const selectedCount = suggestions.filter(s => isTopicSelected(s.name)).length;
               return (
-                <div className="sticky top-0 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-3 py-2 text-xs font-medium z-10">
+                <div className="sticky top-0 bg-gray-50 border-b border-gray-200 px-3 py-2 text-xs font-medium z-10">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-700">
                       {suggestions.length} Ergebnisse gefunden
@@ -189,8 +223,8 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
                     title={isSelected ? 'Klicken zum Entfernen' : 'Klicken zum Hinzufügen'}
                     className={`group p-3 cursor-pointer border-b border-gray-100 last:border-0 transition-all duration-150 ${
                       isSelected 
-                        ? 'bg-gradient-to-r from-green-50 to-green-100 hover:from-red-50 hover:to-red-100' 
-                        : 'hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100'
+                        ? 'bg-green-50 hover:bg-red-50' 
+                        : 'hover:bg-red-50'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -212,7 +246,7 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
                         ) : (
                           <>
                             {topic.type === 'suggestion' && (
-                              <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded whitespace-nowrap">
+                              <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded whitespace-nowrap">
                                 Vorschlag ({topic.status})
                               </span>
                             )}
@@ -244,18 +278,23 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
         {showAddSuggestion && (
           <div className="suggestions-dropdown w-full">
             <div className="p-3 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">
-                  &quot;{searchTerm}&quot; nicht gefunden
-                </span>
-                <button
-                  type="button"
-                  onClick={handleAddSuggestion}
-                  disabled={isAddingSuggestion}
-                  className="text-sm bg-gradient-to-r from-red-500 to-red-600 text-white px-3 py-1 rounded hover:from-red-600 hover:to-red-700 disabled:opacity-50"
-                >
-                  {isAddingSuggestion ? 'Wird hinzugefügt...' : 'Als Vorschlag einreichen'}
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-700 font-medium">
+                    &quot;{searchTerm}&quot; nicht gefunden
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddSuggestion}
+                    disabled={isAddingSuggestion}
+                    className="text-sm bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-all shadow-sm"
+                  >
+                    {isAddingSuggestion ? 'Wird eingereicht...' : 'Als Vorschlag einreichen'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Ihr Vorschlag wird zur Prüfung eingereicht und erscheint in Blau bei Ihren ausgewählten Themen
+                </p>
               </div>
             </div>
           </div>
@@ -263,14 +302,76 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
       </div>
 
       {suggestionMessage && (
-        <div className="text-sm text-green-600 bg-green-50 p-2 rounded border border-green-200">
-          {suggestionMessage}
+        <div className="text-sm text-blue-700 bg-blue-50 p-3 rounded-lg border border-blue-200 flex items-center gap-2 animate-fade-in">
+          <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span>{suggestionMessage}</span>
+        </div>
+      )}
+
+      {/* Level Selector Modal */}
+      {levelSelectorTopic && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setLevelSelectorTopic(null)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                Expertise-Level wählen
+              </h3>
+              <p className="text-sm text-gray-600">
+                Für &quot;{levelSelectorTopic.name}&quot;
+              </p>
+            </div>
+            
+            <div className="space-y-3 mb-6">
+              <button
+                type="button"
+                onClick={() => handleLevelSelect('GRUNDLAGE')}
+                className="w-full px-4 py-3 bg-blue-50 border-2 border-blue-300 rounded-lg hover:bg-blue-100 hover:border-blue-400 transition-all text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-blue-800">Grundlage</span>
+                  <span className="text-xs text-blue-600 bg-blue-200 px-2 py-1 rounded">Basiskenntnisse</span>
+                </div>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => handleLevelSelect('FORTGESCHRITTEN')}
+                className="w-full px-4 py-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg hover:bg-yellow-100 hover:border-yellow-400 transition-all text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-yellow-800">Fortgeschritten</span>
+                  <span className="text-xs text-yellow-600 bg-yellow-200 px-2 py-1 rounded">Erweiterte Kenntnisse</span>
+                </div>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => handleLevelSelect('EXPERTE')}
+                className="w-full px-4 py-3 bg-green-50 border-2 border-green-300 rounded-lg hover:bg-green-100 hover:border-green-400 transition-all text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-green-800">Experte</span>
+                  <span className="text-xs text-green-600 bg-green-200 px-2 py-1 rounded">Höchste Expertise</span>
+                </div>
+              </button>
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setLevelSelectorTopic(null)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Abbrechen
+            </button>
+          </div>
         </div>
       )}
 
       {/* Selected Topics Display */}
       {(topics.length > 0 || topicSuggestions.length > 0) && (
-        <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 space-y-3 border border-gray-200">
+        <div className="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-200">
           {topics.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -285,13 +386,16 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
                 {topics.map((topic, index) => (
                   <span
                     key={`topic-${index}`}
-                    className="selected-topic group"
+                    className="selected-topic group flex items-center gap-2"
                   >
-                    {topic}
+                    <span>{topic.name}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${getLevelColor(topic.level)}`}>
+                      {getLevelLabel(topic.level)}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => onRemoveTopic(topic)}
-                      className="ml-2 text-white opacity-70 hover:opacity-100 transition-opacity"
+                      onClick={() => onRemoveTopic(topic.name, false)}
+                      className="ml-1 text-red-600 opacity-70 hover:opacity-100 transition-opacity"
                       title="Entfernen"
                     >
                       ×
@@ -303,29 +407,32 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
           )}
 
           {topicSuggestions.length > 0 && (
-            <div>
+            <div className="pt-3 border-t border-gray-300">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                  <svg className="w-4 h-4 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
                   Vorgeschlagene Themen ({topicSuggestions.length})
                 </label>
-                <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded font-medium">
                   Warten auf Freigabe
                 </span>
               </div>
+              <p className="text-xs text-blue-600 mb-2">
+                Diese Themen wurden von Ihnen vorgeschlagen und werden geprüft
+              </p>
               <div className="flex flex-wrap gap-2">
                 {topicSuggestions.map((topic, index) => (
                   <span
                     key={`suggestion-${index}`}
-                    className="selected-topic bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-300"
+                    className="selected-topic bg-blue-50 text-blue-700 border-blue-300"
                   >
                     {topic}
                     <button
                       type="button"
-                      onClick={() => onRemoveTopic(topic)}
-                      className="ml-2 text-white opacity-70 hover:opacity-100 transition-opacity"
+                      onClick={() => onRemoveTopic(topic, true)}
+                      className="ml-2 text-blue-700 opacity-70 hover:opacity-100 transition-opacity"
                       title="Entfernen"
                     >
                       ×

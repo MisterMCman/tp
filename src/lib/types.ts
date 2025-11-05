@@ -16,7 +16,10 @@ export interface Trainer {
   lastName: string;
   email: string;
   phone: string;
-  address?: string;
+  street?: string;
+  houseNumber?: string;
+  zipCode?: string;
+  city?: string;
   bio?: string;
   profilePicture?: string;
   iban?: string;
@@ -37,16 +40,26 @@ export interface TrainingCompany {
   id: number;
   userType?: 'TRAINER' | 'TRAINING_COMPANY';
   companyName: string;
-  contactName: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone: string;
-  address?: string;
+  street?: string;
+  houseNumber?: string;
+  zipCode?: string;
+  city?: string;
+  domain?: string;
   bio?: string;
   logo?: string;
   website?: string;
   industry?: string;
   employees?: string;
   consultantName?: string;
+  vatId?: string;
+  billingEmail?: string;
+  billingNotes?: string;
+  tags?: string;
+  onboardingStatus?: string;
   status: 'ACTIVE' | 'INACTIVE';
   countryId?: number;
   country?: Country;
@@ -120,24 +133,10 @@ export interface TrainingRequest {
   updatedAt: string;
 }
 
-export interface Inquiry {
-  id: number;
-  trainerId: number;
-  eventId: number;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COMPLETED' | 'ABGESAGT';
-  originalPrice: number;
-  proposedPrice: number;
-  counterPrice?: number;
-  message: string;
-  createdAt: string;
-  updatedAt: string;
-  trainer?: Trainer;
-  event?: Event;
-}
 
 export interface Invoice {
   id: number;
-  inquiryId: number;
+  trainingRequestId: number;
   invoiceNumber: string;
   amount: number;
   issuedDate: string;
@@ -183,7 +182,10 @@ export interface TrainerProfileVersion {
   lastName?: string;
   email?: string;
   phone?: string;
-  address?: string;
+  street?: string;
+  houseNumber?: string;
+  zipCode?: string;
+  city?: string;
   bio?: string;
   profilePicture?: string;
   iban?: string;
@@ -202,7 +204,10 @@ export interface TrainerRegistrationForm {
   lastName: string;
   email: string;
   phone: string;
-  address: string;
+  street: string;
+  houseNumber?: string;
+  zipCode: string;
+  city: string;
   bio: string;
   topics: string[];
   isCompany?: boolean;
@@ -231,7 +236,6 @@ export interface RegistrationFormData {
   isDeliveryAddress: boolean;
   isHeadquarterAddress: boolean;
   bio: string;
-  profilePicture: string;
   topics: string[];
   isCompany: boolean;
   companyName: string;
@@ -243,7 +247,10 @@ export interface TrainerProfileUpdateData {
   lastName?: string;
   email?: string;
   phone?: string;
-  address?: string;
+  street?: string;
+  houseNumber?: string;
+  zipCode?: string;
+  city?: string;
   bio?: string;
   profilePicture?: string;
   iban?: string;
@@ -262,7 +269,7 @@ export interface BankDetails {
 
 export interface FileAttachment {
   id: number;
-  inquiryMessageId: number;
+  trainingRequestMessageId: number;
   filename: string;
   storedFilename: string;
   filePath: string;
@@ -271,7 +278,7 @@ export interface FileAttachment {
   uploadedAt: string;
 }
 
-export interface InquiryMessage {
+export interface TrainingRequestMessage {
   id: number;
   trainingRequestId: number;
   trainingRequest?: TrainingRequest;

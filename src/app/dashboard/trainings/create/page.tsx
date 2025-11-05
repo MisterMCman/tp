@@ -28,7 +28,13 @@ interface TrainingFormData {
   endDate: string;
   startTime: string;
   endTime: string;
+  type: 'ONLINE' | 'HYBRID' | 'VOR_ORT';
   location: string;
+  locationStreet?: string;
+  locationHouseNumber?: string;
+  locationZipCode?: string;
+  locationCity?: string;
+  locationCountryId?: string;
   participants: string;
   dailyRate: string;
   description: string;
@@ -57,12 +63,19 @@ export default function CreateTrainingPage() {
     endDate: '',
     startTime: '',
     endTime: '',
+    type: 'ONLINE',
     location: '',
+    locationStreet: '',
+    locationHouseNumber: '',
+    locationZipCode: '',
+    locationCity: '',
+    locationCountryId: '',
     participants: '',
     dailyRate: '',
     description: '',
     selectedTrainers: []
   });
+  const [countries, setCountries] = useState<Array<{ id: number; name: string; code: string }>>([]);
 
   useEffect(() => {
     // Check if user is authenticated and is a company
@@ -74,8 +87,21 @@ export default function CreateTrainingPage() {
 
     setUser(currentUser);
     loadTopics();
+    loadCountries();
     setLoading(false);
   }, [router]);
+
+  const loadCountries = async () => {
+    try {
+      const response = await fetch('/api/countries');
+      if (response.ok) {
+        const data = await response.json();
+        setCountries(data.countries || []);
+      }
+    } catch (error) {
+      console.error('Error loading countries:', error);
+    }
+  };
 
   useEffect(() => {
     // Filter trainers when topic changes
@@ -418,9 +444,28 @@ export default function CreateTrainingPage() {
               />
             </div>
 
+            {/* Training Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ort *
+                Trainingstyp *
+              </label>
+              <select
+                name="type"
+                value={formData.type}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="ONLINE">Online</option>
+                <option value="HYBRID">Hybrid</option>
+                <option value="VOR_ORT">Vor Ort</option>
+              </select>
+            </div>
+
+            {/* Location - Simple text field for ONLINE, detailed fields for HYBRID and VOR_ORT */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {formData.type === 'ONLINE' ? 'Ort (z.B. Online)' : 'Ort (zur Anzeige)'} *
               </label>
               <input
                 type="text"
@@ -429,9 +474,93 @@ export default function CreateTrainingPage() {
                 onChange={handleInputChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="z.B. Online oder Büroadresse"
+                placeholder={formData.type === 'ONLINE' ? 'z.B. Online' : 'z.B. Berlin, Büroadresse'}
               />
             </div>
+
+            {/* Detailed Location Fields for HYBRID and VOR_ORT */}
+            {(formData.type === 'HYBRID' || formData.type === 'VOR_ORT') && (
+              <>
+                <div className="md:col-span-2">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">Detaillierte Adresse für Präsenzveranstaltung</h3>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Straße *
+                  </label>
+                  <input
+                    type="text"
+                    name="locationStreet"
+                    value={formData.locationStreet || ''}
+                    onChange={handleInputChange}
+                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Musterstraße"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Hausnummer *
+                  </label>
+                  <input
+                    type="text"
+                    name="locationHouseNumber"
+                    value={formData.locationHouseNumber || ''}
+                    onChange={handleInputChange}
+                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="123"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    PLZ *
+                  </label>
+                  <input
+                    type="text"
+                    name="locationZipCode"
+                    value={formData.locationZipCode || ''}
+                    onChange={handleInputChange}
+                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="12345"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Stadt *
+                  </label>
+                  <input
+                    type="text"
+                    name="locationCity"
+                    value={formData.locationCity || ''}
+                    onChange={handleInputChange}
+                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Berlin"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Land *
+                  </label>
+                  <select
+                    name="locationCountryId"
+                    value={formData.locationCountryId || ''}
+                    onChange={handleInputChange}
+                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">Bitte wählen</option>
+                    {countries.map((country) => (
+                      <option key={country.id} value={country.id.toString()}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

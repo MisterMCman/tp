@@ -22,39 +22,40 @@ export async function GET(req: Request) {
       }, { status: 403 });
     }
 
-    // Find past bookings between this trainer and company
-    const bookings = await prisma.training.findMany({
+    // Find past bookings between this trainer and company via TrainingRequest system
+    const trainingRequests = await prisma.trainingRequest.findMany({
       where: {
         trainerId: parseInt(trainerId),
-        trainingCompanyId: parseInt(companyId),
         status: {
-          in: ['COMPLETED', 'CONFIRMED']
+          in: ['ACCEPTED']
+        },
+        training: {
+          companyId: parseInt(companyId),
+          status: {
+            in: ['COMPLETED', 'IN_PROGRESS']
+          }
         }
       },
-      select: {
-        id: true,
-        title: true,
-        date: true,
-        status: true,
-        topic: {
-          select: {
-            name: true
+      include: {
+        training: {
+          include: {
+            topic: true
           }
         }
       },
       orderBy: {
-        date: 'desc'
+        updatedAt: 'desc'
       },
       take: 10
     });
 
     // Format the bookings
-    const formattedBookings = bookings.map(booking => ({
-      id: booking.id,
-      title: booking.title,
-      date: booking.date.toISOString(),
-      status: booking.status,
-      topicName: booking.topic?.name || 'Thema nicht verfügbar'
+    const formattedBookings = trainingRequests.map(request => ({
+      id: request.training.id,
+      title: request.training.title,
+      date: request.training.startDate.toISOString(),
+      status: request.training.status,
+      topicName: request.training.topic?.name || 'Thema nicht verfügbar'
     }));
 
     return NextResponse.json({

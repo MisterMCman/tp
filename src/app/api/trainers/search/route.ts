@@ -45,6 +45,7 @@ export async function GET(req: Request) {
     const location = url.searchParams.get('location');
     const minPrice = url.searchParams.get('minPrice');
     const maxPrice = url.searchParams.get('maxPrice');
+    const expertiseLevel = url.searchParams.get('expertiseLevel'); // 'minimum_grundlage', 'minimum_fortgeschritten', 'minimum_experte'
     const status = url.searchParams.get('status') || 'ACTIVE';
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '50');
@@ -55,23 +56,55 @@ export async function GET(req: Request) {
 
     // Filter by topic if provided (name search)
     if (topic) {
-      where.topics = {
-        some: {
-          topic: {
-            name: {
-              contains: topic
-            }
+      const topicFilter: any = {
+        topic: {
+          name: {
+            contains: topic
           }
         }
+      };
+
+      // Add expertise level filter if provided
+      if (expertiseLevel && expertiseLevel !== 'all') {
+        const levelMap: Record<string, ('GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE')[]> = {
+          'minimum_grundlage': ['GRUNDLAGE', 'FORTGESCHRITTEN', 'EXPERTE'],
+          'minimum_fortgeschritten': ['FORTGESCHRITTEN', 'EXPERTE'],
+          'minimum_experte': ['EXPERTE']
+        };
+        
+        const allowedLevels = levelMap[expertiseLevel];
+        if (allowedLevels) {
+          topicFilter.expertiseLevel = { in: allowedLevels };
+        }
+      }
+
+      where.topics = {
+        some: topicFilter
       };
     }
 
     // Filter by topic ID if provided (exact match for trainer selection)
     if (topicId) {
-      where.topics = {
-        some: {
-          topicId: parseInt(topicId)
+      const topicIdFilter: any = {
+        topicId: parseInt(topicId)
+      };
+
+      // Add expertise level filter if provided
+      if (expertiseLevel && expertiseLevel !== 'all') {
+        const levelMap: Record<string, ('GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE')[]> = {
+          'minimum_grundlage': ['GRUNDLAGE', 'FORTGESCHRITTEN', 'EXPERTE'],
+          'minimum_fortgeschritten': ['FORTGESCHRITTEN', 'EXPERTE'],
+          'minimum_experte': ['EXPERTE']
+        };
+        
+        const allowedLevels = levelMap[expertiseLevel];
+        if (allowedLevels) {
+          topicIdFilter.expertiseLevel = { in: allowedLevels };
         }
+      }
+
+      where.topics = {
+        some: topicIdFilter
       };
     }
 
@@ -109,6 +142,7 @@ export async function GET(req: Request) {
             topic: true
           }
         },
+        offeredTrainingTypes: true,
         country: true
       },
       orderBy: {
@@ -116,6 +150,27 @@ export async function GET(req: Request) {
       },
       skip: (page - 1) * limit,
       take: limit
+    });
+
+    // Get completed trainings count for each trainer (using TrainingRequest with ACCEPTED status and COMPLETED training status)
+    const trainerIds = trainers.map(t => t.id);
+    const completedRequests = await prisma.trainingRequest.findMany({
+      where: {
+        trainerId: { in: trainerIds },
+        status: 'ACCEPTED',
+        training: {
+          status: 'COMPLETED'
+        }
+      },
+      select: {
+        trainerId: true
+      }
+    });
+
+    // Create a map for quick lookup
+    const completedMap = new Map<number, number>();
+    completedRequests.forEach(req => {
+      completedMap.set(req.trainerId, (completedMap.get(req.trainerId) || 0) + 1);
     });
 
     // Format the response
@@ -133,7 +188,13 @@ export async function GET(req: Request) {
         code: trainer.country.code
       } : null,
       topics: trainer.topics?.map(t => t.topic.name) || [],
-      completedTrainings: 0, // TODO: Calculate this separately
+      topicsWithLevels: trainer.topics?.map(t => ({
+        name: t.topic.name,
+        level: t.expertiseLevel
+      })) || [],
+      offeredTrainingTypes: trainer.offeredTrainingTypes?.map(tt => tt.type) || [],
+      travelRadius: trainer.travelRadius,
+      completedTrainings: completedMap.get(trainer.id) || 0,
       isCompany: trainer.isCompany,
       companyName: trainer.companyName
     }));
