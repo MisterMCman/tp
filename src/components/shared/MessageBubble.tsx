@@ -45,7 +45,7 @@ export default function MessageBubble({
         : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg'
     } rounded-2xl px-4 py-3 relative`}>
       {showSenderName && !isFromUser && senderName && (
-        <p className="text-xs font-semibold mb-2 text-slate-600">{senderName}</p>
+        <p className="text-xs font-semibold mb-2 !text-white" style={{ color: '#ffffff' }}>{senderName}</p>
       )}
 
       <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isFromUser ? 'text-slate-800' : '!text-white'}`} style={!isFromUser ? { color: '#ffffff' } : undefined}>

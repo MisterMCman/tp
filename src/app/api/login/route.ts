@@ -74,25 +74,26 @@ export async function POST(req: Request) {
       }
       
 
-      // Find trainer or training company by email
+      // Find trainer or company user by email
       const trainer = await prisma.trainer.findUnique({
         where: { email }
       });
 
-      const trainingCompany = await prisma.trainingCompany.findUnique({
-        where: { email }
+      const companyUser = await prisma.companyUser.findUnique({
+        where: { email },
+        include: { company: true }
       });
 
-      // If neither trainer nor training company found, return error
-      if (!trainer && !trainingCompany) {
+      // If neither trainer nor company user found, return error
+      if (!trainer && !companyUser) {
         return NextResponse.json(
           { message: 'Kein Konto mit dieser E-Mail gefunden.' },
           { status: 401 }
         );
       }
 
-      const user = trainer || trainingCompany;
-      const userType = trainer ? 'trainer' : 'trainingCompany';
+      const user = trainer || companyUser;
+      const userType = trainer ? 'trainer' : 'companyUser';
       const userId = user!.id;
 
       // Generate a random token
@@ -114,10 +115,10 @@ export async function POST(req: Request) {
             }
           });
         } else {
-          await prisma.trainingCompanyLoginToken.create({
+          await prisma.companyUserLoginToken.create({
             data: {
               token: tokenString,
-              trainingCompanyId: userId,
+              userId: userId,
               expiresAt: expiresAt,
               used: false
             }
@@ -160,7 +161,7 @@ export async function POST(req: Request) {
         );
       }
       
-      // Find token in database (check both trainer and training company tokens)
+      // Find token in database (check trainer and company user tokens)
       const tokenData = await prisma.loginToken.findUnique({
         where: { token },
         include: {
@@ -176,17 +177,21 @@ export async function POST(req: Request) {
         }
       });
 
-      let trainingCompanyTokenData = null;
+      let companyUserTokenData = null;
       if (!tokenData) {
-        trainingCompanyTokenData = await prisma.trainingCompanyLoginToken.findUnique({
+        companyUserTokenData = await prisma.companyUserLoginToken.findUnique({
           where: { token },
           include: {
-            trainingCompany: true
+            user: {
+              include: {
+                company: true
+              }
+            }
           }
         });
       }
 
-      const finalTokenData = tokenData || trainingCompanyTokenData;
+      const finalTokenData = tokenData || companyUserTokenData;
 
       if (!finalTokenData) {
         return NextResponse.json(
@@ -195,8 +200,8 @@ export async function POST(req: Request) {
         );
       }
 
-      const user = tokenData ? finalTokenData.trainer : finalTokenData.trainingCompany;
-      const userType = tokenData ? 'trainer' : 'trainingCompany';
+      const user = tokenData ? finalTokenData.trainer : finalTokenData.user;
+      const userType = tokenData ? 'trainer' : 'companyUser';
       
       // Check if token is expired
       if (new Date() > finalTokenData.expiresAt) {
@@ -219,7 +224,7 @@ export async function POST(req: Request) {
             select: { id: true } // Only select what we need
           });
         } else {
-          await prisma.trainingCompanyLoginToken.update({
+          await prisma.companyUserLoginToken.update({
             where: { token },
             data: {
               usedAt: new Date() // Track when it was last used, but keep it reusable
@@ -253,28 +258,31 @@ export async function POST(req: Request) {
           companyName: trainerData.trainer.companyName || '',
         };
       } else {
-        const companyData = finalTokenData as { trainingCompany: any }; // Type assertion for training company token
+        const userData = finalTokenData as { user: any }; // Type assertion for company user token
         userResponse = {
-          id: companyData.trainingCompany.id,
+          id: userData.user.id,
           userType: 'TRAINING_COMPANY',
-          companyName: companyData.trainingCompany.companyName,
-          firstName: companyData.trainingCompany.firstName,
-          lastName: companyData.trainingCompany.lastName,
-          email: companyData.trainingCompany.email,
-          phone: companyData.trainingCompany.phone,
-          status: companyData.trainingCompany.status,
-          bio: companyData.trainingCompany.bio || '',
-          logo: companyData.trainingCompany.logo || '',
-          website: companyData.trainingCompany.website || '',
-          industry: companyData.trainingCompany.industry || '',
-          employees: companyData.trainingCompany.employees || '',
-          consultantName: companyData.trainingCompany.consultantName || '',
+          companyId: userData.user.companyId,
+          companyName: userData.user.company.companyName,
+          firstName: userData.user.firstName,
+          lastName: userData.user.lastName,
+          email: userData.user.email,
+          phone: userData.user.phone || userData.user.company.phone || '',
+          status: userData.user.company.status,
+          role: userData.user.role, // ADMIN, EDITOR, or VIEWER
+          isActive: userData.user.isActive,
+          bio: userData.user.company.bio || '',
+          logo: userData.user.company.logo || '',
+          website: userData.user.company.website || '',
+          industry: userData.user.company.industry || '',
+          employees: userData.user.company.employees || '',
+          consultantName: userData.user.company.consultantName || '',
         };
       }
 
       // Set cookies for session management (7 days)
       const cookieStore = await cookies();
-      const tokenValue = userType === 'trainer' ? 'trainer_' + user!.id : 'company_' + user!.id;
+      const tokenValue = userType === 'trainer' ? 'trainer_' + user!.id : 'user_' + user!.id;
       cookieStore.set('mr_token', tokenValue, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',

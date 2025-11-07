@@ -84,9 +84,9 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
   // Get expertise level color
   const getLevelColor = (level: ExpertiseLevel): string => {
     switch (level) {
-      case 'GRUNDLAGE': return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'FORTGESCHRITTEN': return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'EXPERTE': return 'bg-green-100 text-green-800 border-green-300';
+      case 'GRUNDLAGE': return 'bg-[#E0E0E0] text-gray-800 border-gray-300';
+      case 'FORTGESCHRITTEN': return 'bg-[#2196F3] text-white border-blue-500';
+      case 'EXPERTE': return 'bg-[#212121] text-white border-gray-700';
       default: return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
@@ -327,33 +327,33 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
               <button
                 type="button"
                 onClick={() => handleLevelSelect('GRUNDLAGE')}
-                className="w-full px-4 py-3 bg-blue-50 border-2 border-blue-300 rounded-lg hover:bg-blue-100 hover:border-blue-400 transition-all text-left"
+                className="w-full px-4 py-3 bg-[#E0E0E0] border-2 border-gray-300 rounded-lg hover:bg-gray-200 hover:border-gray-400 transition-all text-left"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-blue-800">Grundlage</span>
-                  <span className="text-xs text-blue-600 bg-blue-200 px-2 py-1 rounded">Basiskenntnisse</span>
+                  <span className="font-medium text-gray-800">Grundlage</span>
+                  <span className="text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded">Basiskenntnisse</span>
                 </div>
               </button>
               
               <button
                 type="button"
                 onClick={() => handleLevelSelect('FORTGESCHRITTEN')}
-                className="w-full px-4 py-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg hover:bg-yellow-100 hover:border-yellow-400 transition-all text-left"
+                className="w-full px-4 py-3 bg-[#2196F3] border-2 border-blue-500 rounded-lg hover:bg-blue-600 hover:border-blue-600 transition-all text-left"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-yellow-800">Fortgeschritten</span>
-                  <span className="text-xs text-yellow-600 bg-yellow-200 px-2 py-1 rounded">Erweiterte Kenntnisse</span>
+                  <span className="font-medium text-white">Fortgeschritten</span>
+                  <span className="text-xs text-white bg-blue-600 px-2 py-1 rounded">Erweiterte Kenntnisse</span>
                 </div>
               </button>
               
               <button
                 type="button"
                 onClick={() => handleLevelSelect('EXPERTE')}
-                className="w-full px-4 py-3 bg-green-50 border-2 border-green-300 rounded-lg hover:bg-green-100 hover:border-green-400 transition-all text-left"
+                className="w-full px-4 py-3 bg-[#212121] border-2 border-gray-700 rounded-lg hover:bg-gray-800 hover:border-gray-800 transition-all text-left"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-green-800">Experte</span>
-                  <span className="text-xs text-green-600 bg-green-200 px-2 py-1 rounded">Höchste Expertise</span>
+                  <span className="font-medium text-white">Experte</span>
+                  <span className="text-xs text-white bg-gray-800 px-2 py-1 rounded">Höchste Expertise</span>
                 </div>
               </button>
             </div>

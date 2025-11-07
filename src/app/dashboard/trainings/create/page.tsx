@@ -21,6 +21,20 @@ interface Topic {
   name: string;
 }
 
+interface Location {
+  id: number;
+  name: string;
+  type: 'ONLINE' | 'PHYSICAL';
+  onlinePlatform?: string;
+  onlineLink?: string;
+  street?: string;
+  houseNumber?: string;
+  zipCode?: string;
+  city?: string;
+  countryId?: number;
+  country?: { id: number; name: string; code: string };
+}
+
 interface TrainingFormData {
   title: string;
   topicId: string;
@@ -29,7 +43,12 @@ interface TrainingFormData {
   startTime: string;
   endTime: string;
   type: 'ONLINE' | 'HYBRID' | 'VOR_ORT';
-  location: string;
+  locationId?: string; // ID of existing location (if selected)
+  // For ONLINE locations (when creating new)
+  onlinePlatform?: string; // 'ZOOM', 'TEAMS', 'GOOGLE_MEET', 'OTHER'
+  onlineLink?: string;
+  // For PHYSICAL locations (when creating new)
+  locationName?: string; // Name of the physical location
   locationStreet?: string;
   locationHouseNumber?: string;
   locationZipCode?: string;
@@ -64,7 +83,10 @@ export default function CreateTrainingPage() {
     startTime: '',
     endTime: '',
     type: 'ONLINE',
-    location: '',
+    locationId: '',
+    onlinePlatform: 'ZOOM',
+    onlineLink: '',
+    locationName: '',
     locationStreet: '',
     locationHouseNumber: '',
     locationZipCode: '',
@@ -76,6 +98,8 @@ export default function CreateTrainingPage() {
     selectedTrainers: []
   });
   const [countries, setCountries] = useState<Array<{ id: number; name: string; code: string }>>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [useExistingLocation, setUseExistingLocation] = useState(true);
 
   useEffect(() => {
     // Check if user is authenticated and is a company
@@ -88,6 +112,7 @@ export default function CreateTrainingPage() {
     setUser(currentUser);
     loadTopics();
     loadCountries();
+    loadLocations();
     setLoading(false);
   }, [router]);
 
@@ -100,6 +125,18 @@ export default function CreateTrainingPage() {
       }
     } catch (error) {
       console.error('Error loading countries:', error);
+    }
+  };
+
+  const loadLocations = async () => {
+    try {
+      const response = await fetch('/api/locations');
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data.locations || []);
+      }
+    } catch (error) {
+      console.error('Error loading locations:', error);
     }
   };
 
@@ -250,6 +287,33 @@ export default function CreateTrainingPage() {
         }
       }
 
+      // Prepare location data
+      let locationData: any = {};
+
+      if (useExistingLocation && formData.locationId) {
+        // Use existing location
+        locationData.locationId = formData.locationId;
+      } else {
+        // Create new location (one-time address)
+        if (formData.type === 'ONLINE') {
+          // ONLINE location
+          locationData.locationName = 'Online Training';
+          locationData.locationType = 'ONLINE';
+          locationData.onlinePlatform = formData.onlinePlatform || 'ZOOM';
+          locationData.onlineLink = formData.onlineLink || '';
+        } else {
+          // HYBRID or VOR_ORT - PHYSICAL location
+          locationData.locationName = formData.locationName || 
+            (formData.locationCity ? `${formData.locationCity}${formData.locationStreet ? `, ${formData.locationStreet}` : ''}` : 'Vor Ort');
+          locationData.locationType = 'PHYSICAL';
+          locationData.locationStreet = formData.locationStreet;
+          locationData.locationHouseNumber = formData.locationHouseNumber;
+          locationData.locationZipCode = formData.locationZipCode;
+          locationData.locationCity = formData.locationCity;
+          locationData.locationCountryId = formData.locationCountryId;
+        }
+      }
+
       // First create the training
       const trainingResponse = await fetch('/api/trainings', {
         method: 'POST',
@@ -257,10 +321,18 @@ export default function CreateTrainingPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ...formData,
+          title: formData.title,
           topicId: topicId,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          startTime: formData.startTime,
+          endTime: formData.endTime,
+          type: formData.type,
+          participants: formData.participants,
+          dailyRate: formData.dailyRate,
+          description: formData.description,
           companyId: user.id,
-          selectedTrainers: undefined // Don't send selectedTrainers to training creation
+          ...locationData
         }),
       });
 
@@ -269,7 +341,7 @@ export default function CreateTrainingPage() {
 
         // Then send requests to selected trainers
         if (formData.selectedTrainers.length > 0) {
-          await fetch('/api/training-requests', {
+          const requestsResponse = await fetch('/api/training-requests', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -279,6 +351,18 @@ export default function CreateTrainingPage() {
               trainerIds: formData.selectedTrainers
             }),
           });
+
+          if (requestsResponse.ok) {
+            const requestsResult = await requestsResponse.json();
+            if (requestsResult.duplicates && requestsResult.duplicates.length > 0) {
+              // Show warning if there were duplicates
+              if (requestsResult.newRequests && requestsResult.newRequests.length > 0) {
+                alert(requestsResult.message || `${requestsResult.newRequests.length} neue Anfrage(n) gesendet. ${requestsResult.duplicates.length} Trainer wurde(n) bereits zuvor angefragt.`);
+              } else {
+                alert(requestsResult.message || `Alle Trainer wurden bereits zuvor angefragt.`);
+              }
+            }
+          }
         }
 
         router.push('/dashboard/trainings');
@@ -462,27 +546,122 @@ export default function CreateTrainingPage() {
               </select>
             </div>
 
-            {/* Location - Simple text field for ONLINE, detailed fields for HYBRID and VOR_ORT */}
-            <div>
+            {/* Location Selection */}
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {formData.type === 'ONLINE' ? 'Ort (z.B. Online)' : 'Ort (zur Anzeige)'} *
+                Ort auswählen
               </label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder={formData.type === 'ONLINE' ? 'z.B. Online' : 'z.B. Berlin, Büroadresse'}
-              />
+              <div className="flex gap-4 mb-3">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="locationMode"
+                    checked={useExistingLocation}
+                    onChange={() => setUseExistingLocation(true)}
+                    className="mr-2"
+                  />
+                  Vorhandenen Ort verwenden
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="locationMode"
+                    checked={!useExistingLocation}
+                    onChange={() => setUseExistingLocation(false)}
+                    className="mr-2"
+                  />
+                  Neuen Ort eingeben
+                </label>
+              </div>
+
+              {useExistingLocation ? (
+                <select
+                  name="locationId"
+                  value={formData.locationId || ''}
+                  onChange={(e) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      locationId: e.target.value
+                    }));
+                  }}
+                  required={useExistingLocation}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Bitte wählen</option>
+                  {locations
+                    .filter(loc => 
+                      (formData.type === 'ONLINE' && loc.type === 'ONLINE') ||
+                      ((formData.type === 'HYBRID' || formData.type === 'VOR_ORT') && loc.type === 'PHYSICAL')
+                    )
+                    .map((location) => (
+                      <option key={location.id} value={location.id.toString()}>
+                        {location.name} ({location.type === 'ONLINE' ? 'Online' : 'Vor Ort'})
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  {formData.type === 'ONLINE' 
+                    ? 'Geben Sie unten die Online-Plattform-Details ein.'
+                    : 'Geben Sie unten die Adressdetails ein.'}
+                </p>
+              )}
             </div>
 
-            {/* Detailed Location Fields for HYBRID and VOR_ORT */}
-            {(formData.type === 'HYBRID' || formData.type === 'VOR_ORT') && (
+            {/* Online Location Fields (only when creating new location) */}
+            {formData.type === 'ONLINE' && !useExistingLocation && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Online-Plattform *
+                  </label>
+                  <select
+                    name="onlinePlatform"
+                    value={formData.onlinePlatform || 'ZOOM'}
+                    onChange={handleInputChange}
+                    required={!useExistingLocation}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="ZOOM">Zoom</option>
+                    <option value="TEAMS">Microsoft Teams</option>
+                    <option value="GOOGLE_MEET">Google Meet</option>
+                    <option value="OTHER">Andere</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Meeting-Link (optional)
+                  </label>
+                  <input
+                    type="url"
+                    name="onlineLink"
+                    value={formData.onlineLink || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="https://zoom.us/j/..."
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Detailed Location Fields for HYBRID and VOR_ORT (only when creating new location) */}
+            {(formData.type === 'HYBRID' || formData.type === 'VOR_ORT') && !useExistingLocation && (
               <>
                 <div className="md:col-span-2">
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Detaillierte Adresse für Präsenzveranstaltung</h3>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Name des Ortes (optional)
+                  </label>
+                  <input
+                    type="text"
+                    name="locationName"
+                    value={formData.locationName || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="z.B. Büro Berlin, Konferenzraum A"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -493,7 +672,7 @@ export default function CreateTrainingPage() {
                     name="locationStreet"
                     value={formData.locationStreet || ''}
                     onChange={handleInputChange}
-                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    required={!useExistingLocation && (formData.type === 'HYBRID' || formData.type === 'VOR_ORT')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="Musterstraße"
                   />
@@ -507,7 +686,7 @@ export default function CreateTrainingPage() {
                     name="locationHouseNumber"
                     value={formData.locationHouseNumber || ''}
                     onChange={handleInputChange}
-                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    required={!useExistingLocation && (formData.type === 'HYBRID' || formData.type === 'VOR_ORT')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="123"
                   />
@@ -521,7 +700,7 @@ export default function CreateTrainingPage() {
                     name="locationZipCode"
                     value={formData.locationZipCode || ''}
                     onChange={handleInputChange}
-                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    required={!useExistingLocation && (formData.type === 'HYBRID' || formData.type === 'VOR_ORT')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="12345"
                   />
@@ -535,7 +714,7 @@ export default function CreateTrainingPage() {
                     name="locationCity"
                     value={formData.locationCity || ''}
                     onChange={handleInputChange}
-                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    required={!useExistingLocation && (formData.type === 'HYBRID' || formData.type === 'VOR_ORT')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="Berlin"
                   />
@@ -548,7 +727,7 @@ export default function CreateTrainingPage() {
                     name="locationCountryId"
                     value={formData.locationCountryId || ''}
                     onChange={handleInputChange}
-                    required={formData.type === 'HYBRID' || formData.type === 'VOR_ORT'}
+                    required={!useExistingLocation && (formData.type === 'HYBRID' || formData.type === 'VOR_ORT')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="">Bitte wählen</option>

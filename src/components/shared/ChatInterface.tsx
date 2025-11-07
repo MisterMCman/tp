@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { TrainingRequestMessage, FileAttachment } from "@/lib/types";
+import { Message, FileAttachment } from "@/lib/types";
 
 export type Conversation = {
   trainingRequestId: number;
@@ -14,9 +14,9 @@ export type Conversation = {
   trainerName?: string;
   trainingStartDate?: string;
   trainingEndDate?: string;
-  lastMessage: TrainingRequestMessage;
+  lastMessage: Message;
   unreadCount: number;
-  messages: TrainingRequestMessage[];
+  messages: Message[];
 };
 
 interface ChatInterfaceProps {
@@ -122,67 +122,71 @@ export default function ChatInterface({
     <div className="flex h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       {/* Conversations List */}
       <div className="w-1/3 bg-white border-r border-slate-200 shadow-sm flex flex-col overflow-hidden">
-        <div className="p-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg flex-shrink-0">
-          <h1 className="text-xl font-bold tracking-tight">
-            {userType === 'TRAINER' ? 'Nachrichten' : 'Unterhaltungen'}
-          </h1>
-          <p className="text-blue-100 text-sm mt-1 opacity-90">
-            {conversations.length} Unterhaltung{conversations.length !== 1 ? 'en' : ''}
+        <div className="p-6 bg-white border-b border-slate-200 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--ptw-accent-primary)' }}>
+              {userType === 'TRAINER' ? 'Nachrichten' : 'Unterhaltungen'}
+            </h1>
+          </div>
+          <p className="text-sm text-gray-600">
+            <span className="font-semibold">{conversations.length}</span> {conversations.length !== 1 ? 'Unterhaltungen' : 'Unterhaltung'}
           </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50">
+        <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
           {loading ? (
-            <div className="p-4 space-y-3">
+            <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="animate-pulse">
-                  <div className="h-16 bg-slate-200 rounded"></div>
+                  <div className="h-24 bg-white rounded-lg shadow"></div>
                 </div>
               ))}
             </div>
           ) : conversations.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
+            <div className="p-8 text-center text-gray-500">
               <div className="text-6xl mb-4">💬</div>
-              <p className="font-medium text-slate-700 mb-2">Keine Nachrichten vorhanden</p>
-              <p className="text-sm text-slate-500">Ihre Unterhaltungen werden hier angezeigt</p>
+              <p className="font-medium text-gray-700 mb-2">Keine Nachrichten vorhanden</p>
+              <p className="text-sm text-gray-500">Ihre Unterhaltungen werden hier angezeigt</p>
             </div>
           ) : (
             conversations.map((conversation) => (
               <div
                 key={conversation.trainingRequestId}
-                className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-100 transition-all duration-200 ${
+                className={`mb-3 bg-white rounded-lg shadow-sm border cursor-pointer transition-all duration-200 ${
                   selectedConversation?.trainingRequestId === conversation.trainingRequestId
-                    ? 'bg-blue-50 border-l-4 border-l-blue-500 shadow-sm'
-                    : 'hover:shadow-sm'
+                    ? 'border-primary-500 shadow-md ring-2 ring-primary-200'
+                    : 'border-gray-200 hover:shadow-md hover:border-gray-300'
                 }`}
                 onClick={() => onSelectConversation(conversation)}
               >
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-semibold text-slate-800 truncate flex-1 leading-tight">
-                    {conversation.trainingTitle}
-                  </h3>
-                  {conversation.unreadCount > 0 && (
-                    <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-2 font-medium shadow-sm">
-                      {conversation.unreadCount}
+                <div className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-semibold text-gray-900 truncate flex-1 leading-tight text-base">
+                      {conversation.trainingTitle}
+                    </h3>
+                    {conversation.unreadCount > 0 && (
+                      <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-2 font-medium shadow-sm flex-shrink-0">
+                        {conversation.unreadCount}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center mb-2 gap-2">
+                    <p className="text-sm text-gray-600 truncate font-medium flex-1">
+                      {userType === 'TRAINER'
+                        ? conversation.companyName
+                        : conversation.trainerName || 'Trainer'
+                      }
+                    </p>
+                    <span className="text-xs text-gray-500 whitespace-nowrap font-medium flex-shrink-0">
+                      {format(new Date(conversation.lastMessage.createdAt), "dd.MM.yyyy", { locale: de })} - {format(new Date(conversation.lastMessage.createdAt), "HH:mm", { locale: de })}
                     </span>
-                  )}
-                </div>
+                  </div>
 
-                <div className="flex justify-between items-center mb-2 gap-2">
-                  <p className="text-sm text-slate-600 truncate font-medium flex-1">
-                    {userType === 'TRAINER'
-                      ? conversation.companyName
-                      : conversation.trainerName || 'Trainer'
-                    }
+                  <p className="text-sm text-gray-700 truncate leading-relaxed line-clamp-2">
+                    {conversation.lastMessage.message}
                   </p>
-                  <span className="text-xs text-slate-400 whitespace-nowrap font-medium flex-shrink-0">
-                    {format(new Date(conversation.lastMessage.createdAt), "dd.MM.yyyy", { locale: de })} - {format(new Date(conversation.lastMessage.createdAt), "HH:mm", { locale: de })}
-                  </span>
                 </div>
-
-                <p className="text-sm text-slate-500 truncate leading-relaxed">
-                  {conversation.lastMessage.message}
-                </p>
               </div>
             ))
           )}
@@ -249,11 +253,13 @@ export default function ChatInterface({
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                 .map((message) => {
                   const isFromUser = message.senderId === userId && message.senderType === userType;
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const messageWithRequest = message as any;
                   const senderName = isFromUser
                     ? "Sie"
                     : userType === 'TRAINER'
-                      ? message.trainingRequest?.training.company.companyName
-                      : message.trainingRequest?.trainer.firstName + " " + message.trainingRequest?.trainer.lastName;
+                      ? messageWithRequest.trainingRequest?.training?.company?.companyName || "Unbekannt"
+                      : (messageWithRequest.trainingRequest?.trainer?.firstName || "") + " " + (messageWithRequest.trainingRequest?.trainer?.lastName || "") || "Unbekannt";
 
                   return (
                     <div key={message.id} className={`flex mb-4 ${isFromUser ? 'justify-end' : 'justify-start'}`}>

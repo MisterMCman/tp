@@ -37,6 +37,11 @@ export interface TrainingData {
     lastName: string;
     email: string;
     status: string;
+    counterPrice?: number | null;
+    companyCounterPrice?: number | null;
+    trainerAccepted?: boolean;
+    createdAt: string;
+    updatedAt: string;
   }>;
 }
 
@@ -96,11 +101,11 @@ export default function TrainingDetails({
 
   const getStatusClass = (status: string) => {
     switch (status) {
-      case "confirmed": return "bg-green-100 text-green-800";
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      case "completed": return "bg-blue-100 text-blue-800";
-      case "canceled": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "confirmed": return "ptw-badge-accepted";
+      case "pending": return "ptw-badge-pending";
+      case "completed": return "ptw-badge-completed";
+      case "canceled": return "ptw-badge-cancelled";
+      default: return "ptw-badge-pending";
     }
   };
 
@@ -305,28 +310,28 @@ export default function TrainingDetails({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-xl shadow-lg p-8">
+      <div className="min-h-screen" style={{ background: 'var(--ptw-bg-primary)' }}>
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="ptw-dashboard-card p-8">
             <div className="animate-pulse space-y-6">
               <div className="flex justify-between items-start">
                 <div className="space-y-3">
-                  <div className="h-8 bg-slate-200 rounded w-96"></div>
-                  <div className="h-6 bg-slate-200 rounded w-48"></div>
+                  <div className="h-8 rounded w-96" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
+                  <div className="h-6 rounded w-48" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
                 </div>
-                <div className="h-8 bg-slate-200 rounded w-24"></div>
+                <div className="h-8 rounded w-24" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, i) => (
                   <div key={i} className="space-y-2">
-                    <div className="h-4 bg-slate-200 rounded w-20"></div>
-                    <div className="h-6 bg-slate-200 rounded w-32"></div>
+                    <div className="h-4 rounded w-20" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
+                    <div className="h-6 rounded w-32" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
                   </div>
                 ))}
               </div>
               <div className="space-y-3">
-                <div className="h-4 bg-slate-200 rounded w-32"></div>
-                <div className="h-24 bg-slate-200 rounded"></div>
+                <div className="h-4 rounded w-32" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
+                <div className="h-24 rounded" style={{ background: 'var(--ptw-bg-tertiary)' }}></div>
               </div>
             </div>
           </div>
@@ -337,15 +342,15 @@ export default function TrainingDetails({
 
   if (error || !training) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+      <div className="min-h-screen" style={{ background: 'var(--ptw-bg-primary)' }}>
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="ptw-dashboard-card p-8 text-center">
             <div className="text-6xl mb-4">❌</div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Fehler</h2>
-            <p className="text-slate-600 mb-6">{error || "Training konnte nicht gefunden werden"}</p>
+            <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--ptw-text-primary)' }}>Fehler</h2>
+            <p className="mb-6" style={{ color: 'var(--ptw-text-secondary)' }}>{error || "Training konnte nicht gefunden werden"}</p>
             <button
               onClick={() => router.back()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="ptw-button-primary"
             >
               Zurück
             </button>
@@ -356,17 +361,29 @@ export default function TrainingDetails({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen" style={{ background: 'var(--ptw-bg-primary)' }}>
+      <div className="max-w-4xl mx-auto p-6">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-6">
-          <div className="p-6 border-b border-slate-200">
+        <div className="ptw-dashboard-card mb-6">
+          <div className="pb-4 border-b mb-4" style={{ borderColor: 'var(--ptw-border-primary)' }}>
             <div className="flex justify-between items-start">
-              <div>
-                <div className="flex items-center space-x-3 mb-2">
+              <div className="flex-1">
+                <div className="flex items-center space-x-3 mb-4">
                   <button
                     onClick={handleBack}
-                    className="inline-flex items-center space-x-2 hover:bg-slate-100 px-3 py-2 rounded-lg transition-colors text-slate-600 hover:text-slate-800"
+                    className="inline-flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors"
+                    style={{ 
+                      color: 'var(--ptw-text-secondary)',
+                      background: 'transparent'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--ptw-bg-tertiary)';
+                      e.currentTarget.style.color = 'var(--ptw-accent-primary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--ptw-text-secondary)';
+                    }}
                   >
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -374,12 +391,12 @@ export default function TrainingDetails({
                     <span className="text-sm font-medium">Zurück</span>
                   </button>
                 </div>
-                <h1 className="text-3xl font-bold text-slate-800 mb-2">{training.title}</h1>
-                <div className="flex items-center space-x-4">
-                  <span className="inline-block px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800 rounded-full">
+                <h1 className="text-2xl font-bold mb-3" style={{ color: 'var(--ptw-text-primary)' }}>{training.title}</h1>
+                <div className="flex items-center space-x-3 flex-wrap">
+                  <span className="inline-block px-2.5 py-1 text-xs font-medium rounded-full" style={{ background: 'var(--ptw-info-light)', color: 'var(--ptw-info-dark)' }}>
                     {training.topicName}
                   </span>
-                  <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${getStatusClass(training.status)}`}>
+                  <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${getStatusClass(training.status)}`}>
                     {getStatusLabel(training.status)}
                   </span>
                 </div>
@@ -388,40 +405,40 @@ export default function TrainingDetails({
           </div>
 
           {/* Training Details Grid */}
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <span className="block text-sm text-slate-500 font-medium mb-1">Datum</span>
-                <span className="text-lg font-semibold text-slate-800">{formatDate(training.date)}</span>
+          <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="p-4 rounded-lg border" style={{ background: 'var(--ptw-bg-tertiary)', borderColor: 'var(--ptw-border-primary)' }}>
+                <span className="block text-xs font-medium mb-2" style={{ color: 'var(--ptw-text-secondary)' }}>Datum</span>
+                <span className="text-base font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{formatDate(training.date)}</span>
               </div>
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <span className="block text-sm text-slate-500 font-medium mb-1">Zeit</span>
-                <span className="text-lg font-semibold text-slate-800">
+              <div className="p-4 rounded-lg border" style={{ background: 'var(--ptw-bg-tertiary)', borderColor: 'var(--ptw-border-primary)' }}>
+                <span className="block text-xs font-medium mb-2" style={{ color: 'var(--ptw-text-secondary)' }}>Zeit</span>
+                <span className="text-base font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>
                   {formatTime(training.date)} - {formatTime(training.endTime)}
                 </span>
               </div>
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <span className="block text-sm text-slate-500 font-medium mb-1">Ort</span>
-                <span className="text-lg font-semibold text-slate-800">{training.location}</span>
+              <div className="p-4 rounded-lg border" style={{ background: 'var(--ptw-bg-tertiary)', borderColor: 'var(--ptw-border-primary)' }}>
+                <span className="block text-xs font-medium mb-2" style={{ color: 'var(--ptw-text-secondary)' }}>Ort</span>
+                <span className="text-base font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{training.location}</span>
               </div>
-              <div className="bg-slate-50 p-4 rounded-lg">
-                <span className="block text-sm text-slate-500 font-medium mb-1">Teilnehmer</span>
-                <span className="text-lg font-semibold text-slate-800">{training.participants}</span>
+              <div className="p-4 rounded-lg border" style={{ background: 'var(--ptw-bg-tertiary)', borderColor: 'var(--ptw-border-primary)' }}>
+                <span className="block text-xs font-medium mb-2" style={{ color: 'var(--ptw-text-secondary)' }}>Teilnehmer</span>
+                <span className="text-base font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{training.participants}</span>
               </div>
             </div>
 
             {/* Role-specific sections */}
             {userType === 'TRAINER' && training.assignedTrainer && (
-              <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+              <div className="mb-6 p-5 rounded-lg border" style={{ background: 'var(--ptw-info-light)', borderColor: 'var(--ptw-info)' }}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="block text-sm text-blue-600 font-semibold mb-2">Ihre Rolle</span>
-                    <p className="text-2xl font-bold text-slate-800">
+                    <span className="block text-xs font-semibold mb-2" style={{ color: 'var(--ptw-info-dark)' }}>Ihre Rolle</span>
+                    <p className="text-xl font-bold" style={{ color: 'var(--ptw-text-primary)' }}>
                       {training.assignedTrainer.fullName}
                     </p>
-                    <p className="text-sm text-blue-600 mt-1">Zugewiesener Trainer</p>
+                    <p className="text-sm mt-1" style={{ color: 'var(--ptw-info-dark)' }}>Zugewiesener Trainer</p>
                   </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" style={{ color: 'var(--ptw-info-dark)' }} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -430,35 +447,38 @@ export default function TrainingDetails({
 
             {/* Trainer Assignment Section for Companies */}
             {userType === 'TRAINING_COMPANY' && (
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-slate-800 mb-4">Zugewiesener Trainer</h3>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--ptw-text-primary)' }}>Zugewiesener Trainer</h3>
                 {training.assignedTrainer ? (
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 p-6">
+                  <div className="p-5 rounded-lg border" style={{ background: 'var(--ptw-success-light)', borderColor: 'var(--ptw-success)' }}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="block text-sm text-green-600 font-semibold mb-2">Trainer zugewiesen</span>
+                        <span className="block text-xs font-semibold mb-2" style={{ color: 'var(--ptw-success-dark)' }}>Trainer zugewiesen</span>
                         <Link
                           href={`/dashboard/trainer/${training.assignedTrainer.id}`}
-                          className="text-2xl font-bold text-slate-800 hover:text-green-600 hover:underline"
+                          className="text-xl font-bold hover:underline block"
+                          style={{ color: 'var(--ptw-text-primary)' }}
+                          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--ptw-success-dark)'}
+                          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--ptw-text-primary)'}
                         >
                           {training.assignedTrainer.fullName}
                         </Link>
-                        <p className="text-sm text-green-600 mt-1">Klicken Sie auf den Namen, um das Profil anzuzeigen</p>
+                        <p className="text-sm mt-1" style={{ color: 'var(--ptw-success-dark)' }}>Klicken Sie auf den Namen, um das Profil anzuzeigen</p>
                       </div>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" style={{ color: 'var(--ptw-success-dark)' }} viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
                       </svg>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-yellow-50 rounded-xl border border-yellow-200 p-6">
+                  <div className="p-5 rounded-lg border" style={{ background: 'var(--ptw-warning-light)', borderColor: 'var(--ptw-warning)' }}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="block text-sm text-yellow-600 font-semibold mb-2">Kein Trainer zugewiesen</span>
-                        <p className="text-slate-700 mb-4">Dieses Training hat noch keinen zugewiesenen Trainer. Suchen Sie einen passenden Trainer.</p>
+                        <span className="block text-xs font-semibold mb-2" style={{ color: 'var(--ptw-warning-dark)' }}>Kein Trainer zugewiesen</span>
+                        <p className="mb-4" style={{ color: 'var(--ptw-text-primary)' }}>Dieses Training hat noch keinen zugewiesenen Trainer. Suchen Sie einen passenden Trainer.</p>
                         <Link
                           href={`/dashboard/trainer?topic=${encodeURIComponent(training.topicName)}`}
-                          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          className="ptw-button-primary inline-flex items-center"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -466,7 +486,7 @@ export default function TrainingDetails({
                           Trainer suchen
                         </Link>
                       </div>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-600" viewBox="0 0 20 20" fill="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" style={{ color: 'var(--ptw-warning-dark)' }} viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                       </svg>
                     </div>
@@ -477,68 +497,113 @@ export default function TrainingDetails({
 
             {/* Requested Trainers Section for Companies */}
             {userType === 'TRAINING_COMPANY' && training.requestedTrainers && training.requestedTrainers.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-slate-800 mb-4">Angefragte Trainer</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {training.requestedTrainers.map((trainer) => (
-                    <div key={trainer.id} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Link
-                            href={`/dashboard/trainer/${trainer.id}`}
-                            className="text-lg font-semibold text-slate-800 hover:text-blue-600 hover:underline"
-                          >
-                            {trainer.firstName} {trainer.lastName}
-                          </Link>
-                          <p className="text-sm text-slate-600">{trainer.email}</p>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--ptw-text-primary)' }}>Angefragte Trainer</h3>
+                <div className="space-y-3">
+                  {training.requestedTrainers.map((trainer) => {
+                    const getStatusInfo = (status: string) => {
+                      switch (status.toLowerCase()) {
+                        case 'accepted':
+                          return { label: 'Angenommen', bgColor: 'var(--ptw-success-light)', textColor: 'var(--ptw-success-dark)', borderColor: 'var(--ptw-success)' };
+                        case 'pending':
+                          return { label: 'Ausstehend', bgColor: 'var(--ptw-warning-light)', textColor: 'var(--ptw-warning-dark)', borderColor: 'var(--ptw-warning)' };
+                        case 'declined':
+                          return { label: 'Abgelehnt', bgColor: 'var(--ptw-error-light)', textColor: 'var(--ptw-error-dark)', borderColor: 'var(--ptw-error)' };
+                        case 'withdrawn':
+                          return { label: 'Zurückgezogen', bgColor: 'var(--ptw-bg-tertiary)', textColor: 'var(--ptw-text-primary)', borderColor: 'var(--ptw-border-primary)' };
+                        default:
+                          return { label: status, bgColor: 'var(--ptw-bg-tertiary)', textColor: 'var(--ptw-text-primary)', borderColor: 'var(--ptw-border-primary)' };
+                      }
+                    };
+
+                    const statusInfo = getStatusInfo(trainer.status);
+                    const hasCounterOffer = trainer.counterPrice !== null && trainer.counterPrice !== undefined;
+                    const hasCompanyCounter = trainer.companyCounterPrice !== null && trainer.companyCounterPrice !== undefined;
+
+                    return (
+                      <div
+                        key={trainer.id}
+                        className="ptw-dashboard-card p-4 hover:shadow-lg transition-shadow"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                              <Link
+                                href={`/dashboard/trainer/${trainer.id}`}
+                                className="font-semibold hover:underline"
+                                style={{ color: 'var(--ptw-text-primary)' }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--ptw-accent-primary)'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--ptw-text-primary)'}
+                              >
+                                {trainer.firstName} {trainer.lastName}
+                              </Link>
+                              <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full border" style={{ background: statusInfo.bgColor, color: statusInfo.textColor, borderColor: statusInfo.borderColor }}>
+                                {statusInfo.label}
+                              </span>
+                              {trainer.trainerAccepted && trainer.status.toLowerCase() === 'pending' && (
+                                <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full border" style={{ background: 'var(--ptw-info-light)', color: 'var(--ptw-info-dark)', borderColor: 'var(--ptw-info)' }}>
+                                  Trainer hat akzeptiert
+                                </span>
+                              )}
+                            </div>
+                            {trainer.email && (
+                              <p className="text-sm mb-2" style={{ color: 'var(--ptw-text-secondary)' }}>{trainer.email}</p>
+                            )}
+                            {(hasCounterOffer || hasCompanyCounter) && (
+                              <div className="mt-2 space-y-1">
+                                {hasCounterOffer && (
+                                  <p className="text-sm" style={{ color: 'var(--ptw-text-primary)' }}>
+                                    <span className="font-medium">Gegenangebot Trainer:</span> {trainer.counterPrice?.toFixed(2)} €
+                                  </p>
+                                )}
+                                {hasCompanyCounter && (
+                                  <p className="text-sm" style={{ color: 'var(--ptw-text-primary)' }}>
+                                    <span className="font-medium">Gegenangebot Unternehmen:</span> {trainer.companyCounterPrice?.toFixed(2)} €
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          trainer.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
-                          trainer.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {trainer.status === 'ACCEPTED' ? 'Angenommen' :
-                           trainer.status === 'REJECTED' ? 'Abgelehnt' : 'Ausstehend'}
-                        </span>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* Description */}
             {training.description && (
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-slate-800 mb-4">Beschreibung</h3>
-                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
-                  <p className="text-slate-700 leading-relaxed">{training.description}</p>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--ptw-text-primary)' }}>Beschreibung</h3>
+                <div className="ptw-dashboard-card p-5">
+                  <p className="leading-relaxed" style={{ color: 'var(--ptw-text-primary)' }}>{training.description}</p>
                 </div>
               </div>
             )}
 
             {/* Trainer Notes (only for assigned trainers) */}
             {userType === 'TRAINER' && training.trainerNotes && (
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-slate-800 mb-4">Notizen für Sie</h3>
-                <div className="bg-yellow-50 p-6 rounded-xl border border-yellow-200">
-                  <p className="text-yellow-800 leading-relaxed">{training.trainerNotes}</p>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--ptw-text-primary)' }}>Notizen für Sie</h3>
+                <div className="p-5 rounded-lg border" style={{ background: 'var(--ptw-warning-light)', borderColor: 'var(--ptw-warning)' }}>
+                  <p className="leading-relaxed" style={{ color: 'var(--ptw-warning-dark)' }}>{training.trainerNotes}</p>
                 </div>
               </div>
             )}
 
             {/* Materials */}
             {training.materials && training.materials.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-slate-800 mb-4">Materialien</h3>
-                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--ptw-text-primary)' }}>Materialien</h3>
+                <div className="ptw-dashboard-card p-5">
                   <ul className="space-y-3">
                     {training.materials.map((material, index) => (
                       <li key={index} className="flex items-center space-x-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" style={{ color: 'var(--ptw-info-dark)' }} viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
                         </svg>
-                        <span className="text-slate-700">{material}</span>
+                        <span style={{ color: 'var(--ptw-text-primary)' }}>{material}</span>
                       </li>
                     ))}
                   </ul>
@@ -547,12 +612,12 @@ export default function TrainingDetails({
             )}
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap gap-4 pt-6 border-t border-slate-200">
+            <div className="flex flex-wrap gap-4 pt-6 border-t" style={{ borderColor: 'var(--ptw-border-primary)' }}>
               <button
                 onClick={() => downloadCalendarEntry(training)}
-                className="px-6 py-3 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors flex items-center space-x-2"
+                className="ptw-btn ptw-btn-outline inline-flex items-center"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
                 </svg>
                 <span>Kalender hinzufügen</span>
@@ -562,9 +627,9 @@ export default function TrainingDetails({
               {(training.status === "confirmed" || training.status === "completed") && (
                 <button
                   onClick={() => downloadContract(training)}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                  className="ptw-btn ptw-btn-success inline-flex items-center"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
                   <span>Vertrag downloaden</span>
@@ -575,9 +640,9 @@ export default function TrainingDetails({
               {userType === 'TRAINER' && onInquiry && (
                 <button
                   onClick={onInquiry}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                  className="ptw-button-primary inline-flex items-center"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
                   </svg>
                   <span>Rückfrage senden</span>

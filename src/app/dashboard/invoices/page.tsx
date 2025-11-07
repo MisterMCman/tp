@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
 import { getUserData } from '@/lib/session';
+import Link from "next/link";
 
 interface AccountingCredit {
   id: number;
@@ -14,6 +15,10 @@ interface AccountingCredit {
   generatedAt?: string;
   paidAt?: string;
   downloadUrl?: string;
+  trainerName?: string; // For companies: trainer name
+  trainerId?: number; // For companies: trainer ID for linking to profile
+  startDate?: string; // Training start date
+  endDate?: string; // Training end date
 }
 
 interface TrainingRequestData {
@@ -46,6 +51,7 @@ interface TrainingRequestData {
 export default function InvoicesPage() {
   const [credits, setCredits] = useState<AccountingCredit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userType, setUserType] = useState<'TRAINER' | 'TRAINING_COMPANY' | null>(null);
 
   useEffect(() => {
     fetchAccountingCredits();
@@ -69,6 +75,9 @@ export default function InvoicesPage() {
         setLoading(false);
         return;
       }
+
+      // Store user type for conditional rendering
+      setUserType(user.userType as 'TRAINER' | 'TRAINING_COMPANY');
 
       // Fetch accounting credits/invoices from API based on user type
       let apiUrl = '';
@@ -140,25 +149,25 @@ export default function InvoicesPage() {
     // Bio info removed - no longer displayed
 
     if (requestData.trainer.taxId) {
-      doc.text(`Tax ID: ${requestData.trainer.taxId}`, 20, yPosition);
+      doc.text(`Steuer-ID: ${requestData.trainer.taxId}`, 20, yPosition);
     }
 
     // Title
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("ACCOUNTING CREDIT", 20, 100);
+    doc.text("RECHNUNGSGUTSCHRIFT", 20, 100);
 
     // Credit Note Number and Date (right-aligned)
     doc.setFontSize(11);
-    const creditNoteText = `Credit Note No.: ${invoiceNumber}`;
+    const creditNoteText = `Gutschrift-Nr.: ${invoiceNumber}`;
     doc.text(creditNoteText, 20, 110);
     // Date right-aligned, aligned with credit note number
     doc.text(formattedInvoiceDate, 190, 110, { align: 'right' });
 
     // Content
     doc.setFont("helvetica", "normal");
-    doc.text(`Dear ${trainerName},`, 20, 125);
-    doc.text("Please find below the accounting credit for your services:", 20, 135);
+    doc.text(`Sehr geehrte/r ${trainerName},`, 20, 125);
+    doc.text("im Folgenden finden Sie die Rechnungsgutschrift für Ihre Leistungen:", 20, 135);
 
     // Table
     const tableStartY = 150;
@@ -171,8 +180,8 @@ export default function InvoicesPage() {
 
     // Table headers
     doc.text("Pos.", 20, tableStartY);
-    doc.text("Description", 40, tableStartY);
-    doc.text("Amount", 160, tableStartY);
+    doc.text("Beschreibung", 40, tableStartY);
+    doc.text("Betrag", 160, tableStartY);
 
     // Draw line under headers
     doc.line(20, tableStartY + 2, 190, tableStartY + 2);
@@ -184,17 +193,17 @@ export default function InvoicesPage() {
     doc.text("1", 20, row1Y);
     // Use training title, fallback to course title if available
     const trainingTitle = requestData.training.course?.title || requestData.training.title;
-    doc.text(`Training: ${trainingTitle} for ${monthAndYear}`, 40, row1Y);
+    doc.text(`Training: ${trainingTitle} für ${monthAndYear}`, 40, row1Y);
     // Better spacing for the fixed price line
-    doc.text(`Fixed price: ${baseAmountFormatted}`, 40, row1Y + 8);
+    doc.text(`Festpreis: ${baseAmountFormatted}`, 40, row1Y + 8);
     doc.text(baseAmountFormatted, 160, row1Y);
 
     // Base Amount line removed - not needed for single service invoices
 
     // VAT
     const row3Y = row1Y + 20; // More space after service item
-    doc.text("VAT", 40, row3Y);
-    doc.text("VAT excluded", 160, row3Y);
+    doc.text("MwSt.", 40, row3Y);
+    doc.text("MwSt. ausgeschlossen", 160, row3Y);
 
 
     // Draw line above total
@@ -203,7 +212,7 @@ export default function InvoicesPage() {
 
     // Total - with extra space before it
     doc.setFont("helvetica", "bold");
-    doc.text("Total Amount", 40, row4Y + 5);
+    doc.text("Gesamtbetrag", 40, row4Y + 5);
     doc.text(baseAmountFormatted, 160, row4Y + 5);
 
 
@@ -212,15 +221,15 @@ export default function InvoicesPage() {
     // Notes
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.text("Note: VAT is not applicable as per the reverse charge procedure for cross-border services.", 20, row4Y + 20);
+    doc.text("Hinweis: Die MwSt. ist nach dem Reverse-Charge-Verfahren für grenzüberschreitende Dienstleistungen nicht anwendbar.", 20, row4Y + 20);
 
     // Footer text
     doc.setFontSize(11);
-    doc.text("The amount will be transferred to your account. Thank you for your excellent work and", 20, row4Y + 35);
-    doc.text("the pleasant collaboration.", 20, row4Y + 42);
+    doc.text("Der Betrag wird auf Ihr Konto überwiesen. Vielen Dank für Ihre ausgezeichnete Arbeit und", 20, row4Y + 35);
+    doc.text("die angenehme Zusammenarbeit.", 20, row4Y + 42);
 
     // Signature
-    doc.text("Best regards,", 20, row4Y + 57);
+    doc.text("Mit freundlichen Grüßen,", 20, row4Y + 57);
     doc.text("powertowork GmbH", 20, row4Y + 64);
 
     // Company information at the bottom - formatted as a single clean line
@@ -260,8 +269,9 @@ export default function InvoicesPage() {
         return;
       }
 
+      let requestData: TrainingRequestData;
+
       // For trainers: Parse accounting credit number (AC-YYMMDD-01-XXXX)
-      // For companies: Invoice number might be different format (INV-XXXX)
       if (invoiceNumber.startsWith('AC-')) {
         // Trainer accounting credit - fetch training request data
         const parts = invoiceNumber.split('-');
@@ -278,17 +288,21 @@ export default function InvoicesPage() {
           throw new Error('Failed to fetch training request data');
         }
 
-        const requestData: TrainingRequestData = await response.json();
-
-        // Generate and download PDF using jsPDF
-        const doc = generateAccountingCreditPDF(requestData, invoiceNumber);
-        doc.save(`${invoiceNumber}.pdf`);
+        requestData = await response.json();
       } else {
-        // Company invoice - TODO: Implement invoice PDF generation for companies
-        // For now, show a message that invoice download needs to be implemented
-        alert('Invoice PDF generation for companies is not yet implemented. Please contact support.');
-        console.log('Company invoice download requested:', invoiceNumber);
+        // Company invoice - fetch invoice data by invoice number
+        // The invoice links to a training, which has a training request
+        const response = await fetch(`/api/invoices/${encodeURIComponent(invoiceNumber)}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch invoice data');
+        }
+
+        requestData = await response.json();
       }
+
+      // Generate and download PDF using jsPDF (same document for both trainers and companies)
+      const doc = generateAccountingCreditPDF(requestData, invoiceNumber);
+      doc.save(`${invoiceNumber}.pdf`);
 
     } catch (error) {
       console.error('Error downloading credit/invoice:', error);
@@ -394,6 +408,16 @@ export default function InvoicesPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Kurs
                   </th>
+                  {userType === 'TRAINING_COMPANY' && (
+                    <>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Trainer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Trainingsdatum
+                      </th>
+                    </>
+                  )}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Betrag
                   </th>
@@ -419,6 +443,40 @@ export default function InvoicesPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{credit.courseTitle}</div>
                     </td>
+                    {userType === 'TRAINING_COMPANY' && (
+                      <>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {credit.trainerId && credit.trainerName ? (
+                            <Link
+                              href={(() => {
+                                // Preserve any state when linking to trainer profile
+                                const params = new URLSearchParams();
+                                params.set('returnTo', 'invoices');
+                                const queryString = params.toString();
+                                return `/dashboard/trainer/${credit.trainerId}${queryString ? `?${queryString}` : ''}`;
+                              })()}
+                              className="text-sm text-primary-600 hover:text-primary-800 hover:underline font-medium"
+                            >
+                              {credit.trainerName}
+                            </Link>
+                          ) : (
+                            <div className="text-sm text-gray-900">{credit.trainerName || '-'}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {credit.startDate && credit.endDate ? (
+                              <>
+                                {new Date(credit.startDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                {credit.startDate !== credit.endDate && (
+                                  <> - {new Date(credit.endDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</>
+                                )}
+                              </>
+                            ) : '-'}
+                          </div>
+                        </td>
+                      </>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {formatAmount(credit.amount)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { clearSession, getUserData, getToken } from "@/lib/session";
 import Link from "next/link";
@@ -41,6 +41,7 @@ export default function DashboardLayout({
   const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasInitializedRef = useRef(false);
 
   const handleLogout = async () => {
     try {
@@ -68,10 +69,17 @@ export default function DashboardLayout({
   };
 
   useEffect(() => {
+    const token = searchParams.get('token');
+    
+    // Only prevent duplicate initialization if we've already initialized and there's no token change
+    // This allows token-based login to work properly
+    if (hasInitializedRef.current && !token) {
+      return;
+    }
+    
     const init = async () => {
       try {
         // Check if we have a token in URL - let the page handle authentication
-        const token = searchParams.get('token');
         console.log('Layout: Token in URL:', !!token);
 
         if (token) {
@@ -79,16 +87,21 @@ export default function DashboardLayout({
           // Don't set user data or show loading, let page handle it
           console.log('Layout: Token detected, letting page handle authentication');
           setLoading(false);
+          // Don't set hasInitializedRef here - allow token-based login to work
           return;
         }
 
         // No token - check if we have existing session (works for both trainers and companies)
-        const userData = getUserData();
-        if (userData) {
-          console.log('Layout: Found existing session, setting user');
-          setUser(userData as unknown as User);
-        } else {
-          console.log('Layout: No session found');
+        // Only do this once to prevent duplicate initialization
+        if (!hasInitializedRef.current) {
+          const userData = getUserData();
+          if (userData) {
+            console.log('Layout: Found existing session, setting user');
+            setUser(userData as unknown as User);
+          } else {
+            console.log('Layout: No session found');
+          }
+          hasInitializedRef.current = true;
         }
       } catch (error) {
         console.error('Layout: Error during init:', error);
@@ -108,7 +121,17 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <div className="ptw-sidebar w-64">
         <div className="ptw-sidebar-header">
-          <h2 className="font-bold">TRAINER PORTAL</h2>
+          {user?.userType === 'TRAINING_COMPANY' && user.logo ? (
+            <div className="mb-3">
+              <img
+                src={user.logo.startsWith('http') || user.logo.startsWith('/api/images/') ? user.logo : `/api/images/${user.logo.split('/').pop()}`}
+                alt={user.companyName || 'Company Logo'}
+                className="max-h-12 max-w-full object-contain"
+              />
+            </div>
+          ) : (
+            <h2 className="font-bold">TRAINER PORTAL</h2>
+          )}
           <p className="text-sm">
             {user?.userType === 'TRAINER'
               ? `${user.firstName} ${user.lastName}`
@@ -118,11 +141,6 @@ export default function DashboardLayout({
           {user?.userType === 'TRAINER' && user.dailyRate && (
             <p className="text-xs mt-1" style={{ color: 'var(--ptw-accent-primary)' }}>
               €{user.dailyRate}/Tag
-            </p>
-          )}
-          {user?.userType === 'TRAINING_COMPANY' && user.industry && (
-            <p className="text-xs mt-1" style={{ color: 'var(--ptw-accent-primary)' }}>
-              {user.industry}
             </p>
           )}
         </div>
@@ -209,6 +227,34 @@ export default function DashboardLayout({
             </svg>
             TRAININGS
           </Link>
+          {user?.userType === 'TRAINING_COMPANY' && (
+            <Link
+              href="/dashboard/locations"
+              className={`ptw-nav-item ${pathname.startsWith("/dashboard/locations") ? "active" : ""}`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              ORTE
+            </Link>
+          )}
           <Link
             href="/dashboard/requests"
             className={`ptw-nav-item ${pathname === "/dashboard/requests" ? "active" : ""}`}

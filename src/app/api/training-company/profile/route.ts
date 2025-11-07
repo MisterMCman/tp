@@ -16,17 +16,20 @@ export async function GET() {
       );
     }
 
+    // Get company ID from CompanyUser (companyId) or fallback to id for legacy support
+    const companyId = (currentUser.companyId || currentUser.id) as number;
+    
     // Fetch training company data with country relation
-    console.log('[Training Company Profile GET] Fetching company with ID:', currentUser.id);
+    console.log('[Training Company Profile GET] Fetching company with ID:', companyId);
     const company = await prisma.trainingCompany.findUnique({
-      where: { id: currentUser.id as number },
+      where: { id: companyId },
       include: {
         country: true
       }
     });
 
     if (!company) {
-      console.log('[Training Company Profile GET] Company not found for ID:', currentUser.id);
+      console.log('[Training Company Profile GET] Company not found for ID:', companyId);
       return NextResponse.json(
         { message: 'Unternehmen nicht gefunden' },
         { status: 404 }
@@ -34,6 +37,19 @@ export async function GET() {
     }
 
     console.log('[Training Company Profile GET] Found company:', company.companyName);
+    
+    // Get the current CompanyUser to include role and other user-specific data
+    const currentUserId = currentUser.id as number;
+    const companyUser = await prisma.companyUser.findUnique({
+      where: { id: currentUserId },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+        companyId: true
+      }
+    });
+    
     return NextResponse.json({
       company: {
         id: company.id,
@@ -50,7 +66,7 @@ export async function GET() {
         country: company.country,
         domain: company.domain,
         bio: company.bio,
-        logo: company.logo,
+        logo: company.logo ? (company.logo.startsWith('http') || company.logo.startsWith('/api/images/') ? company.logo : `/api/images/${company.logo.split('/').pop()}`) : null,
         website: company.website,
         industry: company.industry,
         employees: company.employees,
@@ -62,7 +78,11 @@ export async function GET() {
         taxId: company.taxId,
         tags: company.tags,
         onboardingStatus: company.onboardingStatus,
-        status: company.status
+        status: company.status,
+        // Include CompanyUser specific fields
+        role: companyUser?.role || 'ADMIN', // Default to ADMIN for legacy support
+        isActive: companyUser?.isActive ?? true,
+        companyId: companyUser?.companyId || company.id
       }
     });
 
@@ -82,6 +102,14 @@ export async function PATCH(req: Request) {
     if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
       return NextResponse.json(
         { message: 'Nicht autorisiert oder kein Unternehmensaccount' },
+        { status: 403 }
+      );
+    }
+    
+    // Only ADMIN can edit company data
+    if (currentUser.role !== 'ADMIN') {
+      return NextResponse.json(
+        { message: 'Nur Administratoren können Unternehmensdaten bearbeiten' },
         { status: 403 }
       );
     }
@@ -120,8 +148,18 @@ export async function PATCH(req: Request) {
       );
     }
 
+    // Get company ID from CompanyUser (companyId) or fallback to id for legacy support
+    const companyId = (currentUser.companyId || currentUser.id) as number;
+    
     // Check if email is already taken by another user (excluding current user)
     const existingUser = await prisma.trainer.findFirst({
+      where: {
+        email,
+        id: { not: currentUser.id }
+      }
+    });
+
+    const existingCompanyUser = await prisma.companyUser.findFirst({
       where: {
         email,
         id: { not: currentUser.id }
@@ -131,11 +169,11 @@ export async function PATCH(req: Request) {
     const existingCompany = await prisma.trainingCompany.findFirst({
       where: {
         email,
-        id: { not: currentUser.id }
+        id: { not: companyId }
       }
     });
 
-    if (existingUser || existingCompany) {
+    if (existingUser || existingCompanyUser || existingCompany) {
       return NextResponse.json(
         { message: 'Diese E-Mail-Adresse ist bereits vergeben.' },
         { status: 409 }
@@ -144,7 +182,7 @@ export async function PATCH(req: Request) {
 
     // Update training company
     const updatedCompany = await prisma.trainingCompany.update({
-      where: { id: currentUser.id },
+      where: { id: companyId },
       data: {
         companyName,
         firstName: firstName || null,

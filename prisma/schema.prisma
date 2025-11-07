@@ -16,7 +16,7 @@ model Country {
   updatedAt         DateTime          @updatedAt
   trainers          Trainer[]
   trainingCompanies TrainingCompany[]
-  trainingLocations Training[]        @relation("TrainingLocationCountry")
+  locations         Location[]
 }
 
 model Trainer {
@@ -41,6 +41,8 @@ model Trainer {
   countryId            Int? // Reference to Country
   country              Country?                @relation(fields: [countryId], references: [id])
   travelRadius         Int? // Travel radius in km from trainer's address
+  latitude             Float? // Latitude of trainer's address (for distance calculations)
+  longitude            Float? // Longitude of trainer's address (for distance calculations)
   offeredTrainingTypes TrainerTrainingType[] // Types of training the trainer offers (ONLINE, HYBRID, VOR_ORT)
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
@@ -59,10 +61,10 @@ model TrainingCompany {
   id               Int                         @id @default(autoincrement())
   userType         UserType                    @default(TRAINING_COMPANY)
   companyName      String // Company name
-  firstName        String? // Contact person first name
-  lastName         String? // Contact person last name
-  email            String                      @unique
-  phone            String
+  firstName        String? // Contact person first name (legacy, use users table)
+  lastName         String? // Contact person last name (legacy, use users table)
+  email            String?                      @unique // Legacy field - DO NOT USE for authentication. All logins must use CompanyUser.email
+  phone            String? // Legacy phone (use users table)
   street           String? // Straße
   houseNumber      String? // Hausnummer
   zipCode          String? // PLZ
@@ -84,24 +86,42 @@ model TrainingCompany {
   country          Country?                    @relation(fields: [countryId], references: [id])
   createdAt        DateTime                    @default(now())
   updatedAt        DateTime                    @updatedAt
-  loginTokens      TrainingCompanyLoginToken[]
   trainings        Training[]
+  users            CompanyUser[] // Users associated with this company
+  locations        Location[] // Reusable locations owned by this company
 
   @@index([countryId], map: "TrainingCompany_countryId_fkey")
 }
 
-model TrainingCompanyLoginToken {
-  id                Int             @id @default(autoincrement())
-  token             String          @unique
-  trainingCompanyId Int
-  trainingCompany   TrainingCompany @relation(fields: [trainingCompanyId], references: [id])
-  createdAt         DateTime        @default(now())
-  expiresAt         DateTime
-  // Note: Tokens are now reusable within expiration period
-  used              Boolean         @default(false) // For future use, currently not enforced
-  usedAt            DateTime? // Tracks last usage timestamp
+model CompanyUser {
+  id               Int                         @id @default(autoincrement())
+  email            String                      @unique
+  firstName        String
+  lastName         String
+  phone            String?
+  role             CompanyUserRole             @default(EDITOR)
+  isActive         Boolean                     @default(true)
+  companyId        Int
+  company          TrainingCompany             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  loginTokens      CompanyUserLoginToken[]
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
 
-  @@index([trainingCompanyId], map: "TrainingCompanyLoginToken_trainingCompanyId_fkey")
+  @@index([companyId], map: "CompanyUser_companyId_fkey")
+  @@index([email], map: "CompanyUser_email_idx")
+}
+
+model CompanyUserLoginToken {
+  id        Int          @id @default(autoincrement())
+  token     String       @unique
+  userId    Int
+  user      CompanyUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  expiresAt DateTime
+  used      Boolean      @default(false)
+  usedAt    DateTime?
+
+  @@index([userId], map: "CompanyUserLoginToken_userId_fkey")
 }
 
 model LoginToken {
@@ -248,6 +268,12 @@ enum UserType {
   TRAINING_COMPANY
 }
 
+enum CompanyUserRole {
+  ADMIN    // Can manage company and all users
+  EDITOR   // Can use all features but only edit own data
+  VIEWER   // Can only view data, cannot make requests or change data (except own user details)
+}
+
 enum TrainerStatus {
   ACTIVE
   INACTIVE
@@ -300,6 +326,38 @@ enum TopicSuggestionStatus {
   REJECTED
 }
 
+model Location {
+  id                  Int               @id @default(autoincrement())
+  name                String // Display name (e.g., "Zoom Meeting", "Microsoft Teams", "Berlin Office")
+  type                LocationType      @default(ONLINE) // ONLINE, PHYSICAL
+  companyId           Int? // If set, this is a reusable location owned by a company
+  company             TrainingCompany?  @relation(fields: [companyId], references: [id])
+  // For ONLINE locations
+  onlinePlatform      String? // "ZOOM", "TEAMS", "GOOGLE_MEET", "OTHER"
+  onlineLink          String? // Meeting link or platform identifier
+  // For PHYSICAL locations
+  street              String?
+  houseNumber         String?
+  zipCode             String?
+  city                String?
+  countryId           Int?
+  country             Country?          @relation(fields: [countryId], references: [id])
+  latitude            Float? // Latitude for distance calculations (only for PHYSICAL)
+  longitude           Float? // Longitude for distance calculations (only for PHYSICAL)
+  description         String?           @db.Text
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  trainings           Training[] // Trainings using this location
+
+  @@index([countryId])
+  @@index([companyId])
+}
+
+enum LocationType {
+  ONLINE
+  PHYSICAL
+}
+
 model Training {
   id                  Int               @id @default(autoincrement())
   courseId            Int? // Reference to Course template
@@ -314,14 +372,8 @@ model Training {
   startTime           String // Format: "HH:mm"
   endTime             String // Format: "HH:mm"
   type                TrainingType      @default(ONLINE) // Training type: ONLINE, HYBRID, or VOR_ORT
-  location            String // General location string (for display/backward compatibility)
-  // Detailed location fields for HYBRID and VOR_ORT types
-  locationStreet      String? // Street address for physical location
-  locationHouseNumber String? // House number for physical location
-  locationZipCode     String? // ZIP code for physical location
-  locationCity        String? // City for physical location
-  locationCountryId   Int? // Country for physical location
-  locationCountry     Country?          @relation("TrainingLocationCountry", fields: [locationCountryId], references: [id])
+  locationId          Int? // Reference to Location
+  location            Location?         @relation(fields: [locationId], references: [id])
   participantCount    Int // Number of participants
   dailyRate           Float
   description         String?           @db.Text
@@ -335,7 +387,7 @@ model Training {
   @@index([courseId], map: "Training_courseId_fkey")
   @@index([companyId], map: "Training_companyId_fkey")
   @@index([topicId], map: "Training_topicId_fkey")
-  @@index([locationCountryId], map: "Training_locationCountryId_fkey")
+  @@index([locationId])
 }
 
 model TrainingRequest {

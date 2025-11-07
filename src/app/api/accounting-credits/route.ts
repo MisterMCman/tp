@@ -116,7 +116,11 @@ export async function GET(request: NextRequest) {
           createdAt: invoice.createdAt.toISOString(),
           generatedAt: invoice.invoiceDate?.toISOString() || invoice.createdAt.toISOString(),
           paidAt: invoice.paidDate?.toISOString(),
-          downloadUrl: invoice.invoiceNumber ? `#download-${invoice.invoiceNumber}` : undefined
+          downloadUrl: invoice.invoiceNumber ? `#download-${invoice.invoiceNumber}` : undefined,
+          trainerName: invoice.trainer ? `${invoice.trainer.firstName} ${invoice.trainer.lastName}` : undefined,
+          trainerId: invoice.trainer?.id,
+          startDate: invoice.training?.startDate?.toISOString(),
+          endDate: invoice.training?.endDate?.toISOString()
         };
       });
 

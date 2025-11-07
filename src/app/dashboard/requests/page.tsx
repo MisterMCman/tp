@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import jsPDF from 'jspdf';
 import { getUserData, getTrainerData, getCompanyData } from "../../../lib/session";
+import Button from "@/components/ui/Button";
+import StatusBadge from "@/components/ui/StatusBadge";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 interface TrainingRequest {
   id: number;
@@ -91,6 +94,9 @@ export default function RequestsPage() {
   const [inquiryMessage, setInquiryMessage] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Ref to prevent duplicate fetches (React Strict Mode in development)
+  const hasFetchedRef = useRef(false);
 
   // Sync filter with URL parameter when URL changes
   useEffect(() => {
@@ -102,6 +108,11 @@ export default function RequestsPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    // Prevent duplicate fetches in React Strict Mode
+    if (hasFetchedRef.current) {
+      return;
+    }
+    hasFetchedRef.current = true;
     fetchRequests();
   }, []);
 
@@ -1027,20 +1038,20 @@ Mit freundlichen Grüßen
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">
-        {userType === 'TRAINER' ? 'Meine Trainingsanfragen' : 'Trainingsanfragen'}
-      </h1>
+      <div className="ptw-dashboard-header">
+        <h1>{userType === 'TRAINER' ? 'MEINE TRAININGSANFRAGEN' : 'TRAININGSANFRAGEN'}</h1>
+      </div>
       
       {/* Filter/Search */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
+      <div className="ptw-dashboard-card mb-6">
         <div className="flex flex-col md:flex-row justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4 md:mb-0">Filter nach Status</h2>
+          <h2 className="text-lg font-semibold mb-4 md:mb-0" style={{ color: 'var(--ptw-accent-primary)' }}>Filter nach Status</h2>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => handleStatusFilterChange("all")}
               className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
                 statusFilter === "all"
-                ? "bg-gray-800 text-white"
+                ? "bg-primary-600 text-white"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -1050,8 +1061,8 @@ Mit freundlichen Grüßen
               onClick={() => handleStatusFilterChange("pending")}
               className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
                 statusFilter === "pending"
-                ? "bg-yellow-600 text-white"
-                : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                ? "bg-yellow-500 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               Offen ({getRequestCount("pending")})
@@ -1061,7 +1072,7 @@ Mit freundlichen Grüßen
               className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
                 statusFilter === "accepted"
                 ? "bg-green-600 text-white"
-                : "bg-green-100 text-green-800 hover:bg-green-200"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               Angenommen ({getRequestCount("accepted")})
@@ -1071,7 +1082,7 @@ Mit freundlichen Grüßen
               className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
                 statusFilter === "rejected"
                 ? "bg-red-600 text-white"
-                : "bg-red-100 text-red-800 hover:bg-red-200"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               Abgelehnt ({getRequestCount("rejected")})
@@ -1080,8 +1091,8 @@ Mit freundlichen Grüßen
               onClick={() => handleStatusFilterChange("abgesagt")}
               className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
                 statusFilter === "abgesagt"
-                ? "bg-orange-600 text-white"
-                : "bg-orange-100 text-orange-800 hover:bg-orange-200"
+                ? "bg-red-600 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               Abgesagt ({getRequestCount("abgesagt")})
@@ -1090,8 +1101,8 @@ Mit freundlichen Grüßen
               onClick={() => handleStatusFilterChange("completed")}
               className={`px-4 py-2 rounded-md font-medium text-sm transition-colors duration-200 ${
                 statusFilter === "completed"
-                ? "bg-gray-600 text-white"
-                : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                ? "bg-black text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               Abgeschlossen ({getRequestCount("completed")})
@@ -1101,26 +1112,22 @@ Mit freundlichen Grüßen
       </div>
       
       {loading ? (
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="animate-pulse space-y-4">
-            <div className="h-12 bg-gray-200 rounded"></div>
-            <div className="h-12 bg-gray-200 rounded"></div>
-            <div className="h-12 bg-gray-200 rounded"></div>
-          </div>
+        <div className="ptw-dashboard-card flex items-center justify-center min-h-[400px]">
+          <LoadingSpinner size="lg" text="Anfragen werden geladen..." />
         </div>
       ) : filteredRequests.length > 0 ? (
         <div className="grid grid-cols-1 gap-4">
           {filteredRequests.map((request) => (
-            <div key={request.id} className={`rounded-lg shadow overflow-hidden ${
+            <div key={request.id} className={`ptw-dashboard-card overflow-hidden transition-all hover:shadow-lg ${
               request.status === "pending" 
-                ? "bg-yellow-50 border-2 border-yellow-200" 
-                : "bg-white"
+                ? "ptw-card-pending" 
+                : ""
             }`}>
               <div className="p-5 border-b">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold">{request.courseTitle}</h3>
-                    <span className="inline-block mt-1 px-2 py-1 text-xs font-medium rounded-full bg-primary-100 text-primary-800">
+                    <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--ptw-text-primary)' }}>{request.courseTitle}</h3>
+                    <span className="inline-block px-2.5 py-1 text-xs font-medium rounded-full" style={{ background: 'var(--ptw-info-light)', color: 'var(--ptw-info-dark)' }}>
                       {request.topicName}
                     </span>
                     {/* Show trainer info for companies, company info for trainers */}
@@ -1128,13 +1135,22 @@ Mit freundlichen Grüßen
                       <div className="mt-2 text-sm text-gray-600">
                         <span className="font-medium">Trainer: </span>
                         <Link
-                          href={`/dashboard/trainer/${request.trainer.id}`}
+                          href={(() => {
+                            // Preserve status filter when linking to trainer profile
+                            const params = new URLSearchParams();
+                            if (statusFilter && statusFilter !== 'all') {
+                              params.set('status', statusFilter);
+                            }
+                            params.set('returnTo', 'requests');
+                            const queryString = params.toString();
+                            return `/dashboard/trainer/${request.trainer.id}${queryString ? `?${queryString}` : ''}`;
+                          })()}
                           className="text-blue-600 hover:text-blue-800 hover:underline"
                         >
                           {request.trainer.firstName} {request.trainer.lastName}
                         </Link>
                         {request.trainer.email && (
-                          <span className="text-gray-500 ml-2">({request.trainer.email})</span>
+                          <span className="text-gray-600 ml-2">({request.trainer.email})</span>
                         )}
                       </div>
                     )}
@@ -1146,16 +1162,22 @@ Mit freundlichen Grüßen
                     )}
                   </div>
                   <div className="text-right ml-4 flex-shrink-0">
-                    <span className="block font-medium text-lg text-gray-900">
-                      {formatCurrency(request.counterPrice || request.proposedPrice)}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {request.counterPrice ? "Gegenvorschlag" : "Tageshonorar"}
-                    </span>
-                    {request.counterPrice && (
-                      <div className="text-sm text-gray-400 mt-1">
-                        Original: {formatCurrency(request.originalPrice)}
-                      </div>
+                    {request.counterPrice ? (
+                      <>
+                        <span className="block font-medium text-lg text-gray-900">
+                          {formatCurrency(request.counterPrice)}
+                        </span>
+                        <span className="text-sm text-gray-700 font-medium">
+                          Gegenvorschlag
+                        </span>
+                        <div className="text-sm text-gray-600 mt-1">
+                          Original: {formatCurrency(request.originalPrice)}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="block font-medium text-lg text-gray-900">
+                        {formatCurrency(request.proposedPrice)}
+                      </span>
                     )}
                     {request.companyCounterPrice && (
                       <div className="text-sm text-purple-600 mt-1 font-medium">
@@ -1171,101 +1193,87 @@ Mit freundlichen Grüßen
                 </div>
               </div>
               
-              <div className="px-5 py-3 bg-gray-50">
+              <div className="px-5 py-3 border-t" style={{ background: 'var(--ptw-bg-tertiary)' }}>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <span className="block text-xs text-gray-500">Datum</span>
-                    <span className="font-medium">{formatDate(request.date)}</span>
+                    <span className="block text-xs font-medium mb-1" style={{ color: 'var(--ptw-text-secondary)' }}>Datum</span>
+                    <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{formatDate(request.date)}</span>
                   </div>
                   <div>
-                    <span className="block text-xs text-gray-500">Zeit</span>
-                    <span className="font-medium">{formatTime(request.date)} - {formatTime(request.endTime)}</span>
+                    <span className="block text-xs font-medium mb-1" style={{ color: 'var(--ptw-text-secondary)' }}>Zeit</span>
+                    <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{formatTime(request.date)} - {formatTime(request.endTime)}</span>
                   </div>
                   <div>
-                    <span className="block text-xs text-gray-500">Ort</span>
-                    <span className="font-medium">{request.location}</span>
+                    <span className="block text-xs font-medium mb-1" style={{ color: 'var(--ptw-text-secondary)' }}>Ort</span>
+                    <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{request.location}</span>
                   </div>
                   <div>
-                    <span className="block text-xs text-gray-500">Teilnehmer</span>
-                    <span className="font-medium">{request.participants}</span>
+                    <span className="block text-xs font-medium mb-1" style={{ color: 'var(--ptw-text-secondary)' }}>Teilnehmer</span>
+                    <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{request.participants}</span>
                   </div>
                 </div>
               </div>
               
-              <div className="px-5 py-3 bg-gray-100 text-sm text-gray-600">
+              <div className="px-5 py-3 border-t text-sm" style={{ background: 'var(--ptw-bg-quaternary)' }}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <span className="block text-xs text-gray-500">Erstellt am</span>
-                    <span className="font-medium">{formatDateTime(request.createdAt)}</span>
+                    <span className="block text-xs font-medium mb-1" style={{ color: 'var(--ptw-text-secondary)' }}>Erstellt am</span>
+                    <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{formatDateTime(request.createdAt)}</span>
                   </div>
                   <div>
-                    <span className="block text-xs text-gray-500">Zuletzt geändert</span>
-                    <span className="font-medium">{formatDateTime(request.updatedAt)}</span>
+                    <span className="block text-xs font-medium mb-1" style={{ color: 'var(--ptw-text-secondary)' }}>Zuletzt geändert</span>
+                    <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>{formatDateTime(request.updatedAt)}</span>
                   </div>
                 </div>
               </div>
               
               <div className="p-5 flex justify-between items-center">
                 <div>
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                    request.status === "pending" 
-                    ? "bg-yellow-100 text-yellow-800" 
-                    : request.status === "accepted" 
-                    ? "bg-green-100 text-green-800" 
-                    : request.status === "rejected"
-                    ? "bg-red-100 text-red-800"
-                    : request.status === "abgesagt"
-                    ? "bg-orange-100 text-orange-800"
-                    : "bg-gray-100 text-gray-800"
-                  }`}>
-                    {request.status === "pending" 
-                      ? "Offen" 
-                      : request.status === "accepted" 
-                      ? "Angenommen" 
-                      : request.status === "rejected"
-                      ? "Abgelehnt"
-                      : request.status === "abgesagt"
-                      ? "Abgesagt"
-                      : "Abgeschlossen"}
-                  </span>
+                  <StatusBadge status={request.status === "abgesagt" ? "cancelled" : request.status} />
                 </div>
                 
-                <div className="flex space-x-2">
+                <div className="flex flex-wrap gap-2">
                   {request.status === "pending" && userType === 'TRAINER' && (
                     <>
                       {/* If company has countered (companyCounterPrice exists), trainer can accept company's counter */}
                       {request.companyCounterPrice && !request.trainerAccepted && (
-                        <button
+                        <Button
+                          variant="success"
+                          size="sm"
                           onClick={() => {
                             setActiveRequest(request);
                             handleAcceptClick();
                           }}
-                          className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                          icon={
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          }
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
                           Gegenvorschlag annehmen
-                        </button>
+                        </Button>
                       )}
                       {/* Trainer can only accept original offer if they haven't made a counter and haven't already accepted */}
                       {!request.counterPrice && !request.trainerAccepted && !request.companyCounterPrice && (
-                        <button
+                        <Button
+                          variant="success"
+                          size="sm"
                           onClick={() => {
                             setActiveRequest(request);
                             handleAcceptClick();
                           }}
-                          className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                          icon={
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          }
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
                           Annehmen
-                        </button>
+                        </Button>
                       )}
                       {/* Show waiting message only if trainer has accepted OR if trainer made counter but company hasn't responded yet */}
                       {request.trainerAccepted && (
-                        <span className="px-3 py-1 bg-gray-100 border border-gray-300 rounded text-sm font-medium text-gray-500 flex items-center cursor-not-allowed" title="Sie haben bereits zugesagt. Bitte warten Sie auf die Antwort der Firma.">
+                        <span className="px-3 py-1.5 bg-gray-200 border border-gray-400 rounded text-sm font-semibold text-gray-800 flex items-center cursor-not-allowed" title="Sie haben bereits zugesagt. Bitte warten Sie auf die Antwort der Firma.">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                           </svg>
@@ -1273,155 +1281,194 @@ Mit freundlichen Grüßen
                         </span>
                       )}
                       {request.counterPrice && !request.companyCounterPrice && !request.trainerAccepted && (
-                        <span className="px-3 py-1 bg-gray-100 border border-gray-300 rounded text-sm font-medium text-gray-500 flex items-center cursor-not-allowed" title="Sie haben einen Gegenvorschlag gemacht. Bitte warten Sie auf die Antwort der Firma.">
+                        <span className="px-3 py-1.5 bg-gray-200 border border-gray-400 rounded text-sm font-semibold text-gray-800 flex items-center cursor-not-allowed" title="Sie haben einen Gegenvorschlag gemacht. Bitte warten Sie auf die Antwort der Firma.">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                           </svg>
                           Warten auf Antwort
                         </span>
                       )}
-                      <button
+                      <Button
+                        variant="danger"
+                        size="sm"
                         onClick={() => handleReject(request.id)}
-                        className="px-3 py-1 bg-red-50 border border-red-300 rounded text-sm font-medium text-red-700 hover:bg-red-100 flex items-center"
+                        icon={
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        }
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
                         Ablehnen
-                      </button>
+                      </Button>
                       {/* Counter offer button - available if trainer hasn't accepted, and either no counter yet OR company has countered */}
                       {!request.trainerAccepted && (
-                        <button
+                        <Button
+                          variant="warning"
+                          size="sm"
                           onClick={() => {
                             setActiveRequest(request);
                             setCounterPrice(request.counterPrice?.toString() || "");
                             setShowModal(true);
                           }}
-                          className="px-3 py-1 bg-yellow-50 border border-yellow-300 rounded text-sm font-medium text-yellow-700 hover:bg-yellow-100 flex items-center"
+                          icon={
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
+                            </svg>
+                          }
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
-                          </svg>
                           {request.companyCounterPrice ? "Neuer Gegenvorschlag" : "Gegenvorschlag"}
-                        </button>
+                        </Button>
                       )}
                     </>
                   )}
                   {request.status === "pending" && userType === 'TRAINING_COMPANY' && request.counterPrice && (
                     <>
-                      <button
+                      <Button
+                        variant="danger"
+                        size="sm"
                         onClick={() => handleReject(request.id)}
-                        className="px-3 py-1 bg-red-50 border border-red-300 rounded text-sm font-medium text-red-700 hover:bg-red-100 flex items-center"
+                        icon={
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        }
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
                         Gegenvorschlag ablehnen
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="warning"
+                        size="sm"
                         onClick={() => {
                           setActiveRequest(request);
                           setCompanyCounterPrice(request.companyCounterPrice?.toString() || "");
                           setShowModal(true);
                         }}
-                        className="px-3 py-1 bg-yellow-50 border border-yellow-300 rounded text-sm font-medium text-yellow-700 hover:bg-yellow-100 flex items-center"
+                        icon={
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
+                          </svg>
+                        }
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
-                        </svg>
                         Gegenvorschlag senden
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="success"
+                        size="sm"
                         onClick={() => {
                           setActiveRequest(request);
                           handleAccept(request.id);
                         }}
-                        className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                        icon={
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        }
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
                         Gegenvorschlag annehmen
-                      </button>
+                      </Button>
                     </>
                   )}
                   {request.status === "pending" && userType === 'TRAINING_COMPANY' && request.trainerAccepted && !request.counterPrice && (
                     <>
-                      <button
+                      <Button
+                        variant="danger"
+                        size="sm"
                         onClick={() => handleReject(request.id)}
-                        className="px-3 py-1 bg-red-50 border border-red-300 rounded text-sm font-medium text-red-700 hover:bg-red-100 flex items-center"
+                        icon={
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        }
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
                         Ablehnen
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="success"
+                        size="sm"
                         onClick={() => {
                           setActiveRequest(request);
                           handleAccept(request.id);
                         }}
-                        className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                        icon={
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        }
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
                         Trainer-Zusage annehmen
-                      </button>
+                      </Button>
                     </>
                   )}
-                  <button
+                  <Button
+                    variant="info"
+                    size="sm"
                     onClick={() => openInquiryModal(request)}
-                    className="px-3 py-1 bg-blue-50 border border-blue-300 rounded text-sm font-medium text-blue-700 hover:bg-blue-100 flex items-center"
+                    icon={
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M2.94 6.412A2 2 0 002 8.108V16a2 2 0 002 2h12a2 2 0 002-2V8.108a2 2 0 00-.94-1.696l-6-3.75a2 2 0 00-2.12 0l-6 3.75zm2.615 2.423a1 1 0 10-1.11 1.664l5 3.333a1 1 0 001.11 0l5-3.333a1 1 0 00-1.11-1.664L10 11.798 5.555 8.835z" clipRule="evenodd" />
+                      </svg>
+                    }
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M2.94 6.412A2 2 0 002 8.108V16a2 2 0 002 2h12a2 2 0 002-2V8.108a2 2 0 00-.94-1.696l-6-3.75a2 2 0 00-2.12 0l-6 3.75zm2.615 2.423a1 1 0 10-1.11 1.664l5 3.333a1 1 0 001.11 0l5-3.333a1 1 0 00-1.11-1.664L10 11.798 5.555 8.835z" clipRule="evenodd" />
-                    </svg>
                     Rückfrage
-                  </button>
+                  </Button>
                   <Link
-                    href={`/dashboard/training/${request.trainingId}?from=${encodeURIComponent('/dashboard/requests')}`}
-                    className="px-3 py-1 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center"
+                    href={(() => {
+                      // Preserve status filter when linking to training details
+                      const backUrl = statusFilter && statusFilter !== 'all'
+                        ? `/dashboard/requests?status=${statusFilter}`
+                        : '/dashboard/requests';
+                      return `/dashboard/training/${request.trainingId}?from=${encodeURIComponent(backUrl)}`;
+                    })()}
+                    className="ptw-btn ptw-btn-outline ptw-btn-sm inline-flex items-center"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
                       <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                       <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
                     </svg>
                     Details
                   </Link>
                   {(request.status === "accepted" || request.status === "completed") && (
-                    <button
+                    <Button
+                      variant="success"
+                      size="sm"
                       onClick={() => downloadContract(request)}
-                      className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                      icon={
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      }
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
                       Vertrag downloaden
-                    </button>
+                    </Button>
                   )}
                   {request.status === "accepted" && (
                     <>
-                      <button
+                      <Button
+                        variant="warning"
+                        size="sm"
                         onClick={() => handleCancel()}
-                        className="px-3 py-1 bg-orange-50 border border-orange-300 rounded text-sm font-medium text-orange-700 hover:bg-orange-100 flex items-center"
+                        icon={
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        }
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
                         Training absagen
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="success"
+                        size="sm"
                         onClick={() => handleComplete(request.id)}
-                        className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                        icon={
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        }
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
                         Training abschließen
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>
@@ -1430,8 +1477,32 @@ Mit freundlichen Grüßen
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow p-6 text-center">
-          <p className="text-gray-500">Keine {statusFilter !== "all" ? getStatusLabel(statusFilter) + "en" : ""} Trainingsanfragen gefunden.</p>
+        <div className="ptw-dashboard-card text-center py-12">
+          <div className="flex flex-col items-center">
+            <svg
+              className="w-16 h-16 mb-4"
+              style={{ color: 'var(--ptw-text-muted)' }}
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="1.5"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h4.125M8.25 8.25l5.25 5.25m0 0v-4.5m0 4.5h-4.5"
+              />
+            </svg>
+            <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--ptw-text-primary)' }}>
+              Keine {statusFilter !== "all" ? getStatusLabel(statusFilter) + "en" : ""} Trainingsanfragen gefunden
+            </h2>
+            <p className="text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>
+              {statusFilter !== "all" 
+                ? `Es gibt derzeit keine ${getStatusLabel(statusFilter)}en Anfragen. Versuchen Sie einen anderen Filter.`
+                : "Sie haben noch keine Trainingsanfragen. Neue Anfragen werden hier angezeigt."}
+            </p>
+          </div>
         </div>
       )}
       
@@ -1626,12 +1697,12 @@ Mit freundlichen Grüßen
                         )}
                         {/* Show waiting message only if trainer has accepted OR if trainer made counter but company hasn't responded yet */}
                         {activeRequest.trainerAccepted && (
-                          <span className="px-4 py-2 bg-gray-200 border border-gray-300 rounded-md text-gray-500 cursor-not-allowed" title="Sie haben bereits zugesagt. Bitte warten Sie auf die Antwort der Firma.">
+                          <span className="px-4 py-2 bg-gray-200 border border-gray-400 rounded-md text-gray-800 font-semibold cursor-not-allowed" title="Sie haben bereits zugesagt. Bitte warten Sie auf die Antwort der Firma.">
                             Warten auf Firmen-Zusage
                           </span>
                         )}
                         {activeRequest.counterPrice && !activeRequest.companyCounterPrice && !activeRequest.trainerAccepted && (
-                          <span className="px-4 py-2 bg-gray-200 border border-gray-300 rounded-md text-gray-500 cursor-not-allowed" title="Sie haben einen Gegenvorschlag gemacht. Bitte warten Sie auf die Antwort der Firma.">
+                          <span className="px-4 py-2 bg-gray-200 border border-gray-400 rounded-md text-gray-800 font-semibold cursor-not-allowed" title="Sie haben einen Gegenvorschlag gemacht. Bitte warten Sie auf die Antwort der Firma.">
                             Warten auf Antwort
                           </span>
                         )}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { checkWithinRadius } from '@/lib/geocoding';
 
 // Topic suggestions endpoint
 export async function POST(req: Request) {
@@ -49,13 +50,38 @@ export async function GET(req: Request) {
     const status = url.searchParams.get('status') || 'ACTIVE';
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '50');
+    const trainingId = url.searchParams.get('trainingId'); // For distance calculation
 
     // Build the where clause based on filters
     const where: any = {};
     console.log('Search params:', { topic, topicId, location, minPrice, maxPrice, status });
 
-    // Filter by topic if provided (name search)
-    if (topic) {
+    // Filter by topic ID if provided (exact match for trainer selection)
+    // Priority: topicId over topic name to ensure exact matching
+    if (topicId) {
+      const topicIdFilter: any = {
+        topicId: parseInt(topicId)
+      };
+
+      // Add expertise level filter if provided
+      if (expertiseLevel && expertiseLevel !== 'all') {
+        const levelMap: Record<string, ('GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE')[]> = {
+          'minimum_grundlage': ['GRUNDLAGE', 'FORTGESCHRITTEN', 'EXPERTE'],
+          'minimum_fortgeschritten': ['FORTGESCHRITTEN', 'EXPERTE'],
+          'minimum_experte': ['EXPERTE']
+        };
+        
+        const allowedLevels = levelMap[expertiseLevel];
+        if (allowedLevels) {
+          topicIdFilter.expertiseLevel = { in: allowedLevels };
+        }
+      }
+
+      where.topics = {
+        some: topicIdFilter
+      };
+    } else if (topic) {
+      // Filter by topic if provided (name search) - only if topicId is not set
       const topicFilter: any = {
         topic: {
           name: {
@@ -80,31 +106,6 @@ export async function GET(req: Request) {
 
       where.topics = {
         some: topicFilter
-      };
-    }
-
-    // Filter by topic ID if provided (exact match for trainer selection)
-    if (topicId) {
-      const topicIdFilter: any = {
-        topicId: parseInt(topicId)
-      };
-
-      // Add expertise level filter if provided
-      if (expertiseLevel && expertiseLevel !== 'all') {
-        const levelMap: Record<string, ('GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE')[]> = {
-          'minimum_grundlage': ['GRUNDLAGE', 'FORTGESCHRITTEN', 'EXPERTE'],
-          'minimum_fortgeschritten': ['FORTGESCHRITTEN', 'EXPERTE'],
-          'minimum_experte': ['EXPERTE']
-        };
-        
-        const allowedLevels = levelMap[expertiseLevel];
-        if (allowedLevels) {
-          topicIdFilter.expertiseLevel = { in: allowedLevels };
-        }
-      }
-
-      where.topics = {
-        some: topicIdFilter
       };
     }
 
@@ -173,31 +174,89 @@ export async function GET(req: Request) {
       completedMap.set(req.trainerId, (completedMap.get(req.trainerId) || 0) + 1);
     });
 
+    // Get training location if trainingId is provided
+    let trainingLocation: { 
+      latitude: number | null; 
+      longitude: number | null;
+      type: 'ONLINE' | 'PHYSICAL' | null;
+    } | null = null;
+    
+    if (trainingId) {
+      const training = await prisma.training.findUnique({
+        where: { id: parseInt(trainingId) },
+        include: {
+          location: {
+            include: {
+              country: true
+            }
+          }
+        }
+      });
+
+      if (training && training.location) {
+        trainingLocation = {
+          latitude: training.location.latitude,
+          longitude: training.location.longitude,
+          type: training.location.type
+        };
+      }
+    }
+
     // Format the response
-    const formattedTrainers = trainers.map(trainer => ({
-      id: trainer.id,
-      firstName: trainer.firstName,
-      lastName: trainer.lastName,
-      email: trainer.email,
-      phone: trainer.phone,
-      bio: trainer.bio || '',
-      profilePicture: trainer.profilePicture || '',
-      dailyRate: trainer.dailyRate,
-      location: trainer.country ? {
-        name: trainer.country.name,
-        code: trainer.country.code
-      } : null,
-      topics: trainer.topics?.map(t => t.topic.name) || [],
-      topicsWithLevels: trainer.topics?.map(t => ({
-        name: t.topic.name,
-        level: t.expertiseLevel
-      })) || [],
-      offeredTrainingTypes: trainer.offeredTrainingTypes?.map(tt => tt.type) || [],
-      travelRadius: trainer.travelRadius,
-      completedTrainings: completedMap.get(trainer.id) || 0,
-      isCompany: trainer.isCompany,
-      companyName: trainer.companyName
-    }));
+    const formattedTrainers = trainers.map(trainer => {
+      // Calculate distance for PHYSICAL locations
+      let distanceInfo: { isWithinRadius: boolean; distance: number | null } | null = null;
+      let onlineTrainingInfo: { offersOnline: boolean } | null = null;
+      
+      if (trainingLocation) {
+        if (trainingLocation.type === 'PHYSICAL' && trainingLocation.latitude && trainingLocation.longitude && trainer.latitude && trainer.longitude && trainer.travelRadius) {
+          // Physical location: check distance
+          distanceInfo = checkWithinRadius(
+            trainer.latitude,
+            trainer.longitude,
+            trainer.travelRadius,
+            trainingLocation.latitude,
+            trainingLocation.longitude
+          );
+        } else if (trainingLocation.type === 'ONLINE') {
+          // Online location: check if trainer offers online training
+          const offersOnline = trainer.offeredTrainingTypes?.some(tt => tt.type === 'ONLINE') || false;
+          onlineTrainingInfo = { offersOnline };
+        }
+      }
+
+      return {
+        id: trainer.id,
+        firstName: trainer.firstName,
+        lastName: trainer.lastName,
+        email: trainer.email,
+        phone: trainer.phone,
+        bio: trainer.bio || '',
+        profilePicture: trainer.profilePicture || '',
+        dailyRate: trainer.dailyRate,
+        location: trainer.country ? {
+          name: trainer.country.name,
+          code: trainer.country.code
+        } : null,
+        topics: trainer.topics?.map(t => t.topic.name) || [],
+        topicsWithLevels: trainer.topics?.map(t => ({
+          name: t.topic.name,
+          level: t.expertiseLevel
+        })) || [],
+        offeredTrainingTypes: trainer.offeredTrainingTypes?.map(tt => tt.type) || [],
+        travelRadius: trainer.travelRadius,
+        completedTrainings: completedMap.get(trainer.id) || 0,
+        isCompany: trainer.isCompany,
+        companyName: trainer.companyName,
+        // Distance information (for PHYSICAL locations)
+        distanceInfo: distanceInfo ? {
+          isWithinRadius: distanceInfo.isWithinRadius,
+          distance: distanceInfo.distance
+        } : null,
+        // Online training information (for ONLINE locations)
+        onlineTrainingInfo: onlineTrainingInfo
+      };
+    });
 
     return NextResponse.json({
       trainers: formattedTrainers,

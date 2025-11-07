@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getUserData } from "@/lib/session";
 import Link from "next/link";
 
@@ -59,7 +59,62 @@ interface AvailableTraining {
 export default function TrainerProfilePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const trainerId = params.id as string;
+  
+  // Get returnTo parameter and preserved state from URL
+  const returnTo = searchParams.get('returnTo');
+  const topicId = searchParams.get('topicId');
+  const topic = searchParams.get('topic');
+  const location = searchParams.get('location');
+  const maxPrice = searchParams.get('maxPrice');
+  const expertiseLevel = searchParams.get('expertiseLevel');
+  const trainingId = searchParams.get('trainingId');
+  const view = searchParams.get('view'); // For trainings page
+  const week = searchParams.get('week'); // For trainings calendar view
+  const status = searchParams.get('status'); // For requests page
+  
+  // Build back URL with preserved state
+  const getBackUrl = () => {
+    if (returnTo === 'search') {
+      // Return to trainer search with filters
+      const params = new URLSearchParams();
+      if (topicId) {
+        params.set('topicId', topicId);
+      } else if (topic) {
+        params.set('topic', topic);
+      }
+      if (location) params.set('location', location);
+      if (maxPrice) params.set('maxPrice', maxPrice);
+      if (expertiseLevel && expertiseLevel !== 'all') params.set('expertiseLevel', expertiseLevel);
+      if (trainingId) params.set('trainingId', trainingId);
+      const queryString = params.toString();
+      return `/dashboard/trainer${queryString ? `?${queryString}` : ''}`;
+    } else if (returnTo === 'trainings') {
+      // Return to trainings page with view mode and week
+      const params = new URLSearchParams();
+      if (view && view !== 'upcoming') {
+        params.set('view', view);
+      }
+      if (view === 'calendar' && week) {
+        params.set('week', week);
+      }
+      const queryString = params.toString();
+      return `/dashboard/trainings${queryString ? `?${queryString}` : ''}`;
+    } else if (returnTo === 'requests') {
+      // Return to requests page with status filter
+      const params = new URLSearchParams();
+      if (status && status !== 'all') {
+        params.set('status', status);
+      }
+      const queryString = params.toString();
+      return `/dashboard/requests${queryString ? `?${queryString}` : ''}`;
+    } else if (returnTo === 'invoices') {
+      // Return to invoices page
+      return '/dashboard/invoices';
+    }
+    return '/dashboard/trainer';
+  };
 
   const [trainer, setTrainer] = useState<Trainer | null>(null);
   const [pastBookings, setPastBookings] = useState<PastBooking[]>([]);
@@ -137,7 +192,17 @@ export default function TrainerProfilePage() {
       }
 
       const result = await response.json();
-      alert(`Anfragen erfolgreich gesendet! ${selectedIds.length} Schulung(en) wurden angefragt.`);
+      
+      // Show appropriate message based on duplicates
+      if (result.duplicates && result.duplicates.length > 0) {
+        if (result.newRequests && result.newRequests.length > 0) {
+          alert(result.message || `${result.newRequests.length} neue Anfrage(n) gesendet. ${result.duplicates.length} Anfrage(n) wurde(n) bereits zuvor gesendet.`);
+        } else {
+          alert(result.message || `Alle Anfragen wurden bereits zuvor gesendet.`);
+        }
+      } else {
+        alert(result.message || `Anfragen erfolgreich gesendet! ${selectedIds.length} Schulung(en) wurden angefragt.`);
+      }
 
       setShowRequestModal(false);
       setSelectedTrainings(new Set());
@@ -176,7 +241,8 @@ export default function TrainerProfilePage() {
 
         // Fetch past bookings between this trainer and the current company
         if (currentUser.userType === 'TRAINING_COMPANY') {
-          const bookingsResponse = await fetch(`/api/bookings/past?trainerId=${trainerId}&companyId=${currentUser.id}`);
+          const companyId = (currentUser.companyId || currentUser.id) as number;
+          const bookingsResponse = await fetch(`/api/bookings/past?trainerId=${trainerId}&companyId=${companyId}`);
           if (bookingsResponse.ok) {
             const bookingsData = await bookingsResponse.json();
             setPastBookings(bookingsData.bookings);
@@ -210,7 +276,7 @@ export default function TrainerProfilePage() {
         <div className="text-center">
           <h2 className="text-xl font-bold text-red-600 mb-4">Fehler</h2>
           <p className="text-gray-600 mb-4">{error || 'Trainer nicht gefunden'}</p>
-          <Link href="/dashboard" className="ptw-button-primary">
+          <Link href={getBackUrl()} className="ptw-button-primary">
             Zurück zur Suche
           </Link>
         </div>
@@ -223,7 +289,7 @@ export default function TrainerProfilePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <Link
-          href="/dashboard/trainer"
+          href={getBackUrl()}
           className="text-sm hover:text-red-600 transition-colors"
           style={{ color: 'var(--ptw-accent-primary)' }}
         >
@@ -290,28 +356,52 @@ export default function TrainerProfilePage() {
                 Fachgebiete:
               </h3>
               <div className="flex flex-wrap gap-2">
-                {(trainer.topicsWithLevels || trainer.topics.map((name: string) => ({ name, level: 'GRUNDLAGE' as const }))).map((topic: string | { name: string; level: 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE' }, index: number) => {
-                  const topicName = typeof topic === 'string' ? topic : topic.name;
-                  const topicLevel = typeof topic === 'string' ? 'GRUNDLAGE' : topic.level;
-                  const levelColors = {
-                    'GRUNDLAGE': 'bg-blue-100 text-blue-800 border border-blue-300',
-                    'FORTGESCHRITTEN': 'bg-yellow-100 text-yellow-800 border border-yellow-300',
-                    'EXPERTE': 'bg-green-100 text-green-800 border border-green-300'
-                  };
-                  const levelLabels = {
-                    'GRUNDLAGE': 'Grundlage',
-                    'FORTGESCHRITTEN': 'Fortgeschritten',
-                    'EXPERTE': 'Experte'
-                  };
-                  return (
-                    <span
-                      key={index}
-                      className={`text-xs px-3 py-1 rounded-full font-semibold ${levelColors[topicLevel]}`}
-                    >
-                      {topicName} <span className="text-xs opacity-75">({levelLabels[topicLevel]})</span>
-                    </span>
-                  );
-                })}
+                {(() => {
+                  // Convert topics to consistent format
+                  const topicsList = trainer.topicsWithLevels || trainer.topics.map((name: string) => ({ name, level: 'GRUNDLAGE' as const }));
+                  
+                  // Sort topics: EXPERTE first, then FORTGESCHRITTEN, then GRUNDLAGE
+                  const sortedTopics = [...topicsList].sort((a, b) => {
+                    const levelA = typeof a === 'string' ? 'GRUNDLAGE' : a.level;
+                    const levelB = typeof b === 'string' ? 'GRUNDLAGE' : b.level;
+                    
+                    const levelOrder = { 'EXPERTE': 0, 'FORTGESCHRITTEN': 1, 'GRUNDLAGE': 2 };
+                    const orderA = levelOrder[levelA as keyof typeof levelOrder];
+                    const orderB = levelOrder[levelB as keyof typeof levelOrder];
+                    
+                    if (orderA !== orderB) {
+                      return orderA - orderB;
+                    }
+                    
+                    // If same level, sort alphabetically by name
+                    const nameA = typeof a === 'string' ? a : a.name;
+                    const nameB = typeof b === 'string' ? b : b.name;
+                    return nameA.localeCompare(nameB);
+                  });
+                  
+                  return sortedTopics.map((topic: string | { name: string; level: 'GRUNDLAGE' | 'FORTGESCHRITTEN' | 'EXPERTE' }, index: number) => {
+                    const topicName = typeof topic === 'string' ? topic : topic.name;
+                    const topicLevel = typeof topic === 'string' ? 'GRUNDLAGE' : topic.level;
+                    const levelColors = {
+                      'GRUNDLAGE': 'bg-[#E0E0E0] text-gray-800 border border-gray-300',
+                      'FORTGESCHRITTEN': 'bg-[#2196F3] text-white border border-blue-500',
+                      'EXPERTE': 'bg-[#212121] text-white border border-gray-700'
+                    };
+                    const levelLabels = {
+                      'GRUNDLAGE': 'Grundlage',
+                      'FORTGESCHRITTEN': 'Fortgeschritten',
+                      'EXPERTE': 'Experte'
+                    };
+                    return (
+                      <span
+                        key={index}
+                        className={`text-xs px-3 py-1 rounded-full font-semibold ${levelColors[topicLevel]}`}
+                      >
+                        {topicName} <span className="text-xs opacity-75">({levelLabels[topicLevel]})</span>
+                      </span>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>
@@ -338,35 +428,41 @@ export default function TrainerProfilePage() {
           </h3>
 
           <div className="space-y-4">
-            {pastBookings.map((booking) => (
-              <div
-                key={booking.id}
-                className="flex items-center justify-between p-4 rounded-lg border"
-                style={{ background: 'var(--ptw-bg-secondary)', borderColor: 'var(--ptw-border-primary)' }}
-              >
-                <div>
-                  <h4 className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>
-                    {booking.title}
-                  </h4>
-                  <p className="text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>
-                    Thema: {booking.topicName}
-                  </p>
-                  <p className="text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>
-                    Datum: {new Date(booking.date).toLocaleDateString('de-DE')}
-                  </p>
-                </div>
-                <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                  booking.status === 'COMPLETED'
-                    ? 'bg-green-100 text-green-800'
-                    : booking.status === 'CANCELLED'
-                    ? 'bg-red-100 text-red-800'
-                    : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {booking.status === 'COMPLETED' ? 'Abgeschlossen' :
-                   booking.status === 'CANCELLED' ? 'Storniert' : 'Aktiv'}
-                </div>
-              </div>
-            ))}
+            {pastBookings.map((booking) => {
+              // Construct the training details URL with returnTo parameter
+              const trainingUrl = `/dashboard/training/${booking.id}?returnTo=trainer&trainerId=${trainerId}`;
+              
+              return (
+                <Link
+                  key={booking.id}
+                  href={trainingUrl}
+                  className="flex items-center justify-between p-4 rounded-lg border transition-all hover:shadow-md cursor-pointer"
+                  style={{ background: 'var(--ptw-bg-secondary)', borderColor: 'var(--ptw-border-primary)' }}
+                >
+                  <div>
+                    <h4 className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>
+                      {booking.title}
+                    </h4>
+                    <p className="text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>
+                      Thema: {booking.topicName}
+                    </p>
+                    <p className="text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>
+                      Datum: {new Date(booking.date).toLocaleDateString('de-DE')}
+                    </p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    booking.status === 'COMPLETED'
+                      ? 'bg-green-100 text-green-800'
+                      : booking.status === 'CANCELLED'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {booking.status === 'COMPLETED' ? 'Abgeschlossen' :
+                     booking.status === 'CANCELLED' ? 'Storniert' : 'Aktiv'}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

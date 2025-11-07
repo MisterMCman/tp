@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { saveTrainerData, saveCompanyData } from "@/lib/session";
-import { Trainer, TrainerProfileUpdateData } from "@/lib/types";
+import { Trainer } from "@/lib/types";
 import { TopicSelector, TopicWithLevel, ExpertiseLevel } from "@/components/TopicSelector";
+import { canEditCompany, canManageUsers } from "@/lib/permissions";
 
 interface TrainingCompany {
   id: number;
@@ -34,9 +36,13 @@ interface TrainingCompany {
   tags?: string;
   onboardingStatus?: string;
   status: string;
+  role?: 'ADMIN' | 'EDITOR' | 'VIEWER';
+  companyId?: number;
+  isActive?: boolean;
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [user, setUser] = useState<Trainer | TrainingCompany | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,12 +54,70 @@ export default function ProfilePage() {
   const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
   const [topicSearch, setTopicSearch] = useState('');
   const [topicSearchResults, setTopicSearchResults] = useState<{ id: number; name: string; displayName?: string; short_title?: string; type?: 'existing' | 'suggestion'; status?: string }[]>([]);
+  
+  // Company users management state (for admins)
+  const [companyUsers, setCompanyUsers] = useState<any[]>([]);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [userFormData, setUserFormData] = useState({
+    email: '',
+    firstName: '',
+    lastName: '',
+    phone: '',
+    role: 'EDITOR' as 'ADMIN' | 'EDITOR' | 'VIEWER'
+  });
 
 
   useEffect(() => {
     loadProfile();
     loadCountries();
   }, []);
+
+  // Load company users if user is admin
+  useEffect(() => {
+    if (user?.userType === 'TRAINING_COMPANY') {
+      // If role is missing, try to get it from session
+      const userWithRole = user as any;
+      console.log('Checking user role for user management:', { 
+        hasRole: !!userWithRole.role, 
+        role: userWithRole.role,
+        userType: user.userType 
+      });
+      if (!userWithRole.role) {
+        // Dynamically import to avoid SSR issues
+        import('@/lib/session').then(({ getCompanyData }) => {
+          const sessionData = getCompanyData();
+          console.log('Session data for role:', sessionData);
+          if (sessionData?.role) {
+            setUser({ 
+              ...user, 
+              role: sessionData.role as 'ADMIN' | 'EDITOR' | 'VIEWER', 
+              companyId: (sessionData.companyId || sessionData.id) as number, 
+              isActive: (sessionData.isActive ?? true) as boolean 
+            });
+          }
+        });
+        return;
+      }
+      const canManage = canManageUsers(userWithRole);
+      console.log('Can manage users?', canManage);
+      if (canManage) {
+        loadCompanyUsers();
+      }
+    }
+  }, [user]);
+
+  const loadCompanyUsers = async () => {
+    try {
+      const response = await fetch('/api/company-users');
+      if (response.ok) {
+        const data = await response.json();
+        setCompanyUsers(data.users || []);
+      }
+    } catch (error) {
+      console.error('Error loading company users:', error);
+    }
+  };
 
   const loadCountries = async () => {
     try {
@@ -76,6 +140,48 @@ export default function ProfilePage() {
       const currentUser = (trainerData || companyData) as any;
       console.log('Current user from session:', currentUser);
 
+      // If we have session data with role, use it and fetch company details
+      if (currentUser && currentUser.userType === 'TRAINING_COMPANY' && currentUser.role) {
+        console.log('Using session data with role:', currentUser);
+        // Fetch company details but preserve role from session
+        const companyResponse = await fetch('/api/training-company/profile');
+        if (companyResponse.ok) {
+          const data = await companyResponse.json();
+          const userData = {
+            ...data.company,
+            role: currentUser.role,
+            companyId: currentUser.companyId || data.company.companyId || data.company.id,
+            isActive: currentUser.isActive ?? true
+          };
+          setUser(userData);
+          setFormData({
+            companyName: data.company.companyName,
+            firstName: data.company.firstName,
+            lastName: data.company.lastName,
+            email: data.company.email,
+            phone: data.company.phone,
+            street: data.company.street,
+            houseNumber: data.company.houseNumber,
+            zipCode: data.company.zipCode,
+            city: data.company.city,
+            countryId: data.company.country?.id,
+            bio: data.company.bio,
+            logo: data.company.logo,
+            website: data.company.website,
+            industry: data.company.industry,
+            employees: data.company.employees,
+            consultantName: data.company.consultantName,
+            vatId: data.company.vatId,
+            billingEmail: data.company.billingEmail,
+            billingNotes: data.company.billingNotes,
+            iban: data.company.iban,
+            taxId: data.company.taxId,
+            tags: data.company.tags,
+          });
+          return; // Exit early
+        }
+      }
+      
       // If localStorage is empty, try both APIs to determine user type
       if (!currentUser.userType || Object.keys(currentUser).length === 0) {
         console.log('No userType found, trying both APIs...');
@@ -85,9 +191,18 @@ export default function ProfilePage() {
         if (companyResponse.ok) {
           const data = await companyResponse.json();
           console.log('Successfully loaded as Training Company:', data);
-          setUser(data.company);
+          console.log('Current user from session (for role):', currentUser);
+          // Merge session data (which has role) with company data
+          const userData = {
+            ...data.company,
+            role: currentUser?.role || data.company.role || 'ADMIN',
+            companyId: currentUser?.companyId || data.company.companyId || data.company.id,
+            isActive: currentUser?.isActive ?? data.company.isActive ?? true
+          };
+          console.log('Final userData with role:', userData);
+          setUser(userData);
           // Save to cookies for next time
-          saveCompanyData(data.company);
+          saveCompanyData(userData);
           setFormData({
             companyName: data.company.companyName,
             firstName: data.company.firstName,
@@ -287,7 +402,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleInputChange = (field: string, value: string | number | boolean) => {
+  const handleInputChange = (field: string, value: string | number | boolean | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -360,40 +475,64 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">
-          {user?.userType === 'TRAINING_COMPANY' ? 'Unternehmensprofil' : 'Mein Profil'}
-        </h1>
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Page Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">
+            {user?.userType === 'TRAINING_COMPANY' ? 'Einstellungen' : 'Mein Profil'}
+          </h1>
+          <p className="text-gray-600 mt-1">
+            {user?.userType === 'TRAINING_COMPANY' 
+              ? 'Verwalten Sie Ihr Unternehmensprofil und Benutzer'
+              : 'Verwalten Sie Ihre persönlichen Daten und Kompetenzen'}
+          </p>
+        </div>
       </div>
 
-
-
-      {/* Profil-Formular */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Persönliche Daten / Unternehmensdaten */}
-          <div className="md:col-span-2">
-            <h2 className="text-lg font-semibold mb-4">
-              {user?.userType === 'TRAINING_COMPANY' ? 'Unternehmensdaten' : 'Persönliche Daten'}
+      {/* Profile Information Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-gradient-to-r from-primary-50 to-primary-100 px-6 py-4 border-b border-primary-200">
+          <div className="flex items-center gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <h2 className="text-xl font-semibold text-gray-800">
+              {user?.userType === 'TRAINING_COMPANY' ? 'Persönliche Informationen' : 'Persönliche Daten'}
             </h2>
           </div>
-
+        </div>
+        <form onSubmit={handleSubmit} className="p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {user?.userType === 'TRAINING_COMPANY' ? (
             // Training Company Fields
             <>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Unternehmensname *
-                </label>
-                <input
-                  type="text"
-                  value={formData.companyName || ''}
-                  onChange={(e) => handleInputChange('companyName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  required
-                />
-              </div>
+              {canEditCompany(user as any) ? (
+                <>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Unternehmensname *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.companyName || ''}
+                      onChange={(e) => handleInputChange('companyName', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      required
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Unternehmensname
+                  </label>
+                  <div className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-600">
+                    {formData.companyName || '-'}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Nur Administratoren können Unternehmensdaten ändern</p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -986,17 +1125,35 @@ export default function ProfilePage() {
                       id={user?.userType === 'TRAINING_COMPANY' ? 'companyLogoUpload' : 'profilePictureUpload'}
                       type="file"
                       className="hidden"
-                      accept="image/*"
-                      onChange={(e) => {
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          // Handle file upload here
-                          const reader = new FileReader();
-                          reader.onload = (e) => {
+                          try {
                             const fieldName = user?.userType === 'TRAINING_COMPANY' ? 'logo' : 'profilePicture';
-                            handleInputChange(fieldName, e.target?.result as string);
-                          };
-                          reader.readAsDataURL(file);
+                            const uploadType = user?.userType === 'TRAINING_COMPANY' ? 'logo' : 'profilePicture';
+                            
+                            // Upload to server
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            formData.append('type', uploadType);
+                            
+                            const response = await fetch('/api/upload-image', {
+                              method: 'POST',
+                              body: formData,
+                            });
+                            
+                            if (response.ok) {
+                              const result = await response.json();
+                              handleInputChange(fieldName, result.url);
+                            } else {
+                              const error = await response.json();
+                              alert(`Fehler beim Hochladen: ${error.error || 'Unbekannter Fehler'}`);
+                            }
+                          } catch (error) {
+                            console.error('Error uploading image:', error);
+                            alert('Fehler beim Hochladen des Bildes');
+                          }
                         }
                       }}
                     />
@@ -1020,17 +1177,35 @@ export default function ProfilePage() {
                     id={user?.userType === 'TRAINING_COMPANY' ? 'companyLogoUpload' : 'profilePictureUpload'}
                     type="file"
                     className="hidden"
-                    accept="image/*"
-                    onChange={(e) => {
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        // Handle file upload here
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
+                        try {
                           const fieldName = user?.userType === 'TRAINING_COMPANY' ? 'logo' : 'profilePicture';
-                          handleInputChange(fieldName, e.target?.result as string);
-                        };
-                        reader.readAsDataURL(file);
+                          const uploadType = user?.userType === 'TRAINING_COMPANY' ? 'logo' : 'profilePicture';
+                          
+                          // Upload to server
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          formData.append('type', uploadType);
+                          
+                          const response = await fetch('/api/upload-image', {
+                            method: 'POST',
+                            body: formData,
+                          });
+                          
+                          if (response.ok) {
+                            const result = await response.json();
+                            handleInputChange(fieldName, result.url);
+                          } else {
+                            const error = await response.json();
+                            alert(`Fehler beim Hochladen: ${error.error || 'Unbekannter Fehler'}`);
+                          }
+                        } catch (error) {
+                          console.error('Error uploading image:', error);
+                          alert('Fehler beim Hochladen des Bildes');
+                        }
                       }
                     }}
                   />
@@ -1040,17 +1215,362 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Submit Button */}
-        <div className="mt-8 flex justify-end">
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-6 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? 'Speichere...' : 'Änderungen speichern'}
-          </button>
+          {/* Submit Button */}
+          <div className="mt-8 flex justify-end pt-6 border-t border-gray-200">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              {saving ? 'Speichere...' : 'Änderungen speichern'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Company Settings Section (Admin only) */}
+      {user?.userType === 'TRAINING_COMPANY' && canEditCompany(user as any) && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-6 py-4 border-b border-blue-200">
+            <div className="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              <h2 className="text-xl font-semibold text-gray-800">Unternehmenseinstellungen</h2>
+            </div>
+            <p className="text-sm text-gray-600 mt-1 ml-9">Verwalten Sie die Daten Ihres Unternehmens</p>
+          </div>
+          <div className="p-6">
+            <p className="text-gray-600 mb-4">
+              Unternehmensdaten können nur von Administratoren bearbeitet werden. 
+              Diese Einstellungen finden Sie im Formular oben.
+            </p>
+          </div>
         </div>
-      </form>
+      )}
+
+      {/* Company Users Management Section (Admin only) */}
+      {user?.userType === 'TRAINING_COMPANY' && canManageUsers(user as any) && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-6 py-4 border-b border-purple-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-800">Benutzerverwaltung</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Verwalten Sie Benutzer und deren Berechtigungen für Ihr Unternehmen
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setEditingUser(null);
+                  setUserFormData({
+                    email: '',
+                    firstName: '',
+                    lastName: '',
+                    phone: '',
+                    role: 'EDITOR'
+                  });
+                  setShowUserModal(true);
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium flex items-center gap-2 shadow-sm transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Benutzer hinzufügen
+              </button>
+            </div>
+          </div>
+          <div className="p-6">
+
+            {companyUsers.length === 0 ? (
+              <div className="text-center py-12">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <p className="text-gray-500 text-lg font-medium mb-2">Noch keine Benutzer vorhanden</p>
+                <p className="text-gray-400 text-sm mb-4">Erstellen Sie den ersten Benutzer für Ihr Unternehmen</p>
+                <button
+                  onClick={() => {
+                    setEditingUser(null);
+                    setUserFormData({
+                      email: '',
+                      firstName: '',
+                      lastName: '',
+                      phone: '',
+                      role: 'EDITOR'
+                    });
+                    setShowUserModal(true);
+                  }}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium inline-flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Ersten Benutzer hinzufügen
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">E-Mail</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Rolle</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {companyUsers.map((companyUser) => (
+                      <tr key={companyUser.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+                              {companyUser.firstName.charAt(0)}{companyUser.lastName.charAt(0)}
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {companyUser.firstName} {companyUser.lastName}
+                                {companyUser.id === (user as any)?.id && (
+                                  <span className="ml-2 text-xs text-gray-500">(Sie)</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{companyUser.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                            companyUser.role === 'ADMIN' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                            companyUser.role === 'EDITOR' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                            'bg-gray-100 text-gray-800 border border-gray-200'
+                          }`}>
+                            {companyUser.role === 'ADMIN' ? 'Admin' :
+                             companyUser.role === 'EDITOR' ? 'Editor' :
+                             'Betrachter'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                            companyUser.isActive 
+                              ? 'bg-green-100 text-green-800 border border-green-200' 
+                              : 'bg-red-100 text-red-800 border border-red-200'
+                          }`}>
+                            {companyUser.isActive ? 'Aktiv' : 'Inaktiv'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => {
+                                router.push(`/dashboard/profile/users/${companyUser.id}`);
+                              }}
+                              className="text-primary-600 hover:text-primary-900 font-medium flex items-center gap-1 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              Bearbeiten
+                            </button>
+                            {companyUser.id !== (user as any)?.id && (
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`Möchten Sie ${companyUser.firstName} ${companyUser.lastName} wirklich deaktivieren?`)) {
+                                    try {
+                                      const response = await fetch(`/api/company-users/${companyUser.id}`, {
+                                        method: 'DELETE'
+                                      });
+                                      if (response.ok) {
+                                        await loadCompanyUsers();
+                                      } else {
+                                        const error = await response.json();
+                                        alert(error.error || 'Fehler beim Deaktivieren des Benutzers');
+                                      }
+                                    } catch (error) {
+                                      console.error('Error deleting user:', error);
+                                      alert('Fehler beim Deaktivieren des Benutzers');
+                                    }
+                                  }
+                                }}
+                                className="text-red-600 hover:text-red-900 font-medium flex items-center gap-1 transition-colors"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Deaktivieren
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* User Modal */}
+      {showUserModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-6 py-4 border-b border-purple-200">
+              <div className="flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  {editingUser ? 'Benutzer bearbeiten' : 'Neuen Benutzer hinzufügen'}
+                </h3>
+              </div>
+            </div>
+            <div className="p-6">
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  const url = editingUser 
+                    ? `/api/company-users/${editingUser.id}`
+                    : '/api/company-users';
+                  const method = editingUser ? 'PATCH' : 'POST';
+                  
+                  const response = await fetch(url, {
+                    method,
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(userFormData),
+                  });
+
+                  if (response.ok) {
+                    await loadCompanyUsers();
+                    setShowUserModal(false);
+                    setEditingUser(null);
+                    setUserFormData({
+                      email: '',
+                      firstName: '',
+                      lastName: '',
+                      phone: '',
+                      role: 'EDITOR'
+                    });
+                  } else {
+                    const error = await response.json();
+                    alert(error.error || 'Fehler beim Speichern');
+                  }
+                } catch (error) {
+                  console.error('Error saving user:', error);
+                  alert('Fehler beim Speichern');
+                }
+              }}
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    E-Mail *
+                  </label>
+                  <input
+                    type="email"
+                    value={userFormData.email}
+                    onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    required
+                    disabled={!!editingUser}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Vorname *
+                    </label>
+                    <input
+                      type="text"
+                      value={userFormData.firstName}
+                      onChange={(e) => setUserFormData({ ...userFormData, firstName: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nachname *
+                    </label>
+                    <input
+                      type="text"
+                      value={userFormData.lastName}
+                      onChange={(e) => setUserFormData({ ...userFormData, lastName: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Telefon
+                  </label>
+                  <input
+                    type="tel"
+                    value={userFormData.phone}
+                    onChange={(e) => setUserFormData({ ...userFormData, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Rolle *
+                  </label>
+                  <select
+                    value={userFormData.role}
+                    onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value as 'ADMIN' | 'EDITOR' | 'VIEWER' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    required
+                  >
+                    <option value="ADMIN">Admin (kann alles verwalten)</option>
+                    <option value="EDITOR">Editor (kann Anfragen stellen, nur eigene Daten ändern)</option>
+                    <option value="VIEWER">Betrachter (nur ansehen, keine Anfragen)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserModal(false);
+                    setEditingUser(null);
+                    setUserFormData({
+                      email: '',
+                      firstName: '',
+                      lastName: '',
+                      phone: '',
+                      role: 'EDITOR'
+                    });
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-medium transition-colors"
+                >
+                  {editingUser ? 'Speichern' : 'Benutzer hinzufügen'}
+                </button>
+              </div>
+            </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

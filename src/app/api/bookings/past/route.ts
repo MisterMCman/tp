@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getTrainerData } from '@/lib/session';
+import { getUserData } from '@/lib/session';
 
 export async function GET(req: Request) {
   try {
@@ -15,8 +15,16 @@ export async function GET(req: Request) {
     }
 
     // Get current user to verify they own this company
-    const currentUser = getTrainerData();
-    if (!currentUser || currentUser.id.toString() !== companyId) {
+    const currentUser = getUserData();
+    if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
+      return NextResponse.json({
+        message: 'Nicht autorisiert'
+      }, { status: 403 });
+    }
+
+    // Get company ID from CompanyUser (companyId) or fallback to id for legacy support
+    const userCompanyId = (currentUser.companyId || currentUser.id) as number;
+    if (userCompanyId.toString() !== companyId) {
       return NextResponse.json({
         message: 'Nicht autorisiert'
       }, { status: 403 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getTrainerData } from '@/lib/session';
+import { geocodeAddress } from '@/lib/geocoding';
 
 // GET - Aktuelle Trainer-Daten abrufen
 export async function GET() {
@@ -53,7 +54,7 @@ export async function GET() {
       city: trainer.city,
       country: trainer.country,
       bio: trainer.bio,
-      profilePicture: trainer.profilePicture,
+      profilePicture: trainer.profilePicture ? (trainer.profilePicture.startsWith('http') || trainer.profilePicture.startsWith('/api/images/') ? trainer.profilePicture : `/api/images/${trainer.profilePicture.split('/').pop()}`) : null,
       iban: trainer.iban,
       taxId: trainer.taxId,
       companyName: trainer.companyName,
@@ -149,6 +150,35 @@ export async function PATCH(request: NextRequest) {
         changedBy: versionData.changedBy as string
       }
     });
+
+    // Geocode address if address fields changed and travelRadius is set
+    const addressFieldsChanged = 
+      changedFields.includes('street') ||
+      changedFields.includes('houseNumber') ||
+      changedFields.includes('zipCode') ||
+      changedFields.includes('city') ||
+      changedFields.includes('countryId');
+
+    if (addressFieldsChanged && (updateData.travelRadius || currentTrainer.travelRadius)) {
+      const country = updateData.countryId 
+        ? await prisma.country.findUnique({ where: { id: updateData.countryId as number } })
+        : currentTrainer.countryId 
+          ? await prisma.country.findUnique({ where: { id: currentTrainer.countryId } })
+          : null;
+
+      const geocodeResult = await geocodeAddress(
+        (updateData.street || currentTrainer.street) as string | undefined,
+        (updateData.houseNumber || currentTrainer.houseNumber) as string | undefined,
+        (updateData.zipCode || currentTrainer.zipCode) as string | undefined,
+        (updateData.city || currentTrainer.city) as string | undefined,
+        country?.name
+      );
+
+      if (geocodeResult) {
+        updateData.latitude = geocodeResult.latitude;
+        updateData.longitude = geocodeResult.longitude;
+      }
+    }
 
     // Aktualisiere Trainer-Daten
     const updatedTrainer = await prisma.trainer.update({

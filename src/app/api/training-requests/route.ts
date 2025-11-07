@@ -5,12 +5,37 @@ import { TrainingRequestStatus, TrainingStatus } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
+    // Check permissions - only ADMIN and USER can make requests
+    const currentUser = getUserData();
+    if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // VIEWER role cannot make requests - only ADMIN and EDITOR can
+    if (currentUser.role === 'VIEWER') {
+      return NextResponse.json(
+        { error: 'Viewers cannot make training requests' },
+        { status: 403 }
+      );
+    }
+    
+    // Ensure role is ADMIN or EDITOR
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'EDITOR') {
+      return NextResponse.json(
+        { error: 'Only admins and editors can make training requests' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
-    const { trainingId, trainerIds, trainingIds, trainerId, message } = body;
+    const { trainingId, trainerIds, trainingIds, trainerId } = body;
 
     // Handle new format: multiple training IDs for one trainer
     if (trainingIds && trainerId) {
-      const trainingRequests = await Promise.all(
+      const results = await Promise.all(
         trainingIds.map(async (trainingId: number) => {
           // Check if request already exists
           const existing = await prisma.trainingRequest.findUnique({
@@ -23,8 +48,8 @@ export async function POST(request: NextRequest) {
           });
 
           if (existing) {
-            // Return existing request instead of creating duplicate
-            return await prisma.trainingRequest.findUnique({
+            // Return existing request with flag indicating it's a duplicate
+            const existingRequest = await prisma.trainingRequest.findUnique({
               where: { id: existing.id },
               include: {
                 trainer: {
@@ -51,9 +76,10 @@ export async function POST(request: NextRequest) {
                 }
               }
             });
+            return { request: existingRequest, isDuplicate: true, trainingId };
           }
 
-          return await prisma.trainingRequest.create({
+          const newRequest = await prisma.trainingRequest.create({
             data: {
               trainingId: trainingId,
               trainerId: parseInt(trainerId),
@@ -84,29 +110,47 @@ export async function POST(request: NextRequest) {
               }
             }
           });
+          return { request: newRequest, isDuplicate: false, trainingId };
         })
       );
 
-      // Update training statuses to PUBLISHED when requests are sent
-      await Promise.all(
-        trainingIds.map(async (id: number) => {
-          await prisma.training.update({
-            where: { id: id },
-            data: { status: TrainingStatus.PUBLISHED }
-          });
-        })
-      );
+      const trainingRequests = results.map(r => r.request);
+      const duplicates = results.filter(r => r.isDuplicate);
+      const newRequests = results.filter(r => !r.isDuplicate);
+
+      // Update training statuses to PUBLISHED when new requests are sent
+      if (newRequests.length > 0) {
+        await Promise.all(
+          newRequests.map(async (result) => {
+            await prisma.training.update({
+              where: { id: result.trainingId },
+              data: { status: TrainingStatus.PUBLISHED }
+            });
+          })
+        );
+      }
+
+      let message = '';
+      if (newRequests.length > 0 && duplicates.length > 0) {
+        message = `${newRequests.length} neue Anfrage(n) gesendet. ${duplicates.length} Anfrage(n) wurde(n) bereits zuvor gesendet.`;
+      } else if (newRequests.length > 0) {
+        message = `${newRequests.length} Anfrage(n) erfolgreich gesendet.`;
+      } else if (duplicates.length > 0) {
+        message = `Alle ${duplicates.length} Anfrage(n) wurden bereits zuvor gesendet.`;
+      }
 
       return NextResponse.json({
         success: true,
         requests: trainingRequests,
-        message: `Training requests sent for ${trainingIds.length} training(s)`
+        duplicates: duplicates.map(d => d.trainingId),
+        newRequests: newRequests.map(n => n.trainingId),
+        message
       });
     }
 
     // Handle old format: single training ID for multiple trainers
     if (trainingId && trainerIds) {
-      const trainingRequests = await Promise.all(
+      const results = await Promise.all(
         trainerIds.map(async (trainerId: number) => {
           // Check if request already exists
           const existing = await prisma.trainingRequest.findUnique({
@@ -119,8 +163,8 @@ export async function POST(request: NextRequest) {
           });
 
           if (existing) {
-            // Return existing request
-            return await prisma.trainingRequest.findUnique({
+            // Return existing request with flag indicating it's a duplicate
+            const existingRequest = await prisma.trainingRequest.findUnique({
               where: { id: existing.id },
               include: {
                 trainer: {
@@ -147,9 +191,10 @@ export async function POST(request: NextRequest) {
                 }
               }
             });
+            return { request: existingRequest, isDuplicate: true, trainerId };
           }
 
-          return await prisma.trainingRequest.create({
+          const newRequest = await prisma.trainingRequest.create({
             data: {
               trainingId: parseInt(trainingId),
               trainerId: trainerId,
@@ -180,19 +225,37 @@ export async function POST(request: NextRequest) {
               }
             }
           });
+          return { request: newRequest, isDuplicate: false, trainerId };
         })
       );
 
-      // Update training status to PUBLISHED when requests are sent
-      await prisma.training.update({
-        where: { id: parseInt(trainingId) },
-        data: { status: TrainingStatus.PUBLISHED }
-      });
+      const trainingRequests = results.map(r => r.request);
+      const duplicates = results.filter(r => r.isDuplicate);
+      const newRequests = results.filter(r => !r.isDuplicate);
+
+      // Update training status to PUBLISHED when new requests are sent
+      if (newRequests.length > 0) {
+        await prisma.training.update({
+          where: { id: parseInt(trainingId) },
+          data: { status: TrainingStatus.PUBLISHED }
+        });
+      }
+
+      let message = '';
+      if (newRequests.length > 0 && duplicates.length > 0) {
+        message = `${newRequests.length} neue Anfrage(n) gesendet. ${duplicates.length} Trainer wurde(n) bereits zuvor angefragt.`;
+      } else if (newRequests.length > 0) {
+        message = `${newRequests.length} Anfrage(n) erfolgreich gesendet.`;
+      } else if (duplicates.length > 0) {
+        message = `Alle ${duplicates.length} Trainer wurden bereits zuvor angefragt.`;
+      }
 
       return NextResponse.json({
         success: true,
         requests: trainingRequests,
-        message: `Training requests sent to ${trainerIds.length} trainer(s)`
+        duplicates: duplicates.map(d => d.trainerId),
+        newRequests: newRequests.map(n => n.trainerId),
+        message
       });
     }
 
@@ -228,7 +291,8 @@ export async function GET(request: NextRequest) {
 
     if (companyId) {
       // Verify that companies can only see requests for their own trainings
-      if (currentUser.userType === 'TRAINING_COMPANY' && Number(currentUser.id) !== parseInt(companyId)) {
+      const userCompanyId = (currentUser.companyId || currentUser.id) as number;
+      if (currentUser.userType === 'TRAINING_COMPANY' && userCompanyId !== parseInt(companyId)) {
         return NextResponse.json(
           { error: 'Unauthorized: You can only view requests for your own company' },
           { status: 403 }
@@ -326,7 +390,8 @@ export async function GET(request: NextRequest) {
           );
         }
         
-        if (training.companyId !== Number(currentUser.id)) {
+        const userCompanyId = (currentUser.companyId || currentUser.id) as number;
+        if (training.companyId !== userCompanyId) {
           return NextResponse.json(
             { error: 'Unauthorized: You can only view requests for your own trainings' },
             { status: 403 }
@@ -446,12 +511,29 @@ export async function PATCH(request: NextRequest) {
     }
     
     if (currentUser.userType === 'TRAINING_COMPANY') {
+      // VIEWER role cannot update requests
+      if (currentUser.role === 'VIEWER') {
+        return NextResponse.json(
+          { error: 'Viewers cannot update training requests' },
+          { status: 403 }
+        );
+      }
+      
+      // Ensure role is ADMIN or EDITOR
+      if (currentUser.role !== 'ADMIN' && currentUser.role !== 'EDITOR') {
+        return NextResponse.json(
+          { error: 'Only admins and editors can update training requests' },
+          { status: 403 }
+        );
+      }
+      
       const training = await prisma.training.findUnique({
         where: { id: currentRequest.trainingId },
         select: { companyId: true }
       });
       
-      if (!training || training.companyId !== Number(currentUser.id)) {
+      const userCompanyId = (currentUser.companyId || currentUser.id) as number;
+      if (!training || training.companyId !== userCompanyId) {
         return NextResponse.json(
           { error: 'Unauthorized: You can only update requests for your own trainings' },
           { status: 403 }

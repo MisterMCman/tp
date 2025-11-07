@@ -5,22 +5,85 @@
 
 /* CSS Custom Properties for PowerToWork Theme */
 :root {
+  /* Background Colors */
   --ptw-bg-primary: linear-gradient(135deg, #ffffff 0%, #f8f9fa 25%, #e9ecef 100%);
   --ptw-bg-secondary: #ffffff;
   --ptw-bg-tertiary: #f8f9fa;
+  --ptw-bg-quaternary: #e9ecef;
+  
+  /* Accent Colors */
   --ptw-accent-primary: rgb(254, 88, 77); /* Bright red/orange */
   --ptw-accent-secondary: rgb(35, 59, 97); /* Dark blue */
   --ptw-accent-hover: rgb(220, 53, 69); /* Darker red for hover */
   --ptw-accent-secondary-hover: rgb(23, 47, 77); /* Darker blue for hover */
+  
+  /* Semantic Colors */
+  --ptw-success: #10b981;
+  --ptw-success-light: #d1fae5;
+  --ptw-success-dark: #059669;
+  --ptw-error: #ef4444;
+  --ptw-error-light: #fee2e2;
+  --ptw-error-dark: #dc2626;
+  --ptw-warning: #f59e0b;
+  --ptw-warning-light: #fef3c7;
+  --ptw-warning-dark: #d97706;
+  --ptw-info: #3b82f6;
+  --ptw-info-light: #dbeafe;
+  --ptw-info-dark: #2563eb;
+  --ptw-purple: #8b5cf6;
+  --ptw-purple-light: #ede9fe;
+  --ptw-purple-dark: #7c3aed;
+  
+  /* Text Colors */
   --ptw-text-primary: #212529;
   --ptw-text-secondary: #6c757d;
   --ptw-text-muted: #adb5bd;
+  --ptw-text-inverse: #ffffff;
+  
+  /* Border Colors */
   --ptw-border-primary: #dee2e6;
   --ptw-border-secondary: #e9ecef;
+  --ptw-border-focus: var(--ptw-accent-primary);
+  
+  /* Shadows */
+  --ptw-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --ptw-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --ptw-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --ptw-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
   --ptw-shadow-primary: 0 4px 20px rgba(254, 88, 77, 0.1);
   --ptw-shadow-secondary: 0 8px 32px rgba(35, 59, 97, 0.1);
   --ptw-glow-primary: 0 0 20px rgba(254, 88, 77, 0.3);
   --ptw-glow-secondary: 0 0 15px rgba(35, 59, 97, 0.2);
+  
+  /* Spacing Scale */
+  --ptw-space-xs: 0.25rem;
+  --ptw-space-sm: 0.5rem;
+  --ptw-space-md: 1rem;
+  --ptw-space-lg: 1.5rem;
+  --ptw-space-xl: 2rem;
+  --ptw-space-2xl: 3rem;
+  
+  /* Typography Scale */
+  --ptw-font-xs: 0.75rem;
+  --ptw-font-sm: 0.875rem;
+  --ptw-font-base: 1rem;
+  --ptw-font-lg: 1.125rem;
+  --ptw-font-xl: 1.25rem;
+  --ptw-font-2xl: 1.5rem;
+  --ptw-font-3xl: 1.875rem;
+  --ptw-font-4xl: 2.25rem;
+  
+  /* Border Radius */
+  --ptw-radius-sm: 0.375rem;
+  --ptw-radius-md: 0.5rem;
+  --ptw-radius-lg: 0.75rem;
+  --ptw-radius-xl: 1rem;
+  --ptw-radius-full: 9999px;
+  
+  /* Transitions */
+  --ptw-transition-fast: 150ms ease-in-out;
+  --ptw-transition-base: 200ms ease-in-out;
+  --ptw-transition-slow: 300ms ease-in-out;
 }
 
 /* Force CSS reload */
@@ -32,10 +95,17 @@ html {
 /* Base Styles */
 body {
   color: var(--ptw-text-primary);
-  font-family: 'Inter', 'Segoe UI', 'Roboto', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'kern' 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ensure minimum contrast ratios for accessibility */
+* {
+  color-scheme: light;
 }
 
 /* Custom Scrollbar */
@@ -155,6 +225,179 @@ p {
     @apply bg-gradient-to-r from-blue-600 to-blue-700 border-blue-600;
     @apply hover:from-blue-700 hover:to-blue-800;
     @apply focus:ring-blue-500;
+  }
+  
+  /* Button Variants */
+  .ptw-btn {
+    @apply inline-flex items-center justify-center;
+    @apply font-semibold rounded-lg;
+    @apply transition-all duration-200 ease-in-out;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .ptw-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
+  
+  .ptw-btn:hover::before {
+    left: 100%;
+  }
+  
+  /* Button Sizes */
+  .ptw-btn-xs {
+    @apply px-2 py-1 text-xs;
+  }
+  
+  .ptw-btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  
+  .ptw-btn-md {
+    @apply px-4 py-2 text-base;
+  }
+  
+  .ptw-btn-lg {
+    @apply px-6 py-3 text-lg;
+  }
+  
+  /* Button Variants - Primary */
+  .ptw-btn-primary {
+    @apply bg-red-500 text-white border border-red-500;
+    @apply hover:bg-red-600 hover:border-red-600;
+    @apply focus:ring-red-500;
+  }
+  
+  /* Button Variants - Secondary */
+  .ptw-btn-secondary {
+    @apply bg-blue-600 text-white border border-blue-600;
+    @apply hover:bg-blue-700 hover:border-blue-700;
+    @apply focus:ring-blue-500;
+  }
+  
+  /* Button Variants - Success */
+  .ptw-btn-success {
+    @apply bg-green-50 text-green-800 border border-green-400;
+    @apply hover:bg-green-100 hover:border-green-500;
+    @apply focus:ring-green-500;
+  }
+  
+  /* Button Variants - Danger */
+  .ptw-btn-danger {
+    @apply bg-red-50 text-red-800 border border-red-400;
+    @apply hover:bg-red-100 hover:border-red-500;
+    @apply focus:ring-red-500;
+  }
+  
+  /* Button Variants - Warning */
+  .ptw-btn-warning {
+    @apply bg-yellow-50 text-yellow-900 border border-yellow-400;
+    @apply hover:bg-yellow-100 hover:border-yellow-500;
+    @apply focus:ring-yellow-500;
+  }
+  
+  /* Button Variants - Info */
+  .ptw-btn-info {
+    @apply bg-blue-50 text-blue-800 border border-blue-400;
+    @apply hover:bg-blue-100 hover:border-blue-500;
+    @apply focus:ring-blue-500;
+  }
+  
+  /* Button Variants - Outline */
+  .ptw-btn-outline {
+    @apply bg-white text-gray-700 border border-gray-300;
+    @apply hover:bg-gray-50 hover:border-gray-400;
+    @apply focus:ring-gray-500;
+  }
+  
+  /* Button Variants - Ghost */
+  .ptw-btn-ghost {
+    @apply bg-transparent text-gray-700 border border-transparent;
+    @apply hover:bg-gray-50;
+    @apply focus:ring-gray-500;
+  }
+  
+  /* Status Badges - Enhanced contrast for readability */
+  .ptw-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full;
+    @apply text-xs font-semibold;
+    @apply border;
+  }
+  
+  .ptw-badge-pending {
+    @apply bg-yellow-100 text-yellow-900 border-yellow-300;
+  }
+  
+  .ptw-badge-accepted {
+    @apply bg-green-100 text-green-900 border-green-300;
+  }
+  
+  .ptw-badge-rejected {
+    @apply bg-red-100 text-red-900 border-red-300;
+  }
+  
+  .ptw-badge-cancelled {
+    @apply bg-orange-100 text-orange-900 border-orange-300;
+  }
+  
+  .ptw-badge-completed {
+    @apply bg-gray-200 text-gray-900 border-gray-400;
+  }
+  
+  /* Card Variants */
+  .ptw-card-elevated {
+    @apply ptw-card;
+    @apply shadow-lg;
+  }
+  
+  .ptw-card-interactive {
+    @apply ptw-card;
+    @apply cursor-pointer;
+    @apply hover:shadow-xl hover:-translate-y-1;
+  }
+  
+  .ptw-card-pending {
+    @apply bg-yellow-50 border-2 border-yellow-200;
+  }
+  
+  /* Input Variants */
+  .ptw-input-error {
+    @apply border-red-300 focus:ring-red-500 focus:border-red-500;
+  }
+  
+  .ptw-input-success {
+    @apply border-green-300 focus:ring-green-500 focus:border-green-500;
+  }
+  
+  /* Alert/Notification Styles */
+  .ptw-alert {
+    @apply p-4 rounded-lg border;
+    @apply flex items-start;
+  }
+  
+  .ptw-alert-success {
+    @apply bg-green-50 border-green-200 text-green-800;
+  }
+  
+  .ptw-alert-error {
+    @apply bg-red-50 border-red-200 text-red-800;
+  }
+  
+  .ptw-alert-warning {
+    @apply bg-yellow-50 border-yellow-200 text-yellow-800;
+  }
+  
+  .ptw-alert-info {
+    @apply bg-blue-50 border-blue-200 text-blue-800;
   }
 }
 
@@ -511,7 +754,7 @@ form h2 {
   box-shadow: var(--ptw-glow-primary);
 }
 
-/* Loading Animation */
+/* Loading Animations */
 .ptw-loading {
   display: inline-block;
   width: 20px;
@@ -519,14 +762,134 @@ form h2 {
   border: 2px solid var(--ptw-border-primary);
   border-radius: 50%;
   border-top-color: var(--ptw-accent-primary);
-  animation: spin 1s ease-in-out infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* Responsive Design */
+/* Skeleton Loading Animation */
+.ptw-skeleton {
+  @apply animate-pulse bg-gray-200 rounded;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Shimmer Loading Effect */
+.ptw-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Loading Spinner Component */
+.ptw-spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(254, 88, 77, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--ptw-accent-primary);
+  animation: spin 0.8s linear infinite;
+}
+
+.ptw-spinner-sm {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+.ptw-spinner-lg {
+  width: 60px;
+  height: 60px;
+  border-width: 6px;
+}
+
+/* Page Loading Overlay */
+.ptw-loading-overlay {
+  @apply fixed inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50;
+  backdrop-filter: blur(4px);
+}
+
+.ptw-loading-content {
+  @apply flex flex-col items-center space-y-4;
+}
+
+.ptw-loading-text {
+  @apply text-gray-700 font-medium;
+  color: var(--ptw-text-secondary);
+}
+
+/* Responsive Design - Comprehensive Breakpoints */
+/* Mobile First Approach */
+
+/* Extra Small devices (phones, 320px and up) */
+@media (min-width: 320px) {
+  .ptw-btn {
+    @apply text-sm;
+  }
+  
+  .ptw-btn-sm {
+    @apply px-2 py-1 text-xs;
+  }
+}
+
+/* Small devices (landscape phones, 640px and up) */
+@media (min-width: 640px) {
+  .ptw-btn {
+    @apply text-base;
+  }
+  
+  .ptw-card-elevated {
+    @apply p-6;
+  }
+}
+
+/* Medium devices (tablets, 768px and up) */
+@media (min-width: 768px) {
+  .ptw-btn {
+    @apply text-base;
+  }
+  
+  .ptw-card-elevated {
+    @apply p-8;
+  }
+}
+
+/* Large devices (desktops, 1024px and up) */
+@media (min-width: 1024px) {
+  .ptw-card-elevated {
+    @apply p-10;
+  }
+}
+
+/* Extra Large devices (large desktops, 1280px and up) */
+@media (min-width: 1280px) {
+  .ptw-card-elevated {
+    @apply p-12;
+  }
+}
+
+/* Mobile-specific optimizations */
 @media (max-width: 768px) {
   .ptw-auth-card {
     padding: 1.5rem;
@@ -545,9 +908,18 @@ form h2 {
   .ptw-dashboard-header h1 {
     font-size: 1.5rem;
   }
+  
+  /* Stack buttons on mobile */
+  .ptw-btn-group {
+    @apply flex-col space-y-2 space-x-0;
+  }
+  
+  .ptw-btn-group > .ptw-btn {
+    @apply w-full;
+  }
 }
 
-/* Mobile-specific improvements for trainer search */
+/* Small mobile devices */
 @media (max-width: 640px) {
   .ptw-dashboard-card {
     padding: 1rem;
@@ -561,7 +933,10 @@ form h2 {
   /* Ensure inputs don't overflow on mobile */
   input[type="text"],
   input[type="number"],
-  select {
+  input[type="email"],
+  input[type="password"],
+  select,
+  textarea {
     font-size: 16px; /* Prevents zoom on iOS */
     width: 100%;
     box-sizing: border-box;
@@ -570,6 +945,26 @@ form h2 {
   /* Better spacing for price range on mobile */
   .space-y-3 > * + * {
     margin-top: 0.75rem;
+  }
+  
+  /* Responsive button groups */
+  .flex.space-x-2 {
+    @apply flex-col space-y-2 space-x-0;
+  }
+  
+  .flex.space-x-2 > * {
+    @apply w-full;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .ptw-btn {
+    @apply min-h-[44px]; /* Minimum touch target size */
+  }
+  
+  .ptw-nav-item {
+    @apply min-h-[44px];
   }
 }
 

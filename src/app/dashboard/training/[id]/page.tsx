@@ -21,6 +21,25 @@ export default function TrainingDetailsPage() {
 
   const trainingId = params.id as string;
   const from = searchParams.get('from'); // Get the referrer URL
+  const returnTo = searchParams.get('returnTo'); // Get returnTo parameter
+  const trainerId = searchParams.get('trainerId'); // Get trainerId if returning to trainer profile
+
+  // Construct back URL based on returnTo parameter
+  const getBackUrl = () => {
+    if (returnTo === 'trainer' && trainerId) {
+      // Return to trainer profile with preserved state
+      const params = new URLSearchParams();
+      // Preserve any other URL parameters that might be in the current URL
+      searchParams.forEach((value, key) => {
+        if (key !== 'returnTo' && key !== 'trainerId' && key !== 'id') {
+          params.set(key, value);
+        }
+      });
+      const queryString = params.toString();
+      return `/dashboard/trainer/${trainerId}${queryString ? `?${queryString}` : ''}`;
+    }
+    return from || undefined;
+  };
 
   useEffect(() => {
     const currentUser = getUserData();
@@ -68,7 +87,7 @@ export default function TrainingDetailsPage() {
       onInquiry={handleInquiry}
       loading={loading}
       error={error}
-      backHref={from || undefined} // Pass the referrer URL if available
+      backHref={getBackUrl()} // Pass the constructed back URL
     />
   );
 }

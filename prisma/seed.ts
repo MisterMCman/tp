@@ -61,11 +61,14 @@ async function main() {
   await prisma.training.deleteMany();
   await prisma.course.deleteMany();
   await prisma.trainerTopic.deleteMany();
+  await prisma.trainerTrainingType.deleteMany();
   await prisma.loginToken.deleteMany();
-  await prisma.trainingCompanyLoginToken.deleteMany();
+  await prisma.companyUserLoginToken.deleteMany();
+  await prisma.companyUser.deleteMany();
   await prisma.topicSuggestion.deleteMany();
   await prisma.trainerProfileVersion.deleteMany();
   await prisma.availability.deleteMany();
+  await prisma.location.deleteMany();
   await prisma.trainingCompany.deleteMany();
   await prisma.trainer.deleteMany();
   await prisma.topic.deleteMany();
@@ -83,13 +86,15 @@ async function main() {
   await prisma.$executeRaw`ALTER TABLE TrainingRequest AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Message AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE LoginToken AUTO_INCREMENT = 1`;
-  await prisma.$executeRaw`ALTER TABLE TrainingCompanyLoginToken AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE CompanyUserLoginToken AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE CompanyUser AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TopicSuggestion AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Participant AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Invoice AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Availability AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE FileAttachment AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Message AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE Location AUTO_INCREMENT = 1`;
 
   // Create countries
   console.log('🌍 Creating countries...');
@@ -180,6 +185,47 @@ async function main() {
 
   console.log(`  ✓ ${powerToWork.companyName}`);
 
+  // Create CompanyUsers for PowerToWork
+  console.log('\n👥 Creating CompanyUsers for PowerToWork...');
+  const powerToWorkAdmin = await prisma.companyUser.create({
+    data: {
+      email: 'sarah.mueller@powertowork.com',
+      firstName: 'Sarah',
+      lastName: 'Müller',
+      phone: '+49 521 12345678',
+      role: 'ADMIN',
+      isActive: true,
+      companyId: powerToWork.id
+    }
+  });
+  console.log(`  ✓ ${powerToWorkAdmin.firstName} ${powerToWorkAdmin.lastName} (${powerToWorkAdmin.email}) - Admin`);
+
+  const powerToWorkUser = await prisma.companyUser.create({
+    data: {
+      email: 'max.mustermann@powertowork.com',
+      firstName: 'Max',
+      lastName: 'Mustermann',
+      phone: '+49 521 12345679',
+      role: 'EDITOR',
+      isActive: true,
+      companyId: powerToWork.id
+    }
+  });
+  console.log(`  ✓ ${powerToWorkUser.firstName} ${powerToWorkUser.lastName} (${powerToWorkUser.email}) - Editor`);
+
+  const powerToWorkViewer = await prisma.companyUser.create({
+    data: {
+      email: 'anna.schmidt@powertowork.com',
+      firstName: 'Anna',
+      lastName: 'Schmidt',
+      phone: '+49 521 12345680',
+      role: 'VIEWER',
+      isActive: true,
+      companyId: powerToWork.id
+    }
+  });
+  console.log(`  ✓ ${powerToWorkViewer.firstName} ${powerToWorkViewer.lastName} (${powerToWorkViewer.email}) - Betrachter`);
+
   // Create Lorenz Surkemper as MAIN DEMO TRAINER for PowerToWork
   console.log('\n👤 Creating Lorenz Surkemper (Main Demo Trainer)...');
 
@@ -198,8 +244,20 @@ async function main() {
       iban: 'DE89 3704 0044 0532 0130 00',
       taxId: 'DE123456789',
       countryId: germany?.id,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      travelRadius: 200, // 200 km radius
+      latitude: 52.0200, // Bielefeld coordinates
+      longitude: 8.5300
     }
+  });
+
+  // Add training types for Lorenz
+  await prisma.trainerTrainingType.createMany({
+    data: [
+      { trainerId: lorenz.id, type: 'ONLINE' },
+      { trainerId: lorenz.id, type: 'HYBRID' },
+      { trainerId: lorenz.id, type: 'VOR_ORT' }
+    ]
   });
 
   console.log(`  ✓ Lorenz Surkemper (ID: ${lorenz.id})`);
@@ -295,8 +353,20 @@ async function main() {
         bio: trainerData.bio,
         dailyRate: trainerData.dailyRate,
         countryId: germany?.id,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        travelRadius: 150, // 150 km radius
+        latitude: trainerData.city === 'Berlin' ? 52.5200 : trainerData.city === 'München' ? 48.1351 : trainerData.city === 'Hamburg' ? 53.5511 : 50.9375, // Köln
+        longitude: trainerData.city === 'Berlin' ? 13.4050 : trainerData.city === 'München' ? 11.5820 : trainerData.city === 'Hamburg' ? 9.9937 : 6.9603, // Köln
       }
+    });
+
+    // Add training types for trainer
+    await prisma.trainerTrainingType.createMany({
+      data: [
+        { trainerId: trainer.id, type: 'ONLINE' },
+        { trainerId: trainer.id, type: 'HYBRID' },
+        { trainerId: trainer.id, type: 'VOR_ORT' }
+      ]
     });
 
     // Assign topics with expertise levels
@@ -530,8 +600,55 @@ async function main() {
     { course: courses.find(c => c.title === 'Docker Container'), topic: dockerTopic, title: 'Docker & Kubernetes', dailyRate: 1050 },
   ];
 
+  // Create Locations for PowerToWork BEFORE creating trainings
+  console.log('\n📍 Creating Locations for PowerToWork...');
+  
+  const onlineLocation = await prisma.location.create({
+    data: {
+      name: 'Zoom Meeting',
+      type: 'ONLINE',
+      companyId: powerToWork.id,
+      onlinePlatform: 'ZOOM',
+      onlineLink: 'https://zoom.us/j/powertowork'
+    }
+  });
+  console.log(`  ✓ ${onlineLocation.name} (${onlineLocation.type})`);
+
+  const berlinLocation = await prisma.location.create({
+    data: {
+      name: 'Berlin, Schulungsraum A',
+      type: 'PHYSICAL',
+      companyId: powerToWork.id,
+      street: 'Friedrichstraße',
+      houseNumber: '123',
+      zipCode: '10117',
+      city: 'Berlin',
+      countryId: germany?.id,
+      latitude: 52.5200,
+      longitude: 13.4050
+    }
+  });
+  console.log(`  ✓ ${berlinLocation.name} (${berlinLocation.type})`);
+
+  const muenchenLocation = await prisma.location.create({
+    data: {
+      name: 'München, TechHub',
+      type: 'PHYSICAL',
+      companyId: powerToWork.id,
+      street: 'Maximilianstraße',
+      houseNumber: '45',
+      zipCode: '80539',
+      city: 'München',
+      countryId: germany?.id,
+      latitude: 48.1351,
+      longitude: 11.5820
+    }
+  });
+  console.log(`  ✓ ${muenchenLocation.name} (${muenchenLocation.type})`);
+
   // Create trainings with proper dates
   // Each trainer has 6 trainings: first 2 are COMPLETED (October 2025), last 4 are PUBLISHED (after 15.11.2025)
+  // Some trainings will be multi-day (2, 3, 4, or 5 days) within the same week
   for (let i = 0; i < trainingTemplates.length; i++) {
     const template = trainingTemplates[i];
     if (!template.course || !template.topic) continue;
@@ -546,22 +663,55 @@ async function main() {
     const status = isCompleted ? 'COMPLETED' : 'PUBLISHED';
     
     // Set dates: completed in the past, others in the future
-    let trainingDate: Date;
+    let trainingStartDate: Date;
     if (isCompleted) {
       // Completed trainings: spread across 30-60 days ago
       const daysAgo = completedTrainingsEndDaysAgo + 
         ((completedTrainingsStartDaysAgo - completedTrainingsEndDaysAgo) / 10) * 
         (trainerGroup * 2 + trainingIndexInGroup);
-      trainingDate = new Date(today);
-      trainingDate.setDate(trainingDate.getDate() - Math.round(daysAgo));
+      trainingStartDate = new Date(today);
+      trainingStartDate.setDate(trainingStartDate.getDate() - Math.round(daysAgo));
     } else {
       // Future trainings: spread across 7-30 days from now
       const daysFromNow = futureTrainingsStartDaysFromNow + 
         ((futureTrainingsEndDaysFromNow - futureTrainingsStartDaysFromNow) / 20) * 
         (trainerGroup * 4 + (trainingIndexInGroup - 2));
-      trainingDate = new Date(today);
-      trainingDate.setDate(trainingDate.getDate() + Math.round(daysFromNow));
+      trainingStartDate = new Date(today);
+      trainingStartDate.setDate(trainingStartDate.getDate() + Math.round(daysFromNow));
     }
+    
+    // For future trainings (index 2-5 in each group), make some multi-day
+    // Make trainings at index 2, 3, 4, 5 be 2, 3, 4, 5 days respectively (if future)
+    let trainingDuration = 1; // Default: 1 day
+    if (!isCompleted && trainingIndexInGroup >= 2) {
+      // Map: index 2 -> 2 days, index 3 -> 3 days, index 4 -> 4 days, index 5 -> 5 days
+      trainingDuration = trainingIndexInGroup - 1; // 2, 3, 4, 5
+    }
+    
+    // Ensure the training fits within a week (start on Monday, end by Friday)
+    // Adjust start date to be a Monday if needed for multi-day trainings
+    if (trainingDuration > 1 && !isCompleted) {
+      const dayOfWeek = trainingStartDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      // Adjust to Monday (1) if needed, but ensure we don't go back too far
+      if (dayOfWeek === 0) {
+        trainingStartDate.setDate(trainingStartDate.getDate() + 1); // Move to Monday
+      } else if (dayOfWeek > 1) {
+        // If it's Tuesday-Friday, move back to Monday
+        trainingStartDate.setDate(trainingStartDate.getDate() - (dayOfWeek - 1));
+      }
+      // Ensure end date doesn't exceed Friday (5)
+      const endDate = new Date(trainingStartDate);
+      endDate.setDate(endDate.getDate() + trainingDuration - 1);
+      const endDayOfWeek = endDate.getDay();
+      if (endDayOfWeek > 5) {
+        // If end date is Saturday or Sunday, adjust start date back
+        const daysToAdjust = endDayOfWeek - 5;
+        trainingStartDate.setDate(trainingStartDate.getDate() - daysToAdjust);
+      }
+    }
+    
+    const trainingEndDate = new Date(trainingStartDate);
+    trainingEndDate.setDate(trainingEndDate.getDate() + trainingDuration - 1);
     
     // Randomly assign start time (8:00 or 9:00) and end time (15:00 or 16:00)
     const startHour = (i % 2 === 0) ? '08' : '09';
@@ -573,15 +723,14 @@ async function main() {
         title: template.title,
         topicId: template.topic.id,
         companyId: powerToWork.id,
-        startDate: trainingDate,
-        endDate: trainingDate,
+        startDate: trainingStartDate,
+        endDate: trainingEndDate,
         startTime: `${startHour}:00`,
         endTime: `${endHour}:00`,
-        //todo locations should also be a table with name, address, city, country, etc.
-        location: i % 3 === 0 ? 'Online (Zoom)' : i % 3 === 1 ? 'Berlin, Schulungsraum A' : 'München, TechHub',
+        locationId: i % 3 === 0 ? onlineLocation.id : i % 3 === 1 ? berlinLocation.id : muenchenLocation.id,
         participantCount: 10 + (i % 5),
         dailyRate: template.dailyRate,
-        description: `${template.title} - Professionelle Schulung`,
+        description: `${template.title} - Professionelle Schulung${trainingDuration > 1 ? ` (${trainingDuration} Tage)` : ''}`,
         status: status as 'PUBLISHED' | 'DRAFT' | 'COMPLETED' | 'IN_PROGRESS' | 'CANCELLED'
       }
     });
@@ -960,6 +1109,10 @@ async function main() {
   console.log('\n📊 Summary:');
   console.log(`  - ${createdTopics.length} topics from CSV`);
   console.log(`  - 1 Training Company: PowerToWork GmbH`);
+  console.log(`  - 3 CompanyUsers for PowerToWork:`);
+  console.log(`    • Sarah Müller (Admin) - sarah.mueller@powertowork.com`);
+  console.log(`    • Max Mustermann (Editor) - max.mustermann@powertowork.com`);
+  console.log(`    • Anna Schmidt (Betrachter) - anna.schmidt@powertowork.com`);
   console.log(`  - 5 Trainers (Lorenz Surkemper + 4 others)`);
   console.log(`  - ${courses.length} Courses (templates for recurring trainings)`);
   console.log(`  - ${allTrainings.length} Trainings (concrete course instances):`);
@@ -972,8 +1125,12 @@ async function main() {
   console.log(`  - ${invoiceCount} Invoices (for accepted trainings)`);
   console.log(`  - 5 Availability slots for Lorenz (Mon-Fri, 9-17)`);
   console.log('\n🎯 Demo Login Credentials:');
-  console.log(`  Email: surkemper@powertowork.com`);
-  console.log(`  (Works for both Company and Trainer login)`);
+  console.log(`  Company Users:`);
+  console.log(`    • Admin: sarah.mueller@powertowork.com (kann alles verwalten)`);
+  console.log(`    • Editor: max.mustermann@powertowork.com (kann Anfragen stellen, nur eigene Daten ändern)`);
+  console.log(`    • Betrachter: anna.schmidt@powertowork.com (nur ansehen, keine Anfragen)`);
+  console.log(`  Trainer: surkemper@powertowork.com`);
+  console.log(`  (Legacy company login auch möglich: sarah.mueller@powertowork.com via TrainingCompany)`);
   console.log('\n📋 Test Scenarios:');
   console.log(`  ✓ View training requests (6 per trainer with proper distribution)`);
   console.log(`  ✓ Accept/Reject trainer requests (auto-decline others)`);

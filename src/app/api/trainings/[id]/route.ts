@@ -25,6 +25,11 @@ export async function GET(
       },
       include: {
         topic: true,
+        location: {
+          include: {
+            country: true
+          }
+        },
         company: {
           select: {
             id: true,
@@ -39,7 +44,8 @@ export async function GET(
               select: {
                 id: true,
                 firstName: true,
-                lastName: true
+                lastName: true,
+                email: true
               }
             }
           },
@@ -87,6 +93,31 @@ export async function GET(
       // If user is not logged in or not the assigned trainer, don't show assigned trainer info
     }
 
+    // Transform requests to include trainer info and status
+    const requestedTrainers = training.requests.map(request => ({
+      id: request.trainer.id,
+      firstName: request.trainer.firstName,
+      lastName: request.trainer.lastName,
+      email: request.trainer.email || '',
+      status: request.status.toLowerCase(),
+      counterPrice: request.counterPrice,
+      companyCounterPrice: request.companyCounterPrice,
+      trainerAccepted: request.trainerAccepted,
+      createdAt: request.createdAt.toISOString(),
+      updatedAt: request.updatedAt.toISOString()
+    }));
+
+    // Get location display string from Location table
+    let locationDisplay = 'Kein Ort angegeben';
+    if (training.location) {
+      if (training.location.type === 'ONLINE') {
+        locationDisplay = training.location.name || 'Online';
+      } else {
+        locationDisplay = training.location.name || 
+          (training.location.city ? `${training.location.city}${training.location.street ? `, ${training.location.street}` : ''}` : 'Vor Ort');
+      }
+    }
+
     // Transform to match frontend expectations
     const transformedTraining = {
       id: training.id,
@@ -94,7 +125,7 @@ export async function GET(
       topicName: training.topic.name,
       date: training.startDate.toISOString(),
       endTime: new Date(`${training.startDate.toISOString().split('T')[0]}T${training.endTime}`).toISOString(),
-      location: training.location,
+      location: locationDisplay,
       participants: training.participantCount,
       status: training.status.toLowerCase(),
       description: training.description,
@@ -104,7 +135,8 @@ export async function GET(
       startTime: training.startTime,
       endDate: training.endDate.toISOString(),
       company: training.company,
-      assignedTrainer: assignedTrainer
+      assignedTrainer: assignedTrainer,
+      requestedTrainers: requestedTrainers
     };
 
     return NextResponse.json(transformedTraining);

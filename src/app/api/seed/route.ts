@@ -15,7 +15,6 @@ async function seedDatabase() {
   await prisma.course.deleteMany();
   await prisma.trainerTopic.deleteMany();
   await prisma.loginToken.deleteMany();
-  await prisma.trainingCompanyLoginToken.deleteMany();
   await prisma.topicSuggestion.deleteMany();
   await prisma.trainerProfileVersion.deleteMany();
   await prisma.availability.deleteMany();
@@ -34,7 +33,6 @@ async function seedDatabase() {
   // Inquiry table removed - using TrainingRequest instead
   await prisma.$executeRaw`ALTER TABLE TrainerTopic AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE LoginToken AUTO_INCREMENT = 1`;
-  await prisma.$executeRaw`ALTER TABLE TrainingCompanyLoginToken AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TopicSuggestion AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainerProfileVersion AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Availability AUTO_INCREMENT = 1`;
