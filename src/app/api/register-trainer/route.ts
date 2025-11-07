@@ -111,8 +111,7 @@ export async function POST(req: Request) {
         });
 
         // TrainerTopic-Einträge erstellen falls topics vorhanden
-        // Use topicsWithLevels if available, otherwise fall back to topics (backward compatibility)
-        const topicsToProcess = topicsWithLevels || (topics ? topics.map((name: string) => ({ name, level: 'GRUNDLAGE' as const })) : []);
+        const topicsToProcess = topicsWithLevels || [];
         
         if (topicsToProcess && topicsToProcess.length > 0) {
             // Zuerst prüfen, ob alle Topics in der Datenbank existieren

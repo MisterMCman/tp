@@ -414,7 +414,6 @@ function TrainerRegistrationContent() {
           zipCode: formData.zip,
           city: formData.city,
           countryId: formData.countryId,
-          topics: topicsWithLevels.map(t => t.name), // Send topic names for backward compatibility
           topicsWithLevels: topicsWithLevels, // Send full topic data with levels
           topicSuggestions: topicSuggestionsList,
           bio: formData.bio,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
+import { getUserData } from '@/lib/session';
 
 interface AccountingCredit {
   id: number;
@@ -53,19 +54,22 @@ export default function InvoicesPage() {
   const fetchAccountingCredits = async () => {
     try {
       setLoading(true);
-      
-      // Get user data from localStorage (supports both trainer and company)
-      const trainerData = localStorage.getItem("trainer_data");
-      const companyData = localStorage.getItem("company_data");
-      
-      if (!trainerData && !companyData) {
+
+      // Get user data (works for both trainers and companies)
+      const user = getUserData();
+
+      if (!user) {
         console.error('No user data found');
         setLoading(false);
         return;
       }
-      
-      const user = trainerData ? JSON.parse(trainerData) : JSON.parse(companyData);
-      
+
+      if (!user || !user.id) {
+        console.error('Invalid user data:', user);
+        setLoading(false);
+        return;
+      }
+
       // Fetch accounting credits/invoices from API based on user type
       let apiUrl = '';
       if (user.userType === 'TRAINER') {
@@ -73,18 +77,21 @@ export default function InvoicesPage() {
       } else if (user.userType === 'TRAINING_COMPANY') {
         apiUrl = `/api/accounting-credits?companyId=${user.id}`;
       } else {
-        console.error('Unknown user type');
+        console.error('Unknown user type:', user.userType);
         setLoading(false);
         return;
       }
-      
+
+      console.log('Fetching invoices from:', apiUrl);
       const response = await fetch(apiUrl);
-      
+
       if (response.ok) {
         const data = await response.json();
+        console.log('Received invoices:', data);
         setCredits(data);
       } else {
-        console.error('Failed to fetch accounting credits/invoices');
+        const errorText = await response.text();
+        console.error('Failed to fetch accounting credits/invoices:', response.status, errorText);
         setCredits([]); // Show empty state if API fails
       }
     } catch (error) {
@@ -103,161 +110,156 @@ export default function InvoicesPage() {
     const endOfMonth = new Date(invoiceDate.getFullYear(), invoiceDate.getMonth() + 1, 0);
     const formattedInvoiceDate = endOfMonth.toLocaleDateString('de-DE');
     const monthAndYear = invoiceDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
-    
-    // Set up colors
-    const primaryColor = [0, 51, 102]; // Dark blue similar to powertowork branding
-    
+
     // Header with powertowork branding
     doc.setFontSize(8);
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
     doc.text("powertowork GmbH | Hermannstraße 3 | 33602 Bielefeld | Germany", 20, 20);
-    
-    // Trainer address - using structured address fields
+
+    // Trainer address - using structured address fields with smaller spacing
     doc.setFontSize(10);
-    doc.text(`${trainerName}`, 20, 35);
-    
-    let yPosition = 42;
+    let yPosition = 35;
+    doc.text(`${trainerName}`, 20, yPosition);
+    yPosition += 5; // Reduced from 7 to 5
+
     if (requestData.trainer.street) {
       const streetLine = `${requestData.trainer.street}${requestData.trainer.houseNumber ? ' ' + requestData.trainer.houseNumber : ''}`;
       doc.text(streetLine, 20, yPosition);
-      yPosition += 7;
+      yPosition += 5; // Reduced from 7 to 5
     }
     if (requestData.trainer.zipCode && requestData.trainer.city) {
       doc.text(`${requestData.trainer.zipCode} ${requestData.trainer.city}`, 20, yPosition);
-      yPosition += 7;
+      yPosition += 5; // Reduced from 7 to 5
     }
     if (requestData.trainer.country) {
       doc.text(requestData.trainer.country.name, 20, yPosition);
+      yPosition += 5; // Reduced from 7 to 5
     }
-    
-    // Dynamic trainer role based on bio, with fallback
-    const trainerRole = requestData.trainer.bio ? 
-      requestData.trainer.bio.split('.')[0] + (requestData.trainer.bio.split('.')[0].endsWith('.') ? '' : '.') : 
-      'Professional Trainer';
-    doc.text(trainerRole, 20, 63);
-    
+
+    // Bio info removed - no longer displayed
+
     if (requestData.trainer.taxId) {
-      doc.text(`Tax ID: ${requestData.trainer.taxId}`, 20, 70);
+      doc.text(`Tax ID: ${requestData.trainer.taxId}`, 20, yPosition);
     }
-    
-    // Date (top right)
-    doc.text(formattedInvoiceDate, 150, 85);
-    
+
     // Title
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text("ACCOUNTING CREDIT", 20, 100);
-    
+
+    // Credit Note Number and Date (right-aligned)
     doc.setFontSize(11);
-    doc.text(`Credit Note No.: ${invoiceNumber}`, 20, 110);
-    
+    const creditNoteText = `Credit Note No.: ${invoiceNumber}`;
+    doc.text(creditNoteText, 20, 110);
+    // Date right-aligned, aligned with credit note number
+    doc.text(formattedInvoiceDate, 190, 110, { align: 'right' });
+
     // Content
     doc.setFont("helvetica", "normal");
     doc.text(`Dear ${trainerName},`, 20, 125);
     doc.text("Please find below the accounting credit for your services:", 20, 135);
-    
+
     // Table
     const tableStartY = 150;
-    
+
     // Table data
     const baseAmountFormatted = `${finalPrice.toFixed(2).replace('.', ',')} €`;
-    
+
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    
+
     // Table headers
     doc.text("Pos.", 20, tableStartY);
     doc.text("Description", 40, tableStartY);
     doc.text("Amount", 160, tableStartY);
-    
+
     // Draw line under headers
     doc.line(20, tableStartY + 2, 190, tableStartY + 2);
-    
+
     doc.setFont("helvetica", "normal");
-    
+
     // Row 1: Training service
     const row1Y = tableStartY + 10;
     doc.text("1", 20, row1Y);
     // Use training title, fallback to course title if available
     const trainingTitle = requestData.training.course?.title || requestData.training.title;
     doc.text(`Training: ${trainingTitle} for ${monthAndYear}`, 40, row1Y);
-    doc.text(`Fixed price: ${baseAmountFormatted}`, 40, row1Y + 7);
+    // Better spacing for the fixed price line
+    doc.text(`Fixed price: ${baseAmountFormatted}`, 40, row1Y + 8);
     doc.text(baseAmountFormatted, 160, row1Y);
-    
-    // Base amount
-    const row2Y = row1Y + 20;
-    doc.text("Base Amount", 40, row2Y);
-    doc.text(baseAmountFormatted, 160, row2Y);
-    
+
+    // Base Amount line removed - not needed for single service invoices
+
     // VAT
-    const row3Y = row2Y + 10;
+    const row3Y = row1Y + 20; // More space after service item
     doc.text("VAT", 40, row3Y);
     doc.text("VAT excluded", 160, row3Y);
-    
-    // Total
-    const row4Y = row3Y + 10;
-    doc.setFont("helvetica", "bold");
-    doc.text("Total Amount", 40, row4Y);
-    doc.text(baseAmountFormatted, 160, row4Y);
-    
+
+
     // Draw line above total
+    const row4Y = row3Y + 10; // Increased spacing from 10 to 15
     doc.line(40, row4Y - 2, 190, row4Y - 2);
-    
+
+    // Total - with extra space before it
+    doc.setFont("helvetica", "bold");
+    doc.text("Total Amount", 40, row4Y + 5);
+    doc.text(baseAmountFormatted, 160, row4Y + 5);
+
+
+
+
     // Notes
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text("Note: VAT is not applicable as per the reverse charge procedure for cross-border services.", 20, row4Y + 20);
-    
+
     // Footer text
     doc.setFontSize(11);
     doc.text("The amount will be transferred to your account. Thank you for your excellent work and", 20, row4Y + 35);
     doc.text("the pleasant collaboration.", 20, row4Y + 42);
-    
+
     // Signature
     doc.text("Best regards,", 20, row4Y + 57);
     doc.text("powertowork GmbH", 20, row4Y + 64);
-    
-    // Company information at the bottom
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.text("POWERTOWORK GMBH:", 20, 270);
-    
+
+    // Company information at the bottom - formatted as a single clean line
+    const footerY = 280;
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(0, 0, 0);
-    doc.text("CEO: Lorenz Surkemper, Phone: +49 176 7091 0870", 65, 270);
-    
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.text("| VAT ID:", 20, 277);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(0, 0, 0);
-    doc.text("DE341423200", 50, 277);
-    
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.text("Bank details:", 80, 277);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(0, 0, 0);
-    doc.text("Sparkasse Schaumburg, IBAN: DE65 2555 1480 0313 8616 35 | BIC: NOLADE21SHG", 20, 284);
-    
+
+    // Format footer as a single line with proper spacing (note: IBAN corrected to include missing "1")
+    const footerText = "POWERTOWORK GMBH: CEO: Lorenz Surkemper, Phone: +49 176 7091 0870 | VAT ID: DE341423200 | Bank details: Sparkasse Schaumburg, IBAN: DE65 2555 1480 0313 8616 351 | BIC: NOLADE21SHG";
+
+    // Use splitTextToSize to handle long text and wrap if needed
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - (margin * 2);
+    const splitFooter = doc.splitTextToSize(footerText, maxWidth);
+
+    // Center the footer text
+    let footerYPos = footerY;
+    splitFooter.forEach((line: string) => {
+      const textWidth = doc.getTextWidth(line);
+      const xPos = (pageWidth - textWidth) / 2;
+      doc.text(line, xPos, footerYPos);
+      footerYPos += 5;
+    });
+
     return doc;
   };
 
   const downloadCredit = async (invoiceNumber: string) => {
     try {
-      // Get user data from localStorage (supports both trainer and company)
-      const trainerData = localStorage.getItem("trainer_data");
-      const companyData = localStorage.getItem("company_data");
-      
-      if (!trainerData && !companyData) {
+      // Get user data (works for both trainers and companies)
+      const user = getUserData();
+
+      if (!user) {
         alert('No user data found. Please log in again.');
         return;
       }
-      
+
       // For trainers: Parse accounting credit number (AC-YYMMDD-01-XXXX)
       // For companies: Invoice number might be different format (INV-XXXX)
       if (invoiceNumber.startsWith('AC-')) {
@@ -267,17 +269,17 @@ export default function InvoicesPage() {
           alert('Invalid invoice number format');
           return;
         }
-        
+
         const requestId = parseInt(parts[3]);
-        
+
         // Fetch full training request data with trainer and training details
         const response = await fetch(`/api/accounting-credits/${requestId}`);
         if (!response.ok) {
           throw new Error('Failed to fetch training request data');
         }
-        
+
         const requestData: TrainingRequestData = await response.json();
-        
+
         // Generate and download PDF using jsPDF
         const doc = generateAccountingCreditPDF(requestData, invoiceNumber);
         doc.save(`${invoiceNumber}.pdf`);
@@ -287,7 +289,7 @@ export default function InvoicesPage() {
         alert('Invoice PDF generation for companies is not yet implemented. Please contact support.');
         console.log('Company invoice download requested:', invoiceNumber);
       }
-      
+
     } catch (error) {
       console.error('Error downloading credit/invoice:', error);
       alert('Fehler beim Herunterladen der Rechnung. Bitte versuchen Sie es erneut.');

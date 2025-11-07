@@ -48,7 +48,7 @@ export default function MessageBubble({
         <p className="text-xs font-semibold mb-2 text-slate-600">{senderName}</p>
       )}
 
-      <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isFromUser ? 'text-slate-800' : 'text-white'}`}>
+      <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isFromUser ? 'text-slate-800' : '!text-white'}`} style={!isFromUser ? { color: '#ffffff' } : undefined}>
         {message}
       </p>
 
@@ -87,7 +87,7 @@ export default function MessageBubble({
       <p className={`text-xs mt-2 font-medium ${
         isFromUser ? 'text-slate-500' : 'text-blue-100'
       }`}>
-        {format(new Date(timestamp), "HH:mm", { locale: de })}
+        {format(new Date(timestamp), "dd.MM.yyyy", { locale: de })} - {format(new Date(timestamp), "HH:mm", { locale: de })}
       </p>
     </div>
   );

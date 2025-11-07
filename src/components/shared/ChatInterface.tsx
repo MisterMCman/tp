@@ -12,6 +12,8 @@ export type Conversation = {
   trainingTitle: string;
   companyName: string;
   trainerName?: string;
+  trainingStartDate?: string;
+  trainingEndDate?: string;
   lastMessage: TrainingRequestMessage;
   unreadCount: number;
   messages: TrainingRequestMessage[];
@@ -41,14 +43,31 @@ export default function ChatInterface({
   const pathname = usePathname();
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (force = false) => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    
+    // Check if user is near bottom (within 100px) or force scroll
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    
+    if (force || isNearBottom) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: force ? 'smooth' : 'auto'
+      });
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Scroll when conversation changes (force scroll)
+    scrollToBottom(true);
+  }, [selectedConversation?.trainingRequestId]);
+
+  useEffect(() => {
+    // Scroll when messages change (respect user scroll position)
+    scrollToBottom(false);
   }, [selectedConversation?.messages]);
 
   const handleSendMessage = async () => {
@@ -58,6 +77,8 @@ export default function ChatInterface({
     try {
       await onSendMessage(newMessage, selectedConversation.trainingRequestId);
       setNewMessage("");
+      // Scroll immediately after sending (user expects to see their message)
+      setTimeout(() => scrollToBottom(true), 100);
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -100,8 +121,8 @@ export default function ChatInterface({
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       {/* Conversations List */}
-      <div className="w-1/3 bg-white border-r border-slate-200 shadow-sm flex flex-col">
-        <div className="p-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
+      <div className="w-1/3 bg-white border-r border-slate-200 shadow-sm flex flex-col overflow-hidden">
+        <div className="p-5 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg flex-shrink-0">
           <h1 className="text-xl font-bold tracking-tight">
             {userType === 'TRAINER' ? 'Nachrichten' : 'Unterhaltungen'}
           </h1>
@@ -147,21 +168,21 @@ export default function ChatInterface({
                   )}
                 </div>
 
-                <p className="text-sm text-slate-600 mb-2 truncate font-medium">
-                  {userType === 'TRAINER'
-                    ? conversation.companyName
-                    : conversation.trainerName || 'Trainer'
-                  }
-                </p>
-
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-slate-500 truncate flex-1 mr-2 leading-relaxed">
-                    {conversation.lastMessage.message}
+                <div className="flex justify-between items-center mb-2 gap-2">
+                  <p className="text-sm text-slate-600 truncate font-medium flex-1">
+                    {userType === 'TRAINER'
+                      ? conversation.companyName
+                      : conversation.trainerName || 'Trainer'
+                    }
                   </p>
-                  <span className="text-xs text-slate-400 whitespace-nowrap font-medium">
-                    {format(new Date(conversation.lastMessage.createdAt), "HH:mm", { locale: de })}
+                  <span className="text-xs text-slate-400 whitespace-nowrap font-medium flex-shrink-0">
+                    {format(new Date(conversation.lastMessage.createdAt), "dd.MM.yyyy", { locale: de })} - {format(new Date(conversation.lastMessage.createdAt), "HH:mm", { locale: de })}
                   </span>
                 </div>
+
+                <p className="text-sm text-slate-500 truncate leading-relaxed">
+                  {conversation.lastMessage.message}
+                </p>
               </div>
             ))
           )}
@@ -169,11 +190,11 @@ export default function ChatInterface({
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {selectedConversation ? (
           <>
-            {/* Chat Header */}
-            <div className="bg-white p-4 border-b border-slate-200 shadow-sm flex items-center">
+            {/* Chat Header - Sticky */}
+            <div className="bg-white p-4 border-b border-slate-200 shadow-sm flex items-center sticky top-0 z-10 flex-shrink-0">
               <div className="flex-1">
                 <div className="flex items-center space-x-3">
                   <div className="flex-shrink-0">
@@ -195,6 +216,14 @@ export default function ChatInterface({
                       <h2 className="font-bold text-slate-800 group-hover:text-slate-900 leading-tight">
                         {selectedConversation.trainingTitle}
                       </h2>
+                      {selectedConversation.trainingStartDate && selectedConversation.trainingEndDate && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          {format(new Date(selectedConversation.trainingStartDate), "dd.MM.yyyy", { locale: de })}
+                          {selectedConversation.trainingStartDate !== selectedConversation.trainingEndDate && (
+                            <> - {format(new Date(selectedConversation.trainingEndDate), "dd.MM.yyyy", { locale: de })}</>
+                          )}
+                        </p>
+                      )}
                       <p className="text-sm text-slate-600 mt-1">
                         {userType === 'TRAINER'
                           ? selectedConversation.companyName
@@ -214,8 +243,8 @@ export default function ChatInterface({
               </div>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-slate-50 to-white">
+            {/* Messages - Scrollable */}
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-slate-50 to-white min-h-0">
               {selectedConversation.messages
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                 .map((message) => {
@@ -234,10 +263,12 @@ export default function ChatInterface({
                           : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg'
                       } rounded-2xl px-4 py-3 relative`}>
                         {!isFromUser && (
-                          <p className="text-xs font-semibold mb-2 text-slate-600">{senderName}</p>
+                          <p className="text-xs font-semibold mb-2 !text-white" style={{ color: '#ffffff' }}>{senderName}</p>
                         )}
 
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.message}</p>
+                        <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isFromUser ? 'text-slate-800' : '!text-white'}`} style={!isFromUser ? { color: '#ffffff' } : undefined}>
+                          {message.message}
+                        </p>
 
                         {/* File Attachments */}
                         {message.attachments && message.attachments.length > 0 && (
@@ -274,17 +305,16 @@ export default function ChatInterface({
                         <p className={`text-xs mt-2 font-medium ${
                           isFromUser ? 'text-slate-500' : 'text-blue-100'
                         }`}>
-                          {format(new Date(message.createdAt), "HH:mm", { locale: de })}
+                          {format(new Date(message.createdAt), "dd.MM.yyyy", { locale: de })} - {format(new Date(message.createdAt), "HH:mm", { locale: de })}
                         </p>
                       </div>
                     </div>
                   );
                 })}
-              <div ref={messagesEndRef} />
             </div>
 
-            {/* Message Input */}
-            <div className="bg-white p-6 border-t border-slate-200 shadow-lg">
+            {/* Message Input - Fixed at bottom */}
+            <div className="bg-white p-6 border-t border-slate-200 shadow-lg flex-shrink-0">
               <div className="flex items-end space-x-4">
                 <div className="flex-1">
                   <div className="relative">

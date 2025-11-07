@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getTrainerData } from '@/lib/session';
+import { getUserData } from '@/lib/session';
 
 export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
-    const currentUser = getTrainerData();
+    const currentUser = getUserData();
     
     if (!currentUser || currentUser.userType !== 'TRAINER') {
       return NextResponse.json(

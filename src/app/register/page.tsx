@@ -65,7 +65,8 @@ function AuthFormContent() {
 
   // Wenn bereits Session vorhanden, direkt weiterleiten
   useEffect(() => {
-    const token = localStorage.getItem("mr_token");
+    const { getToken } = require('@/lib/session');
+    const token = getToken();
     if (token) {
       router.push("/dashboard");
     }

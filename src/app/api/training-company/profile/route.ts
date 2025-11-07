@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getTrainerData } from '@/lib/session';
+import { getCompanyData } from '@/lib/session';
 
 export async function GET() {
   try {
     // Get current user to identify the training company
-    const currentUser = getTrainerData();
+    const currentUser = getCompanyData();
     console.log('[Training Company Profile GET] Current user from session:', currentUser);
     
     if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
@@ -78,7 +78,7 @@ export async function GET() {
 export async function PATCH(req: Request) {
   try {
     // Get current user to identify the training company
-    const currentUser = getTrainerData();
+    const currentUser = getCompanyData();
     if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
       return NextResponse.json(
         { message: 'Nicht autorisiert oder kein Unternehmensaccount' },

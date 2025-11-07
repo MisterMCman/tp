@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import jsPDF from 'jspdf';
-import { getTrainerData, getCompanyData } from "../../../lib/session";
+import { getUserData, getTrainerData, getCompanyData } from "../../../lib/session";
 
 interface TrainingRequest {
   id: number;
@@ -17,7 +18,8 @@ interface TrainingRequest {
   originalPrice: number;
   proposedPrice: number;
   counterPrice?: number;
-  message?: string;
+  companyCounterPrice?: number;
+  trainerAccepted?: boolean;
   status: "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
   createdAt: string;
   updatedAt: string;
@@ -41,7 +43,6 @@ interface ApiTrainingRequest {
   trainingId: number;
   trainerId: number;
   status: string;
-  message: string | null;
   counterPrice: number | null;
   createdAt: string;
   updatedAt: string;
@@ -64,19 +65,41 @@ interface ApiTrainingRequest {
 type FilterStatus = "all" | "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
 
 export default function RequestsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [requests, setRequests] = useState<TrainingRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<TrainingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeRequest, setActiveRequest] = useState<TrainingRequest | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
+  const [companyCounterPrice, setCompanyCounterPrice] = useState<string>("");
   const [showModal, setShowModal] = useState(false);
   const [showContract, setShowContract] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
+  
+  // Initialize statusFilter from URL parameter or default to "all"
+  const getInitialFilter = (): FilterStatus => {
+    const statusParam = searchParams.get('status');
+    const validStatuses: FilterStatus[] = ["all", "pending", "accepted", "rejected", "abgesagt", "completed"];
+    return (statusParam && validStatuses.includes(statusParam as FilterStatus)) 
+      ? (statusParam as FilterStatus) 
+      : "all";
+  };
+  
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>(getInitialFilter());
   const [showInquiryModal, setShowInquiryModal] = useState(false);
   const [inquirySubject, setInquirySubject] = useState("");
   const [inquiryMessage, setInquiryMessage] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Sync filter with URL parameter when URL changes
+  useEffect(() => {
+    const urlFilter = getInitialFilter();
+    if (urlFilter !== statusFilter) {
+      setStatusFilter(urlFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     fetchRequests();
@@ -86,11 +109,8 @@ export default function RequestsPage() {
     try {
       setLoading(true);
 
-      // Get user data to determine if it's a trainer or company
-      // Check both trainer and company data
-      const trainerData = getTrainerData();
-      const companyData = getCompanyData();
-      const user = trainerData || companyData;
+      // Get user data (works for both trainers and companies)
+      const user = getUserData();
 
       if (!user) {
         console.error('No user data found');
@@ -108,34 +128,47 @@ export default function RequestsPage() {
             const requests = await response.json();
 
             // Transform training requests to match the existing interface
-            const mapped: TrainingRequest[] = requests.map((req: any) => ({
-              id: req.id,
-              trainingId: req.trainingId,
-              courseTitle: req.training.title,
-              topicName: req.training.topic.name,
-              date: typeof req.training.startDate === 'string' ? req.training.startDate : req.training.startDate.toISOString(),
-              endTime: typeof req.training.endDate === 'string' 
-                ? new Date(`${req.training.endDate.split('T')[0]}T${req.training.endTime}`).toISOString()
-                : new Date(`${req.training.endDate.toISOString().split('T')[0]}T${req.training.endTime}`).toISOString(),
-              location: req.training.location,
-              participants: req.training.participantCount,
-              originalPrice: req.training.dailyRate || 0,
-              proposedPrice: req.training.dailyRate || 0,
-              counterPrice: req.counterPrice,
-              message: req.message || "",
-              status: (req.status === 'DECLINED' ? 'rejected' : 
-                       req.status === 'WITHDRAWN' ? 'abgesagt' : 
-                       req.status.toLowerCase()) as "pending" | "accepted" | "rejected" | "abgesagt" | "completed",
-              createdAt: typeof req.createdAt === 'string' ? req.createdAt : req.createdAt.toISOString(),
-              updatedAt: typeof req.updatedAt === 'string' ? req.updatedAt : req.updatedAt.toISOString(),
-              company: req.training.company ? {
-                id: req.training.company.id,
-                companyName: req.training.company.companyName || '',
-                firstName: req.training.company.firstName || '',
-                lastName: req.training.company.lastName || '',
-                email: req.training.company.email || ''
-              } : undefined
-            }));
+            const mapped: TrainingRequest[] = requests.map((req: any) => {
+              // Determine status: if training is COMPLETED and request is ACCEPTED, mark as "completed"
+              let requestStatus: "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
+              if (req.status === 'DECLINED') {
+                requestStatus = 'rejected';
+              } else if (req.status === 'WITHDRAWN') {
+                requestStatus = 'abgesagt';
+              } else if (req.status === 'ACCEPTED' && req.training?.status === 'COMPLETED') {
+                requestStatus = 'completed';
+              } else {
+                requestStatus = req.status.toLowerCase() as "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
+              }
+              
+              return {
+                id: req.id,
+                trainingId: req.trainingId,
+                courseTitle: req.training.title,
+                topicName: req.training.topic.name,
+                date: typeof req.training.startDate === 'string' ? req.training.startDate : req.training.startDate.toISOString(),
+                endTime: typeof req.training.endDate === 'string' 
+                  ? new Date(`${req.training.endDate.split('T')[0]}T${req.training.endTime}`).toISOString()
+                  : new Date(`${req.training.endDate.toISOString().split('T')[0]}T${req.training.endTime}`).toISOString(),
+                location: req.training.location,
+                participants: req.training.participantCount,
+                originalPrice: req.training.dailyRate || 0,
+                proposedPrice: req.training.dailyRate || 0,
+                counterPrice: req.counterPrice,
+                companyCounterPrice: req.companyCounterPrice,
+                trainerAccepted: req.trainerAccepted || false,
+                status: requestStatus,
+                createdAt: typeof req.createdAt === 'string' ? req.createdAt : req.createdAt.toISOString(),
+                updatedAt: typeof req.updatedAt === 'string' ? req.updatedAt : req.updatedAt.toISOString(),
+                company: req.training.company ? {
+                  id: req.training.company.id,
+                  companyName: req.training.company.companyName || '',
+                  firstName: req.training.company.firstName || '',
+                  lastName: req.training.company.lastName || '',
+                  email: req.training.company.email || ''
+                } : undefined
+              };
+            });
 
             setRequests(mapped);
             setFilteredRequests(mapped);
@@ -151,86 +184,64 @@ export default function RequestsPage() {
           setFilteredRequests([]);
         }
       } else if (user.userType === 'TRAINING_COMPANY') {
-        // For companies, fetch all training requests for their trainings (both upcoming and past)
+        // For companies, fetch all training requests for their trainings using companyId
         try {
-          // Get both upcoming and past trainings
-          const [upcomingResponse, pastResponse] = await Promise.all([
-            fetch(`/api/trainings?companyId=${user.id}&type=upcoming`),
-            fetch(`/api/trainings?companyId=${user.id}&type=past`)
-          ]);
-          
-          let trainings = [];
-          if (upcomingResponse.ok) {
-            const upcoming = await upcomingResponse.json();
-            trainings.push(...upcoming);
-          }
-          if (pastResponse.ok) {
-            const past = await pastResponse.json();
-            trainings.push(...past);
-          }
-          
-          if (trainings.length > 0) {
-            // Fetch requests for all trainings
-            const allRequests = await Promise.all(
-              trainings.map(async (training: any) => {
-                try {
-                  console.log(`Fetching requests for training ${training.id}: ${training.title}`);
-                  const response = await fetch(`/api/training-requests?trainingId=${training.id}`);
-                  if (response.ok) {
-                    const requests = await response.json();
-                    console.log(`Found ${requests.length} requests for training ${training.id}`);
-                    return requests.map((req: any) => {
-                      // Ensure we have all required data
-                      if (!req.training || !req.training.topic || !req.trainer) {
-                        console.warn('Incomplete request data:', req);
-                      }
-                      return {
-                      id: req.id,
-                      trainingId: req.trainingId,
-                      courseTitle: req.training.title,
-                      topicName: req.training.topic.name,
-                      date: typeof req.training.startDate === 'string' ? req.training.startDate : req.training.startDate.toISOString(),
-                      endTime: typeof req.training.endDate === 'string' 
-                        ? new Date(`${req.training.endDate.split('T')[0]}T${req.training.endTime}`).toISOString()
-                        : new Date(`${req.training.endDate.toISOString().split('T')[0]}T${req.training.endTime}`).toISOString(),
-                      location: req.training.location,
-                      participants: req.training.participantCount,
-                      originalPrice: req.training.dailyRate || 0,
-                      proposedPrice: req.training.dailyRate || 0,
-                      counterPrice: req.counterPrice,
-                      message: req.message || "",
-                      status: (req.status === 'DECLINED' ? 'rejected' : 
-                       req.status === 'WITHDRAWN' ? 'abgesagt' : 
-                       req.status.toLowerCase()) as "pending" | "accepted" | "rejected" | "abgesagt" | "completed",
-                      createdAt: typeof req.createdAt === 'string' ? req.createdAt : req.createdAt.toISOString(),
-                      updatedAt: typeof req.updatedAt === 'string' ? req.updatedAt : req.updatedAt.toISOString(),
-                      trainer: {
-                        id: req.trainer.id,
-                        firstName: req.trainer.firstName,
-                        lastName: req.trainer.lastName,
-                        email: req.trainer.email
-                      }
-                    };
-                    });
-                  } else {
-                    console.error(`Failed to fetch requests for training ${training.id}:`, response.status, response.statusText);
-                    return [];
-                  }
-                } catch (error) {
-                  console.error(`Error fetching requests for training ${training.id}:`, error);
-                  return [];
-                }
-              })
-            );
+          const response = await fetch(`/api/training-requests?companyId=${user.id}`);
+          if (response.ok) {
+            const requests = await response.json();
+            console.log(`Found ${requests.length} requests for company`);
             
-            const flattenedRequests = allRequests.flat();
-            console.log('Total requests found:', flattenedRequests.length);
-            console.log('Sample request:', flattenedRequests[0]);
-            setRequests(flattenedRequests);
-            setFilteredRequests(flattenedRequests);
-            console.log('Loaded training requests for company:', flattenedRequests);
+            const mapped: TrainingRequest[] = requests.map((req: any) => {
+              // Ensure we have all required data
+              if (!req.training || !req.training.topic || !req.trainer) {
+                console.warn('Incomplete request data:', req);
+              }
+              
+              // Determine status: if training is COMPLETED and request is ACCEPTED, mark as "completed"
+              let requestStatus: "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
+              if (req.status === 'DECLINED') {
+                requestStatus = 'rejected';
+              } else if (req.status === 'WITHDRAWN') {
+                requestStatus = 'abgesagt';
+              } else if (req.status === 'ACCEPTED' && req.training?.status === 'COMPLETED') {
+                requestStatus = 'completed';
+              } else {
+                requestStatus = req.status.toLowerCase() as "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
+              }
+              
+              return {
+                id: req.id,
+                trainingId: req.trainingId,
+                courseTitle: req.training.title,
+                topicName: req.training.topic.name,
+                date: typeof req.training.startDate === 'string' ? req.training.startDate : req.training.startDate.toISOString(),
+                endTime: typeof req.training.endDate === 'string' 
+                  ? new Date(`${req.training.endDate.split('T')[0]}T${req.training.endTime}`).toISOString()
+                  : new Date(`${req.training.endDate.toISOString().split('T')[0]}T${req.training.endTime}`).toISOString(),
+                location: req.training.location,
+                participants: req.training.participantCount,
+                originalPrice: req.training.dailyRate || 0,
+                proposedPrice: req.training.dailyRate || 0,
+                counterPrice: req.counterPrice,
+                companyCounterPrice: req.companyCounterPrice,
+                trainerAccepted: req.trainerAccepted || false,
+                status: requestStatus,
+                createdAt: typeof req.createdAt === 'string' ? req.createdAt : req.createdAt.toISOString(),
+                updatedAt: typeof req.updatedAt === 'string' ? req.updatedAt : req.updatedAt.toISOString(),
+                trainer: {
+                  id: req.trainer.id,
+                  firstName: req.trainer.firstName,
+                  lastName: req.trainer.lastName,
+                  email: req.trainer.email
+                }
+              };
+            });
+            
+            setRequests(mapped);
+            setFilteredRequests(mapped);
+            console.log('Loaded training requests for company:', mapped);
           } else {
-            // No trainings found, but that's okay - just no requests to show
+            console.error('Failed to fetch training requests for company');
             setRequests([]);
             setFilteredRequests([]);
           }
@@ -254,8 +265,8 @@ export default function RequestsPage() {
 
   const updateRequest = async (id: number, updates: Partial<TrainingRequest>) => {
     try {
-      // Get user data
-      const user = getTrainerData();
+      // Get user data (works for both trainers and companies)
+      const user = getUserData();
       if (!user) {
         console.error('No user data found');
         return null;
@@ -271,21 +282,32 @@ export default function RequestsPage() {
           requestId: id,
           status: updates.status?.toUpperCase(),
           counterPrice: updates.counterPrice,
-          message: updates.message
         }),
       });
 
       if (response.ok) {
         const updatedRequest = await response.json();
+        
+        // Determine status: if training is COMPLETED and request is ACCEPTED, mark as "completed"
+        let requestStatus: "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
+        if (updatedRequest.status === 'DECLINED') {
+          requestStatus = 'rejected';
+        } else if (updatedRequest.status === 'WITHDRAWN') {
+          requestStatus = 'abgesagt';
+        } else if (updatedRequest.status === 'ACCEPTED' && updatedRequest.training?.status === 'COMPLETED') {
+          requestStatus = 'completed';
+        } else {
+          requestStatus = updatedRequest.status.toLowerCase() as "pending" | "accepted" | "rejected" | "abgesagt" | "completed";
+        }
+        
         setRequests(prev =>
           prev.map(req =>
             req.id === id ? {
               ...req,
-              status: (updatedRequest.status === 'DECLINED' ? 'rejected' : 
-                       updatedRequest.status === 'WITHDRAWN' ? 'abgesagt' : 
-                       updatedRequest.status.toLowerCase()) as any,
-              message: updatedRequest.message || req.message,
+              status: requestStatus,
               counterPrice: updatedRequest.counterPrice,
+              companyCounterPrice: updatedRequest.companyCounterPrice,
+              trainerAccepted: updatedRequest.trainerAccepted || false,
               updatedAt: updatedRequest.updatedAt
             } : req
           )
@@ -294,11 +316,10 @@ export default function RequestsPage() {
           prev.map(req =>
             req.id === id ? {
               ...req,
-              status: (updatedRequest.status === 'DECLINED' ? 'rejected' : 
-                       updatedRequest.status === 'WITHDRAWN' ? 'abgesagt' : 
-                       updatedRequest.status.toLowerCase()) as any,
-              message: updatedRequest.message || req.message,
+              status: requestStatus,
               counterPrice: updatedRequest.counterPrice,
+              companyCounterPrice: updatedRequest.companyCounterPrice,
+              trainerAccepted: updatedRequest.trainerAccepted || false,
               updatedAt: updatedRequest.updatedAt
             } : req
           )
@@ -317,11 +338,20 @@ export default function RequestsPage() {
 
   // Apply filter when statusFilter changes or requests change
   useEffect(() => {
-    if (statusFilter === "all") {
-      setFilteredRequests(requests);
-    } else {
-      setFilteredRequests(requests.filter(request => request.status === statusFilter));
+    let filtered = requests;
+    
+    if (statusFilter !== "all") {
+      filtered = requests.filter(request => request.status === statusFilter);
     }
+    
+    // Sort: pending requests first, then others
+    filtered = [...filtered].sort((a, b) => {
+      if (a.status === "pending" && b.status !== "pending") return -1;
+      if (a.status !== "pending" && b.status === "pending") return 1;
+      return 0;
+    });
+    
+    setFilteredRequests(filtered);
   }, [statusFilter, requests]);
 
   const formatDate = (dateString: string) => {
@@ -365,89 +395,238 @@ export default function RequestsPage() {
     setShowModal(false);
   };
 
-  const generateContractPDF = (request: TrainingRequest) => {
+  const generateContractPDF = async (request: TrainingRequest) => {
     const doc = new jsPDF();
-    const finalPrice = request.counterPrice || request.proposedPrice;
-    const startDate = formatDate(request.date);
-    const startTime = formatTime(request.date);
-    const endTime = formatTime(request.endTime);
+    // Use company counter price if available, otherwise trainer counter price, otherwise proposed price
+    const finalPrice = request.companyCounterPrice || request.counterPrice || request.proposedPrice;
+    
+    // Calculate duration from dates
+    const startDateTime = new Date(request.date);
+    const endDateTime = new Date(request.endTime);
+    const durationMs = endDateTime.getTime() - startDateTime.getTime();
+    const durationHours = Math.round(durationMs / (1000 * 60 * 60));
+    const durationDays = Math.floor(durationHours / 24);
+    const remainingHours = durationHours % 24;
+    const durationText = durationDays > 0 
+      ? `${durationDays} Tag${durationDays > 1 ? 'e' : ''}, ${remainingHours} Std.`
+      : `${durationHours} Std.`;
+    
+    // Format dates properly - ensure earlier date comes first
+    
+    // Determine which date is earlier
+    const earlierDate = startDateTime <= endDateTime ? startDateTime : endDateTime;
+    const laterDate = startDateTime <= endDateTime ? endDateTime : startDateTime;
+    
+    // Format dates
+    const earlierDateStr = earlierDate.toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const laterDateStr = laterDate.toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    
+    // Extract times from original dates (not swapped)
+    const startTime = startDateTime.toLocaleTimeString('de-DE', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const endTime = endDateTime.toLocaleTimeString('de-DE', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    // Format training dates - always show earlier date first
+    const trainingDatesText = earlierDateStr === laterDateStr
+      ? `${earlierDateStr}, ${startTime} - ${endTime} Uhr`
+      : `${earlierDateStr} - ${laterDateStr}, ${startTime} - ${endTime} Uhr`;
+    
+    // Contract date and number
+    const today = new Date();
+    const contractDate = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+    const contractNumber = `CT-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(request.id).padStart(4, '0')}`;
     
     // Set up fonts and colors
     const primaryColor = [52, 73, 93]; // Dark blue similar to powertowork branding
     
-    // Header with powertowork branding
-    doc.setFontSize(24);
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.setFont("helvetica", "bold");
-    doc.text("powertowork", 150, 25);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.setFont("helvetica", "normal");
-    doc.text("online academy", 150, 32);
-    
-    // Main title
+    // Main title - moved to top
     doc.setFontSize(20);
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.setFont("helvetica", "bold");
-    doc.text("Dozentenvertrag", 105, 55, { align: "center" });
+    doc.text("Dozentenvertrag", 105, 25, { align: "center" });
     
-    // Contract parties
+    // Contract number and date (right-aligned) - moved up
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Vertragsnummer: ${contractNumber}`, 20, 40);
+    doc.text(`Datum: ${contractDate}`, 190, 40, { align: 'right' });
+    
+    // Get trainer data first - try session first, then fetch if needed
+    let trainerName = "[Trainer Name]";
+    let trainerData: any = null;
+    
+    const userData = getUserData();
+    const trainerId = request.trainer?.id;
+    
+    if (userData && userData.userType === 'TRAINER') {
+      // Trainer viewing their own contract - use session data
+      trainerData = userData as any;
+      trainerName = `${trainerData.firstName} ${trainerData.lastName}`;
+      
+      // Check if session data has address fields, if not fetch from API
+      if ((!trainerData.street && !trainerData.zipCode) && trainerData.id) {
+        try {
+          const trainerResponse = await fetch(`/api/trainers/${trainerData.id}`);
+          if (trainerResponse.ok) {
+            const response = await trainerResponse.json();
+            const fetchedData = response.trainer || response;
+            // Merge fetched data with session data (prefer fetched data for address fields)
+            trainerData = { ...trainerData, ...fetchedData };
+          }
+        } catch (error) {
+          console.error('Error fetching trainer data for contract:', error);
+          // Continue with session data even if incomplete
+        }
+      }
+    } else if (trainerId) {
+      // Company user - fetch full trainer data including address
+      trainerName = `${request.trainer.firstName} ${request.trainer.lastName}`;
+      try {
+        const trainerResponse = await fetch(`/api/trainers/${trainerId}`);
+        if (trainerResponse.ok) {
+          const response = await trainerResponse.json();
+          trainerData = response.trainer || response;
+          
+          // Normalize country field (some endpoints return 'location' instead of 'country')
+          if (trainerData.location && !trainerData.country) {
+            trainerData.country = trainerData.location;
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching trainer data for contract:', error);
+        // Continue without address data
+      }
+    }
+    
+    // Contract parties - side by side layout
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
     
-    doc.text("Zwischen Auftraggeber (AG):", 105, 75, { align: "center" });
+    const leftX = 20;
+    const rightX = 110; // Right side starts at middle of page
+    let yPosition = 60;
+    
+    // Left side: Company details
+    doc.text("Zwischen Auftraggeber (AG):", leftX, yPosition);
+    yPosition += 10;
     doc.setFont("helvetica", "bold");
-    doc.text("powertowork GmbH", 105, 85, { align: "center" });
+    doc.text("powertowork GmbH", leftX, yPosition);
+    yPosition += 5;
     doc.setFont("helvetica", "normal");
-    doc.text("Hermannstraße 3, 33602 Bielefeld", 105, 92, { align: "center" });
+    doc.text("Hermannstraße 3", leftX, yPosition);
+    yPosition += 5;
+    doc.text("33602 Bielefeld", leftX, yPosition);
+    yPosition += 5;
+    doc.text("Deutschland", leftX, yPosition);
     
-    doc.text("und Auftragnehmer (AN)", 105, 105, { align: "center" });
+    // Right side: Trainer details (same y-position as company)
+    let trainerY = 60;
+    doc.setFont("helvetica", "normal");
+    doc.text("und Auftragnehmer (AN)", rightX, trainerY);
+    trainerY += 10;
     doc.setFont("helvetica", "bold");
+    doc.text(trainerName, rightX, trainerY);
+    trainerY += 5;
     
-    // Get trainer data from localStorage
-    const trainerData = localStorage.getItem("trainer");
-    let trainerInfo = "[Trainer Name], [Trainer Adresse]";
-    
+    // Structured address formatting - add below trainer name
     if (trainerData) {
-      const trainer = JSON.parse(trainerData);
-      const trainerName = `${trainer.firstName} ${trainer.lastName}`;
-      const trainerAddress = trainer.street && trainer.zipCode && trainer.city 
-        ? `${trainer.street}${trainer.houseNumber ? ' ' + trainer.houseNumber : ''}, ${trainer.zipCode} ${trainer.city}`
-        : "[Adresse nicht hinterlegt]";
-      trainerInfo = `${trainerName}, ${trainerAddress}`;
+      // Debug: log trainer data structure to help diagnose issues
+      console.log('Trainer data for contract:', {
+        hasStreet: !!trainerData.street,
+        hasHouseNumber: !!trainerData.houseNumber,
+        hasZipCode: !!trainerData.zipCode,
+        hasCity: !!trainerData.city,
+        hasCountry: !!trainerData.country,
+        hasLocation: !!trainerData.location,
+        hasTaxId: !!trainerData.taxId,
+        countryType: typeof trainerData.country,
+        locationType: typeof trainerData.location
+      });
+      
+      if (trainerData.street) {
+        const streetLine = `${trainerData.street}${trainerData.houseNumber ? ' ' + trainerData.houseNumber : ''}`;
+        doc.setFont("helvetica", "normal");
+        doc.text(streetLine, rightX, trainerY);
+        trainerY += 5;
+      }
+      if (trainerData.zipCode && trainerData.city) {
+        doc.text(`${trainerData.zipCode} ${trainerData.city}`, rightX, trainerY);
+        trainerY += 5;
+      }
+      // Handle country field - can be object with name/code or string
+      const countryValue = trainerData.country || trainerData.location;
+      if (countryValue) {
+        const countryText = typeof countryValue === 'object' 
+          ? (countryValue.name || countryValue.code || '')
+          : countryValue;
+        if (countryText) {
+          doc.text(countryText, rightX, trainerY);
+          trainerY += 5;
+        }
+      }
+      if (trainerData.taxId) {
+        doc.setFontSize(10);
+        doc.text(`Tax ID: ${trainerData.taxId}`, rightX, trainerY);
+        trainerY += 5;
+      }
+    } else {
+      // If no trainer data available, show a note
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text("(Adressdaten nicht verfügbar)", rightX, trainerY);
+      trainerY += 5;
     }
     
-    doc.text(trainerInfo, 105, 115, { align: "center" });
-    
+    // Use the maximum y-position from both sides to continue
+    yPosition = Math.max(yPosition, trainerY) + 10;
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
-    doc.text("wird folgender Vertrag mit den Bestandteilen des", 105, 130, { align: "center" });
-    doc.text("Rahmenvertrages für Dozenten:innen geschlossen.", 105, 137, { align: "center" });
+    doc.text("wird folgender Vertrag mit den Bestandteilen des", 20, yPosition);
+    yPosition += 7;
+    doc.text("Rahmenvertrages für Dozenten:innen geschlossen.", 20, yPosition);
+    yPosition += 15;
     
     // Training information section
     doc.setFont("helvetica", "bold");
-    doc.text("Notwendige Informationen für Ihre Schulung:", 20, 155);
+    doc.text("Notwendige Informationen für Ihre Schulung:", 20, yPosition);
+    yPosition += 10;
     
     // Create table
-    const tableStartY = 165;
+    const tableStartY = yPosition;
     const rowHeight = 12;
     const col1Width = 60;
     const col2Width = 120;
     
-    // Table header style
-    doc.setFillColor(240, 240, 240);
+    // Calculate honorar text (no variable component if it's 0)
+    const honorarText = `${formatCurrency(finalPrice)} (Festpreis)`;
     
     // Table rows data
     const tableData = [
       ["Veranstaltungs-ID:", `V-${request.id}`],
       ["Thema:", request.topicName],
       ["Kurstitel:", request.courseTitle],
-      ["Schulungsinhalte:", `https://powertowork.com/kurse/${request.topicName.toLowerCase()}`],
-      ["Termine:", `${startDate} ${startTime} Uhr bis ${endTime} Uhr`],
-      ["Dauer in Stunden:", "8 Std."],
+      ["Schulungsinhalte:", `${process.env.NEXT_PUBLIC_BASE_URL || 'https://powertowork.com'}/dashboard/training/${request.trainingId}`],
+      ["Termine:", trainingDatesText],
+      ["Dauer:", durationText],
       ["Anzahl Teilnehmer:innen:", request.participants.toString()],
-      ["Honorar:", `${formatCurrency(finalPrice)} | + 0,00 € pro weiterem Teilnehmer`]
+      ["Honorar:", honorarText]
     ];
     
     // Draw table
@@ -478,20 +657,24 @@ export default function RequestsPage() {
     });
     
     // Footer
-    const footerY = tableStartY + (tableData.length * rowHeight) + 30;
+    const tableEndY = tableStartY + (tableData.length * rowHeight);
+    let footerY = tableEndY + 20;
+    
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
     doc.text("Mit freundlichen Grüßen", 20, footerY);
+    footerY += 10;
+    
     doc.setFontSize(10);
     doc.setFont("helvetica", "italic");
-    doc.text("- Auch ohne Unterschrift gültig", 20, footerY + 15);
+    doc.text("- Auch ohne Unterschrift gültig", 20, footerY);
     
     return doc;
   };
 
-  const downloadContract = (request: TrainingRequest) => {
+  const downloadContract = async (request: TrainingRequest) => {
     try {
-      const doc = generateContractPDF(request);
+      const doc = await generateContractPDF(request);
       const filename = `Dozentenvertrag_${request.courseTitle.replace(/\s+/g, '_')}_${request.id}.pdf`;
       doc.save(filename);
     } catch (error) {
@@ -583,8 +766,7 @@ export default function RequestsPage() {
         body: JSON.stringify({
           requestId: id,
           status: 'PENDING', // Keep as pending but update the counter price
-          counterPrice: price,
-          message: `Gegenvorschlag: €${Math.round(price)}`
+          counterPrice: price
         }),
       });
 
@@ -601,8 +783,49 @@ export default function RequestsPage() {
     setShowModal(false);
   };
 
+  const handleCompanyCounterOffer = async (id: number) => {
+    const price = parseFloat(companyCounterPrice);
+    if (isNaN(price) || price <= 0) return;
+    try {
+      // Send company counteroffer using local API
+      const response = await fetch('/api/training-requests', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestId: id,
+          status: 'PENDING', // Keep as pending but update the company counter price
+          companyCounterPrice: price
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send company counteroffer');
+      }
+
+      await fetchRequests();
+      alert('Gegenvorschlag erfolgreich gesendet!');
+    } catch (e) {
+      console.error('Error sending company counter offer:', e);
+      alert('Fehler beim Senden des Gegenvorschlags.');
+    }
+    setShowModal(false);
+  };
+
   const handleStatusFilterChange = (status: FilterStatus) => {
     setStatusFilter(status);
+    
+    // Update URL with the new filter status
+    const params = new URLSearchParams(searchParams.toString());
+    if (status === "all") {
+      params.delete('status');
+    } else {
+      params.set('status', status);
+    }
+    
+    // Update URL without page reload
+    router.push(`/dashboard/requests?${params.toString()}`, { scroll: false });
   };
 
   const getRequestCount = (status: FilterStatus) => {
@@ -611,18 +834,19 @@ export default function RequestsPage() {
   };
 
   const generateContractText = (request: TrainingRequest) => {
-    const finalPrice = request.counterPrice || request.proposedPrice;
+    // Use company counter price if available, otherwise trainer counter price, otherwise proposed price
+    const finalPrice = request.companyCounterPrice || request.counterPrice || request.proposedPrice;
     const startDate = formatDate(request.date);
     const startTime = formatTime(request.date);
     const endTime = formatTime(request.endTime);
     
-    // Get trainer data from localStorage
-    const trainerData = localStorage.getItem("trainer");
+    // Get user data from session (works for both trainers and companies)
+    const userData = getUserData();
     let trainerName = "[Trainer Name]";
     let trainerAddress = "[Trainer Adresse]";
     
-    if (trainerData) {
-      const trainer = JSON.parse(trainerData);
+    if (userData && userData.userType === 'TRAINER') {
+      const trainer = userData as any;
       trainerName = `${trainer.firstName} ${trainer.lastName}`;
       trainerAddress = trainer.street && trainer.zipCode && trainer.city 
         ? `${trainer.street}${trainer.houseNumber ? ' ' + trainer.houseNumber : ''}, ${trainer.zipCode} ${trainer.city}`
@@ -728,6 +952,12 @@ Mit freundlichen Grüßen
       return;
     }
 
+    const userData = getUserData();
+    if (!userData || !userData.id || !userData.userType) {
+      alert('Fehler: Benutzerdaten nicht gefunden. Bitte melden Sie sich erneut an.');
+      return;
+    }
+
     setIsUploading(true);
     try {
       let response;
@@ -738,6 +968,8 @@ Mit freundlichen Grüßen
         formData.append('trainingRequestId', activeRequest.id.toString());
         formData.append('subject', inquirySubject);
         formData.append('message', inquiryMessage);
+        formData.append('senderId', userData.id.toString());
+        formData.append('senderType', userData.userType as string);
 
         // Add files to form data
         attachedFiles.forEach((file) => {
@@ -759,8 +991,8 @@ Mit freundlichen Grüßen
             trainingRequestId: activeRequest.id,
             subject: inquirySubject,
             message: inquiryMessage,
-            senderId: user.id,
-            senderType: user.userType
+            senderId: userData.id,
+            senderType: userData.userType
           }),
         });
       }
@@ -787,8 +1019,8 @@ Mit freundlichen Grüßen
   const [userType, setUserType] = useState<'TRAINER' | 'TRAINING_COMPANY' | null>(null);
 
   useEffect(() => {
-    const user = getTrainerData();
-    if (user) {
+    const user = getUserData();
+    if (user && user.userType) {
       setUserType(user.userType as 'TRAINER' | 'TRAINING_COMPANY');
     }
   }, []);
@@ -879,7 +1111,11 @@ Mit freundlichen Grüßen
       ) : filteredRequests.length > 0 ? (
         <div className="grid grid-cols-1 gap-4">
           {filteredRequests.map((request) => (
-            <div key={request.id} className="bg-white rounded-lg shadow overflow-hidden">
+            <div key={request.id} className={`rounded-lg shadow overflow-hidden ${
+              request.status === "pending" 
+                ? "bg-yellow-50 border-2 border-yellow-200" 
+                : "bg-white"
+            }`}>
               <div className="p-5 border-b">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
@@ -919,6 +1155,16 @@ Mit freundlichen Grüßen
                     {request.counterPrice && (
                       <div className="text-sm text-gray-400 mt-1">
                         Original: {formatCurrency(request.originalPrice)}
+                      </div>
+                    )}
+                    {request.companyCounterPrice && (
+                      <div className="text-sm text-purple-600 mt-1 font-medium">
+                        {userType === 'TRAINER' ? "Gegenvorschlag von Firma:" : "Ihr Gegenvorschlag:"} {formatCurrency(request.companyCounterPrice)}
+                      </div>
+                    )}
+                    {request.trainerAccepted && userType === 'TRAINING_COMPANY' && (
+                      <div className="text-sm text-green-600 mt-1 font-medium">
+                        ✓ Trainer hat zugesagt
                       </div>
                     )}
                   </div>
@@ -985,6 +1231,147 @@ Mit freundlichen Grüßen
                 </div>
                 
                 <div className="flex space-x-2">
+                  {request.status === "pending" && userType === 'TRAINER' && (
+                    <>
+                      {/* If company has countered (companyCounterPrice exists), trainer can accept company's counter */}
+                      {request.companyCounterPrice && !request.trainerAccepted && (
+                        <button
+                          onClick={() => {
+                            setActiveRequest(request);
+                            handleAcceptClick();
+                          }}
+                          className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Gegenvorschlag annehmen
+                        </button>
+                      )}
+                      {/* Trainer can only accept original offer if they haven't made a counter and haven't already accepted */}
+                      {!request.counterPrice && !request.trainerAccepted && !request.companyCounterPrice && (
+                        <button
+                          onClick={() => {
+                            setActiveRequest(request);
+                            handleAcceptClick();
+                          }}
+                          className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Annehmen
+                        </button>
+                      )}
+                      {/* Show waiting message only if trainer has accepted OR if trainer made counter but company hasn't responded yet */}
+                      {request.trainerAccepted && (
+                        <span className="px-3 py-1 bg-gray-100 border border-gray-300 rounded text-sm font-medium text-gray-500 flex items-center cursor-not-allowed" title="Sie haben bereits zugesagt. Bitte warten Sie auf die Antwort der Firma.">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                          </svg>
+                          Warten auf Firmen-Zusage
+                        </span>
+                      )}
+                      {request.counterPrice && !request.companyCounterPrice && !request.trainerAccepted && (
+                        <span className="px-3 py-1 bg-gray-100 border border-gray-300 rounded text-sm font-medium text-gray-500 flex items-center cursor-not-allowed" title="Sie haben einen Gegenvorschlag gemacht. Bitte warten Sie auf die Antwort der Firma.">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                          </svg>
+                          Warten auf Antwort
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleReject(request.id)}
+                        className="px-3 py-1 bg-red-50 border border-red-300 rounded text-sm font-medium text-red-700 hover:bg-red-100 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Ablehnen
+                      </button>
+                      {/* Counter offer button - available if trainer hasn't accepted, and either no counter yet OR company has countered */}
+                      {!request.trainerAccepted && (
+                        <button
+                          onClick={() => {
+                            setActiveRequest(request);
+                            setCounterPrice(request.counterPrice?.toString() || "");
+                            setShowModal(true);
+                          }}
+                          className="px-3 py-1 bg-yellow-50 border border-yellow-300 rounded text-sm font-medium text-yellow-700 hover:bg-yellow-100 flex items-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
+                          </svg>
+                          {request.companyCounterPrice ? "Neuer Gegenvorschlag" : "Gegenvorschlag"}
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {request.status === "pending" && userType === 'TRAINING_COMPANY' && request.counterPrice && (
+                    <>
+                      <button
+                        onClick={() => handleReject(request.id)}
+                        className="px-3 py-1 bg-red-50 border border-red-300 rounded text-sm font-medium text-red-700 hover:bg-red-100 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Gegenvorschlag ablehnen
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActiveRequest(request);
+                          setCompanyCounterPrice(request.companyCounterPrice?.toString() || "");
+                          setShowModal(true);
+                        }}
+                        className="px-3 py-1 bg-yellow-50 border border-yellow-300 rounded text-sm font-medium text-yellow-700 hover:bg-yellow-100 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
+                        </svg>
+                        Gegenvorschlag senden
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActiveRequest(request);
+                          handleAccept(request.id);
+                        }}
+                        className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Gegenvorschlag annehmen
+                      </button>
+                    </>
+                  )}
+                  {request.status === "pending" && userType === 'TRAINING_COMPANY' && request.trainerAccepted && !request.counterPrice && (
+                    <>
+                      <button
+                        onClick={() => handleReject(request.id)}
+                        className="px-3 py-1 bg-red-50 border border-red-300 rounded text-sm font-medium text-red-700 hover:bg-red-100 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Ablehnen
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActiveRequest(request);
+                          handleAccept(request.id);
+                        }}
+                        className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Trainer-Zusage annehmen
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={() => openInquiryModal(request)}
                     className="px-3 py-1 bg-blue-50 border border-blue-300 rounded text-sm font-medium text-blue-700 hover:bg-blue-100 flex items-center"
@@ -1101,12 +1488,6 @@ Mit freundlichen Grüßen
                 </div>
               </div>
               
-              {activeRequest.message && (
-                <div className="mb-6">
-                  <span className="block text-sm text-gray-500 mb-1">Nachricht</span>
-                  <p className="p-3 bg-gray-50 rounded border">{activeRequest.message}</p>
-                </div>
-              )}
               
               <div className="mb-6">
                 <span className="block text-sm text-gray-500 mb-1">Preisdetails</span>
@@ -1120,18 +1501,30 @@ Mit freundlichen Grüßen
                   {activeRequest.counterPrice && (
                     <div className="p-3 bg-blue-50 rounded border border-blue-200">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-blue-600">Ihr Gegenvorschlag:</span>
+                        <span className="text-sm text-blue-600">
+                          {userType === 'TRAINER' ? "Ihr Gegenvorschlag:" : "Gegenvorschlag vom Trainer:"}
+                        </span>
                         <span className="font-medium text-lg text-blue-700">{formatCurrency(activeRequest.counterPrice)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {activeRequest.companyCounterPrice && (
+                    <div className="p-3 bg-purple-50 rounded border border-purple-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-purple-600">
+                          {userType === 'TRAINER' ? "Gegenvorschlag von Firma:" : "Ihr Gegenvorschlag:"}
+                        </span>
+                        <span className="font-medium text-lg text-purple-700">{formatCurrency(activeRequest.companyCounterPrice)}</span>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
               
-              {activeRequest.status === "pending" && (
+              {activeRequest.status === "pending" && userType === 'TRAINER' && !activeRequest.trainerAccepted && (
                 <div className="mb-6">
                   <span className="block text-sm text-gray-500 mb-1">
-                    {activeRequest.counterPrice ? "Neuer Gegenvorschlag (optional)" : "Gegenvorschlag (optional)"}
+                    {activeRequest.companyCounterPrice ? "Neuer Gegenvorschlag (optional)" : activeRequest.counterPrice ? "Neuer Gegenvorschlag (optional)" : "Gegenvorschlag (optional)"}
                   </span>
                   <div className="flex items-center">
                     <span className="mr-2 text-gray-500">€</span>
@@ -1140,7 +1533,39 @@ Mit freundlichen Grüßen
                       value={counterPrice}
                       onChange={(e) => setCounterPrice(e.target.value)}
                       className="form-input"
-                      placeholder={activeRequest.counterPrice ? "Neuer Preisvorschlag" : "Ihr Preisvorschlag"}
+                      placeholder={activeRequest.companyCounterPrice ? "Neuer Preisvorschlag" : activeRequest.counterPrice ? "Neuer Preisvorschlag" : "Ihr Preisvorschlag"}
+                      min="0"
+                      step="50"
+                    />
+                  </div>
+                </div>
+              )}
+              {activeRequest.status === "pending" && userType === 'TRAINER' && activeRequest.trainerAccepted && (
+                <div className="mb-6 p-3 bg-green-50 rounded border border-green-200">
+                  <div className="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm font-medium text-green-800">
+                      Sie haben bereits zugesagt. Bitte warten Sie auf die Antwort der Firma.
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              {activeRequest.status === "pending" && userType === 'TRAINING_COMPANY' && activeRequest.counterPrice && (
+                <div className="mb-6">
+                  <span className="block text-sm text-gray-500 mb-1">
+                    {activeRequest.companyCounterPrice ? "Neuer Gegenvorschlag (optional)" : "Gegenvorschlag (optional)"}
+                  </span>
+                  <div className="flex items-center">
+                    <span className="mr-2 text-gray-500">€</span>
+                    <input
+                      type="number"
+                      value={companyCounterPrice}
+                      onChange={(e) => setCompanyCounterPrice(e.target.value)}
+                      className="form-input"
+                      placeholder={activeRequest.companyCounterPrice ? "Neuer Preisvorschlag" : "Ihr Preisvorschlag"}
                       min="0"
                       step="50"
                     />
@@ -1161,28 +1586,112 @@ Mit freundlichen Grüßen
                 
                 {activeRequest.status === "pending" && (
                   <>
-                    <button
-                      onClick={() => handleReject(activeRequest.id)}
-                      className="px-4 py-2 border border-red-300 rounded-md text-red-700 hover:bg-red-50"
-                    >
-                      Ablehnen
-                    </button>
-                    
-                    {parseFloat(counterPrice) !== (activeRequest.counterPrice || activeRequest.proposedPrice) && !isNaN(parseFloat(counterPrice)) && (
+                    {userType === 'TRAINER' && (
+                      <>
+                        <button
+                          onClick={() => handleReject(activeRequest.id)}
+                          className="px-4 py-2 border border-red-300 rounded-md text-red-700 hover:bg-red-50"
+                        >
+                          Ablehnen
+                        </button>
+                        
+                        {/* If company has countered (companyCounterPrice exists), trainer can accept company's counter */}
+                        {activeRequest.companyCounterPrice && !activeRequest.trainerAccepted && (
+                          <button
+                            onClick={() => handleAcceptClick()}
+                            className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600"
+                          >
+                            Gegenvorschlag annehmen
+                          </button>
+                        )}
+                        
+                        {/* Trainer can send counter offer if they haven't accepted and either no counter yet OR company has countered */}
+                        {!activeRequest.trainerAccepted && parseFloat(counterPrice) !== (activeRequest.counterPrice || activeRequest.proposedPrice) && !isNaN(parseFloat(counterPrice)) && activeRequest.status === "pending" && (
+                          <button
+                            onClick={() => handleCounterOffer(activeRequest.id)}
+                            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                          >
+                            {activeRequest.companyCounterPrice ? "Neuer Gegenvorschlag senden" : "Gegenvorschlag senden"}
+                          </button>
+                        )}
+                        
+                        {/* Trainer can only accept original offer if they haven't made a counter, haven't already accepted, and company hasn't countered */}
+                        {!activeRequest.counterPrice && !activeRequest.trainerAccepted && !activeRequest.companyCounterPrice && activeRequest.status === "pending" && (
+                          <button
+                            onClick={() => handleAcceptClick()}
+                            className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600"
+                          >
+                            Vertrag anzeigen
+                          </button>
+                        )}
+                        {/* Show waiting message only if trainer has accepted OR if trainer made counter but company hasn't responded yet */}
+                        {activeRequest.trainerAccepted && (
+                          <span className="px-4 py-2 bg-gray-200 border border-gray-300 rounded-md text-gray-500 cursor-not-allowed" title="Sie haben bereits zugesagt. Bitte warten Sie auf die Antwort der Firma.">
+                            Warten auf Firmen-Zusage
+                          </span>
+                        )}
+                        {activeRequest.counterPrice && !activeRequest.companyCounterPrice && !activeRequest.trainerAccepted && (
+                          <span className="px-4 py-2 bg-gray-200 border border-gray-300 rounded-md text-gray-500 cursor-not-allowed" title="Sie haben einen Gegenvorschlag gemacht. Bitte warten Sie auf die Antwort der Firma.">
+                            Warten auf Antwort
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {userType === 'TRAINING_COMPANY' && activeRequest.counterPrice && (
+                      <>
+                        <button
+                          onClick={() => handleReject(activeRequest.id)}
+                          className="px-4 py-2 border border-red-300 rounded-md text-red-700 hover:bg-red-50"
+                        >
+                          Gegenvorschlag ablehnen
+                        </button>
+                        {/* Company can send counter offer - only if company hasn't accepted the trainer's counter yet */}
+                        {parseFloat(companyCounterPrice) !== (activeRequest.companyCounterPrice || activeRequest.proposedPrice) && !isNaN(parseFloat(companyCounterPrice)) && activeRequest.status === "pending" && (
+                          <button
+                            onClick={() => handleCompanyCounterOffer(activeRequest.id)}
+                            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                          >
+                            Gegenvorschlag senden
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            // Accept the counter offer - this accepts the request with the counter price
+                            handleAccept(activeRequest.id);
+                          }}
+                          className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+                        >
+                          Gegenvorschlag annehmen
+                        </button>
+                      </>
+                    )}
+                    {userType === 'TRAINING_COMPANY' && activeRequest.trainerAccepted && !activeRequest.counterPrice && (
+                      <>
+                        <button
+                          onClick={() => handleReject(activeRequest.id)}
+                          className="px-4 py-2 border border-red-300 rounded-md text-red-700 hover:bg-red-50"
+                        >
+                          Ablehnen
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Company accepts trainer's acceptance - this fully accepts the request
+                            handleAccept(activeRequest.id);
+                          }}
+                          className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+                        >
+                          Trainer-Zusage annehmen
+                        </button>
+                      </>
+                    )}
+                    {userType === 'TRAINING_COMPANY' && !activeRequest.counterPrice && !activeRequest.trainerAccepted && (
                       <button
-                        onClick={() => handleCounterOffer(activeRequest.id)}
-                        className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                        onClick={() => handleReject(activeRequest.id)}
+                        className="px-4 py-2 border border-red-300 rounded-md text-red-700 hover:bg-red-50"
                       >
-                        Gegenvorschlag senden
+                        Ablehnen
                       </button>
                     )}
-                    
-                    <button
-                      onClick={() => handleAcceptClick()}
-                      className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600"
-                    >
-                      Vertrag anzeigen
-                    </button>
                   </>
                 )}
 

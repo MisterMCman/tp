@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import jsPDF from 'jspdf';
-import { getTrainerData } from "@/lib/session";
+import { getUserData } from "@/lib/session";
 import Link from "next/link";
 
 interface Training {
@@ -39,8 +39,8 @@ export default function TrainingsPage() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Load user data
-    const currentUser = getTrainerData();
+    // Load user data (works for both trainers and companies)
+    const currentUser = getUserData();
     setUser(currentUser as unknown as User | null);
 
     // Fetch actual trainings data from API
@@ -163,12 +163,12 @@ export default function TrainingsPage() {
     doc.text("und Auftragnehmer (AN)", 105, 105, { align: "center" });
     doc.setFont("helvetica", "bold");
     
-    // Get trainer data from localStorage
-    const trainerData = localStorage.getItem("trainer");
+    // Get user data from session (works for both trainers and companies)
+    const userData = getUserData();
     let trainerInfo = "[Trainer Name], [Trainer Adresse]";
     
-    if (trainerData) {
-      const trainer = JSON.parse(trainerData);
+    if (userData && userData.userType === 'TRAINER') {
+      const trainer = userData as any;
       const trainerName = `${trainer.firstName} ${trainer.lastName}`;
       const trainerAddress = trainer.street && trainer.zipCode && trainer.city 
         ? `${trainer.street}${trainer.houseNumber ? ' ' + trainer.houseNumber : ''}, ${trainer.zipCode} ${trainer.city}`

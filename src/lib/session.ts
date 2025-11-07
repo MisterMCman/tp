@@ -1,5 +1,19 @@
 import Cookies from 'js-cookie';
 
+/**
+ * Session Management Module
+ * 
+ * This module uses Cookies as the primary storage mechanism for session data.
+ * Cookies are preferred over localStorage/sessionStorage because:
+ * - They support server-side rendering (SSR) in Next.js
+ * - They can be accessed on both client and server
+ * - They support httpOnly flag for enhanced security
+ * - They work better with SSR/SSG patterns
+ * 
+ * All components should use the helper functions (getTrainerData, getCompanyData, getUserData, etc.)
+ * instead of directly accessing cookies.
+ */
+
 export type AuthSession = {
   token: string;
   instructorId: number;
@@ -13,7 +27,6 @@ const COMPANY_DATA_KEY = "company_data";
 export function saveSession(session: AuthSession): void {
   if (typeof window === "undefined") return;
 
-  // Set cookies with 7 days expiration
   Cookies.set(TOKEN_KEY, session.token, {
     expires: 7,
     secure: process.env.NODE_ENV === 'production',
@@ -29,7 +42,9 @@ export function saveSession(session: AuthSession): void {
 export function saveTrainerData(trainerData: Record<string, unknown>): void {
   if (typeof window === "undefined") return;
 
-  Cookies.set(TRAINER_DATA_KEY, JSON.stringify(trainerData), {
+  const dataString = JSON.stringify(trainerData);
+  
+  Cookies.set(TRAINER_DATA_KEY, dataString, {
     expires: 7,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict'
@@ -39,7 +54,9 @@ export function saveTrainerData(trainerData: Record<string, unknown>): void {
 export function saveCompanyData(companyData: Record<string, unknown>): void {
   if (typeof window === "undefined") return;
 
-  Cookies.set(COMPANY_DATA_KEY, JSON.stringify(companyData), {
+  const dataString = JSON.stringify(companyData);
+  
+  Cookies.set(COMPANY_DATA_KEY, dataString, {
     expires: 7,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict'
@@ -52,7 +69,7 @@ export function clearSession(): void {
   Cookies.remove(INSTRUCTOR_ID_KEY);
   Cookies.remove(TRAINER_DATA_KEY);
   Cookies.remove(COMPANY_DATA_KEY);
-  // Also clear localStorage for backward compatibility
+  // Clean up any old localStorage data that might exist
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(INSTRUCTOR_ID_KEY);
   localStorage.removeItem("trainer");
@@ -62,17 +79,13 @@ export function clearSession(): void {
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return Cookies.get(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  return Cookies.get(TOKEN_KEY) || null;
 }
 
 export function getInstructorId(): number | null {
   if (typeof window === "undefined") return null;
   const cookieId = Cookies.get(INSTRUCTOR_ID_KEY);
-  if (cookieId) return Number(cookieId);
-
-  // Fallback to localStorage
-  const localId = localStorage.getItem(INSTRUCTOR_ID_KEY);
-  return localId ? Number(localId) : null;
+  return cookieId ? Number(cookieId) : null;
 }
 
 export function getTrainerData(): Record<string, unknown> | null {
@@ -103,16 +116,6 @@ export function getTrainerData(): Record<string, unknown> | null {
   if (cookieData) {
     try {
       return JSON.parse(cookieData);
-    } catch {
-      return null;
-    }
-  }
-
-  // Fallback to localStorage
-  const localData = localStorage.getItem("trainer_data");
-  if (localData) {
-    try {
-      return JSON.parse(localData);
     } catch {
       return null;
     }
@@ -154,17 +157,30 @@ export function getCompanyData(): Record<string, unknown> | null {
     }
   }
 
-  // Fallback to localStorage
-  const localData = localStorage.getItem("company_data");
-  if (localData) {
-    try {
-      return JSON.parse(localData);
-    } catch {
-      return null;
-    }
-  }
-
   return null;
 }
 
+/**
+ * Unified function to get current user data (trainer or company)
+ * Returns the user data regardless of type, or null if no user is logged in
+ */
+export function getUserData(): Record<string, unknown> | null {
+  const trainerData = getTrainerData();
+  if (trainerData) return trainerData;
+  
+  const companyData = getCompanyData();
+  if (companyData) return companyData;
+  
+  return null;
+}
+
+/**
+ * Get the current user type ('TRAINER' | 'TRAINING_COMPANY' | null)
+ */
+export function getUserType(): 'TRAINER' | 'TRAINING_COMPANY' | null {
+  const user = getUserData();
+  if (!user) return null;
+  
+  return (user.userType as 'TRAINER' | 'TRAINING_COMPANY') || null;
+}
 

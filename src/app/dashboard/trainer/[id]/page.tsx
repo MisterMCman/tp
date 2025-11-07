@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getTrainerData } from "@/lib/session";
+import { getUserData } from "@/lib/session";
 import Link from "next/link";
 
 interface Trainer {
@@ -152,10 +152,16 @@ export default function TrainerProfilePage() {
   useEffect(() => {
     const fetchTrainerDetails = async () => {
       try {
-        // Check if user is authenticated
-        const currentUser = getTrainerData();
+        // Check if user is authenticated and is a company (only companies can view trainer profiles)
+        const currentUser = getUserData();
         if (!currentUser) {
           router.push('/');
+          return;
+        }
+        
+        // Only companies can view trainer profiles
+        if (currentUser.userType !== 'TRAINING_COMPANY') {
+          router.push('/dashboard');
           return;
         }
 

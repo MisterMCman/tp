@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserData } from '@/lib/session';
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +15,9 @@ export async function GET(
         { status: 400 }
       );
     }
+
+    // Get current user from session (works for both trainers and companies)
+    const currentUser = getUserData();
 
     const training = await prisma.training.findUnique({
       where: {
@@ -53,25 +57,35 @@ export async function GET(
       );
     }
 
-    // Find the accepted trainer request - prioritize ACCEPTED, but also show any request with a trainer
-    // First try to find ACCEPTED request
-    let acceptedRequest = training.requests.find(r => 
+    // Find the accepted trainer request
+    const acceptedRequest = training.requests.find(r => 
       String(r.status).toUpperCase() === 'ACCEPTED'
     );
     
-    // If no ACCEPTED request found, check for any request with a trainer (for display purposes)
-    // This allows companies to see the trainer even if request is still pending
-    // Since requests are already ordered by createdAt desc, we can just take the first one with a trainer
-    if (!acceptedRequest && training.requests.length > 0) {
-      acceptedRequest = training.requests.find(r => r.trainer) || null;
-    }
+    // Determine assigned trainer based on user type and permissions
+    let assignedTrainer = null;
     
-    const assignedTrainer = acceptedRequest && acceptedRequest.trainer ? {
-      id: acceptedRequest.trainer.id,
-      firstName: acceptedRequest.trainer.firstName,
-      lastName: acceptedRequest.trainer.lastName,
-      fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
-    } : null;
+    if (acceptedRequest && acceptedRequest.trainer) {
+      // If user is a company, they can always see the assigned trainer
+      if (currentUser && currentUser.userType === 'TRAINING_COMPANY') {
+        assignedTrainer = {
+          id: acceptedRequest.trainer.id,
+          firstName: acceptedRequest.trainer.firstName,
+          lastName: acceptedRequest.trainer.lastName,
+          fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
+        };
+      }
+      // If user is a trainer, only show assigned trainer if it's them
+      else if (currentUser && currentUser.userType === 'TRAINER' && Number(currentUser.id) === acceptedRequest.trainer.id) {
+        assignedTrainer = {
+          id: acceptedRequest.trainer.id,
+          firstName: acceptedRequest.trainer.firstName,
+          lastName: acceptedRequest.trainer.lastName,
+          fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
+        };
+      }
+      // If user is not logged in or not the assigned trainer, don't show assigned trainer info
+    }
 
     // Transform to match frontend expectations
     const transformedTraining = {

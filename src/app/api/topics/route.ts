@@ -3,8 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  // Support both 'query' and 'search' parameters for backward compatibility
-  const query = searchParams.get("query") || searchParams.get("search") || "";
+  const query = searchParams.get("search") || "";
   const all = searchParams.get("all"); // Special flag to get all topics
 
   // If 'all' parameter is set, return all online topics

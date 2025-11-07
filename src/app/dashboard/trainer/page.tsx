@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { getCompanyData, getTrainerData } from "@/lib/session";
+import { getUserData } from "@/lib/session";
 
 interface TopicWithLevel {
   name: string;
@@ -51,13 +51,8 @@ export default function TrainerSearchPage() {
   const [showTopicSuggestions, setShowTopicSuggestions] = useState(false);
 
   useEffect(() => {
-    // Check if user is logged in and is a company
-    // Try both getCompanyData and getTrainerData (legacy support - companies might be stored as trainer_data)
-    const companyData = getCompanyData();
-    const trainerData = getTrainerData();
-    
-    // Use company data if available, otherwise fall back to trainer data
-    const userData = companyData || trainerData;
+    // Check if user is logged in and is a company (works for both trainers and companies)
+    const userData = getUserData();
     
     if (!userData) {
       // No user data at all - redirect to dashboard (will redirect to login)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { getTrainerData, getCompanyData } from "@/lib/session";
+import { getUserData } from "@/lib/session";
 import TrainingDetails, { TrainingData } from "@/components/shared/TrainingDetails";
 
 interface User {
@@ -23,7 +23,7 @@ export default function TrainingDetailsPage() {
   const from = searchParams.get('from'); // Get the referrer URL
 
   useEffect(() => {
-    const currentUser = getTrainerData() || getCompanyData();
+    const currentUser = getUserData();
     setUser(currentUser as User | null);
 
     const fetchTrainingDetails = async () => {

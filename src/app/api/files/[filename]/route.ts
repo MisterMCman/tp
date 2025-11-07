@@ -28,7 +28,7 @@ export async function GET(
         storedFilename: filename,
       },
       include: {
-        trainingRequestMessage: {
+        message: {
           include: {
             trainingRequest: {
               include: {
@@ -45,19 +45,19 @@ export async function GET(
       }
     });
 
-    if (!attachment) {
+    if (!attachment || !attachment.message) {
       return NextResponse.json(
         { error: 'File not found' },
         { status: 404 }
       );
     }
 
-    // Authorization check: User must be either the trainer or the company involved
-    const trainingRequest = attachment.trainingRequestMessage.trainingRequest;
-    const isTrainer = currentUser.userType === 'TRAINER' && currentUser.id === trainingRequest.trainerId;
-    const isCompany = currentUser.userType === 'TRAINING_COMPANY' && currentUser.id === trainingRequest.training.companyId;
+    // Authorization check: User must be either the sender or recipient of the message
+    const message = attachment.message;
+    const isSender = currentUser.id === message.senderId && currentUser.userType === message.senderType;
+    const isRecipient = currentUser.id === message.recipientId && currentUser.userType === message.recipientType;
 
-    if (!isTrainer && !isCompany) {
+    if (!isSender && !isRecipient) {
       return NextResponse.json(
         { error: 'Nicht autorisiert - Sie haben keinen Zugriff auf diese Datei' },
         { status: 403 }

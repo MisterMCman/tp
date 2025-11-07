@@ -60,6 +60,7 @@ function CompanyRegistrationContent() {
       }
       
       // Fallback to hardcoded data (if API call failed or returned non-ok)
+      //todo remove the hardcoding, we miht mess up the ids etc
       try {
         const hardcodedCountries = [
           { id: 1, name: 'Deutschland', code: 'DE' },

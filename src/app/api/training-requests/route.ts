@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserData } from '@/lib/session';
+import { TrainingRequestStatus, TrainingStatus } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,8 +57,7 @@ export async function POST(request: NextRequest) {
             data: {
               trainingId: trainingId,
               trainerId: parseInt(trainerId),
-              message: message || null,
-              status: 'PENDING'
+              status: TrainingRequestStatus.PENDING
             },
             include: {
               trainer: {
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
         trainingIds.map(async (id: number) => {
           await prisma.training.update({
             where: { id: id },
-            data: { status: 'PUBLISHED' }
+            data: { status: TrainingStatus.PUBLISHED }
           });
         })
       );
@@ -152,8 +153,7 @@ export async function POST(request: NextRequest) {
             data: {
               trainingId: parseInt(trainingId),
               trainerId: trainerId,
-              message: message || null,
-              status: 'PENDING'
+              status: TrainingRequestStatus.PENDING
             },
             include: {
               trainer: {
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
       // Update training status to PUBLISHED when requests are sent
       await prisma.training.update({
         where: { id: parseInt(trainingId) },
-        data: { status: 'PUBLISHED' }
+        data: { status: TrainingStatus.PUBLISHED }
       });
 
       return NextResponse.json({
@@ -213,9 +213,76 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const trainerId = searchParams.get('trainerId');
+    const companyId = searchParams.get('companyId');
     const trainingId = searchParams.get('trainingId');
 
-    if (trainerId) {
+    // Get current user for authorization
+    const currentUser = getUserData();
+    
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
+    if (companyId) {
+      // Verify that companies can only see requests for their own trainings
+      if (currentUser.userType === 'TRAINING_COMPANY' && Number(currentUser.id) !== parseInt(companyId)) {
+        return NextResponse.json(
+          { error: 'Unauthorized: You can only view requests for your own company' },
+          { status: 403 }
+        );
+      }
+      
+      // Get all training requests for trainings owned by this company
+      const requests = await prisma.trainingRequest.findMany({
+        where: {
+          training: {
+            companyId: parseInt(companyId)
+          }
+        },
+        include: {
+          training: {
+            include: {
+              topic: true,
+              company: {
+                select: {
+                  id: true,
+                  companyName: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  logo: true
+                }
+              }
+            }
+          },
+          trainer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              profilePicture: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      return NextResponse.json(requests);
+    } else if (trainerId) {
+      // Verify that trainers can only see their own requests
+      if (currentUser.userType === 'TRAINER' && Number(currentUser.id) !== parseInt(trainerId)) {
+        return NextResponse.json(
+          { error: 'Unauthorized: You can only view your own requests' },
+          { status: 403 }
+        );
+      }
+      
       // Get training requests for a specific trainer
       const requests = await prisma.trainingRequest.findMany({
         where: {
@@ -245,6 +312,43 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(requests);
     } else if (trainingId) {
+      // Verify that companies can only see requests for their own trainings
+      if (currentUser.userType === 'TRAINING_COMPANY') {
+        const training = await prisma.training.findUnique({
+          where: { id: parseInt(trainingId) },
+          select: { companyId: true }
+        });
+        
+        if (!training) {
+          return NextResponse.json(
+            { error: 'Training not found' },
+            { status: 404 }
+          );
+        }
+        
+        if (training.companyId !== Number(currentUser.id)) {
+          return NextResponse.json(
+            { error: 'Unauthorized: You can only view requests for your own trainings' },
+            { status: 403 }
+          );
+        }
+      } else if (currentUser.userType === 'TRAINER') {
+        // Trainers can only see requests for trainings they have a request for
+        const trainerRequest = await prisma.trainingRequest.findFirst({
+          where: {
+            trainingId: parseInt(trainingId),
+            trainerId: Number(currentUser.id)
+          }
+        });
+        
+        if (!trainerRequest) {
+          return NextResponse.json(
+            { error: 'Unauthorized: You can only view requests for trainings you are involved in' },
+            { status: 403 }
+          );
+        }
+      }
+      
       // Get all requests for a specific training
       const requests = await prisma.trainingRequest.findMany({
         where: {
@@ -300,15 +404,21 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { requestId, status, message, counterPrice } = body;
+    const { requestId, status, message, counterPrice, companyCounterPrice } = body;
 
-    const updatedRequest = await prisma.trainingRequest.update({
+    // Get current user for authorization
+    const currentUser = getUserData();
+    
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
+    // First, get the current request to understand the training context
+    const currentRequest = await prisma.trainingRequest.findUnique({
       where: { id: parseInt(requestId) },
-      data: {
-        status: status,
-        message: message || undefined,
-        counterPrice: counterPrice !== undefined ? parseFloat(counterPrice) : undefined
-      },
       include: {
         training: {
           include: {
@@ -319,6 +429,192 @@ export async function PATCH(request: NextRequest) {
         trainer: true
       }
     });
+
+    if (!currentRequest) {
+      return NextResponse.json(
+        { error: 'Training request not found' },
+        { status: 404 }
+      );
+    }
+
+    // Authorization: Trainers can only update their own requests, companies can only update requests for their trainings
+    if (currentUser.userType === 'TRAINER' && currentRequest.trainerId !== Number(currentUser.id)) {
+      return NextResponse.json(
+        { error: 'Unauthorized: You can only update your own requests' },
+        { status: 403 }
+      );
+    }
+    
+    if (currentUser.userType === 'TRAINING_COMPANY') {
+      const training = await prisma.training.findUnique({
+        where: { id: currentRequest.trainingId },
+        select: { companyId: true }
+      });
+      
+      if (!training || training.companyId !== Number(currentUser.id)) {
+        return NextResponse.json(
+          { error: 'Unauthorized: You can only update requests for your own trainings' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Prevent counter offer updates if request is already ACCEPTED (locked)
+    if (currentRequest.status === TrainingRequestStatus.ACCEPTED) {
+      if (counterPrice !== undefined || companyCounterPrice !== undefined) {
+        return NextResponse.json(
+          { error: 'Cannot update counter offers: Request has already been accepted and is locked' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Update the current request
+    // Handle two-step acceptance: trainer accepts first, then company accepts
+    const updateData: any = {};
+    
+    // If trainer is accepting, set trainerAccepted = true but keep status as PENDING
+    if (currentUser.userType === 'TRAINER' && status === TrainingRequestStatus.ACCEPTED) {
+      // Prevent duplicate accepts
+      if (currentRequest.trainerAccepted) {
+        return NextResponse.json(
+          { error: 'You have already accepted this training request. Waiting for company response.' },
+          { status: 400 }
+        );
+      }
+      updateData.trainerAccepted = true;
+      updateData.status = TrainingRequestStatus.PENDING; // Keep as PENDING until company accepts
+    } 
+    // If company is accepting and trainer has already accepted, then set status to ACCEPTED
+    else if (currentUser.userType === 'TRAINING_COMPANY' && status === TrainingRequestStatus.ACCEPTED) {
+      // If trainer already accepted, then fully accept
+      if (currentRequest.trainerAccepted) {
+        updateData.status = TrainingRequestStatus.ACCEPTED;
+      } else {
+        // Company accepting a counter offer or accepting before trainer - set status to ACCEPTED
+        updateData.status = TrainingRequestStatus.ACCEPTED;
+      }
+    }
+    // For other status changes (DECLINED, etc.), update status normally
+    else {
+      updateData.status = status;
+    }
+    
+    // Only update counterPrice if it's explicitly provided in the request and status is PENDING
+    // This allows trainers to send new counters to replace old ones (only latest is shown to company)
+    if (counterPrice !== undefined) {
+      if (currentRequest.status !== TrainingRequestStatus.PENDING) {
+        return NextResponse.json(
+          { error: 'Cannot send counter offer: Request must be pending' },
+          { status: 400 }
+        );
+      }
+      // Prevent counter offers if trainer has already accepted
+      if (currentUser.userType === 'TRAINER' && currentRequest.trainerAccepted) {
+        return NextResponse.json(
+          { error: 'Cannot send counter offer: You have already accepted this request. Waiting for company response.' },
+          { status: 400 }
+        );
+      }
+      updateData.counterPrice = parseFloat(counterPrice);
+    }
+    
+    // Only update companyCounterPrice if it's explicitly provided in the request and status is PENDING
+    // This allows companies to send new counters to replace old ones (only latest is shown to trainer)
+    if (companyCounterPrice !== undefined) {
+      if (currentRequest.status !== TrainingRequestStatus.PENDING) {
+        return NextResponse.json(
+          { error: 'Cannot send counter offer: Request must be pending' },
+          { status: 400 }
+        );
+      }
+      updateData.companyCounterPrice = parseFloat(companyCounterPrice);
+    }
+    
+    const updatedRequest = await prisma.trainingRequest.update({
+      where: { id: parseInt(requestId) },
+      data: updateData,
+      include: {
+        training: {
+          include: {
+            topic: true,
+            company: true
+          }
+        },
+        trainer: true
+      }
+    });
+
+    // If a request is being fully accepted (status = ACCEPTED), automatically decline all other pending requests for the same training
+    // Only do this when the final status is ACCEPTED (not just trainerAccepted)
+    const finalStatus = updateData.status || updatedRequest.status;
+    if (finalStatus === TrainingRequestStatus.ACCEPTED && currentRequest.status !== TrainingRequestStatus.ACCEPTED) {
+      // Find all other pending requests for this training
+      const otherPendingRequests = await prisma.trainingRequest.findMany({
+        where: {
+          trainingId: currentRequest.trainingId,
+          id: { not: parseInt(requestId) },
+          status: TrainingRequestStatus.PENDING
+        },
+        include: {
+          trainer: true,
+          training: {
+            include: {
+              topic: true,
+              company: true
+            }
+          }
+        }
+      });
+
+      // Decline all other pending requests
+      if (otherPendingRequests.length > 0) {
+        await prisma.trainingRequest.updateMany({
+          where: {
+            id: { in: otherPendingRequests.map(r => r.id) }
+          },
+          data: {
+            status: TrainingRequestStatus.DECLINED
+          }
+        });
+
+        // Send notifications to all declined trainers
+        for (const declinedRequest of otherPendingRequests) {
+          const declineMessage = `Ihre Anfrage für das Training "${currentRequest.training.title}" wurde abgelehnt, da ein anderer Trainer die Anfrage bereits angenommen hat.`;
+          
+          await prisma.message.create({
+            data: {
+              trainingRequestId: declinedRequest.id,
+              senderId: currentRequest.training.companyId,
+              senderType: 'TRAINING_COMPANY',
+              recipientId: declinedRequest.trainerId,
+              recipientType: 'TRAINER',
+              subject: `Anfrage abgelehnt: ${currentRequest.training.title}`,
+              message: declineMessage,
+              isRead: false,
+              messageType: 'NOTIFICATION'
+            }
+          });
+        }
+      }
+
+      // Send notification to the accepted trainer
+      const acceptMessage = `Herzlichen Glückwunsch! Ihre Anfrage für das Training "${currentRequest.training.title}" wurde angenommen. Sie können nun weitere Details im Dashboard einsehen.`;
+      
+      await prisma.message.create({
+        data: {
+          trainingRequestId: parseInt(requestId),
+          senderId: currentRequest.training.companyId,
+          senderType: 'TRAINING_COMPANY',
+          recipientId: currentRequest.trainerId,
+          recipientType: 'TRAINER',
+          subject: `Anfrage angenommen: ${currentRequest.training.title}`,
+          message: acceptMessage,
+          isRead: false,
+          messageType: 'NOTIFICATION'
+        }
+      });
+    }
 
     return NextResponse.json(updatedRequest);
   } catch (error) {

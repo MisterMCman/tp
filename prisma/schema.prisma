@@ -11,7 +11,7 @@ model Country {
   id                Int               @id @default(autoincrement())
   name              String            @unique
   code              String            @unique // ISO 3166-1 alpha-2
-  phoneCode         String?           // International phone code
+  phoneCode         String? // International phone code
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   trainers          Trainer[]
@@ -20,124 +20,124 @@ model Country {
 }
 
 model Trainer {
-  id                    Int                @id @default(autoincrement())
-  userType              UserType           @default(TRAINER)
-  firstName             String
-  lastName              String
-  email                 String             @unique
-  phone                 String
-  street                String?            // Straße
-  houseNumber           String?            // Hausnummer
-  zipCode               String?            // PLZ
-  city                  String?            // Stadt
-  bio                   String?            @db.Text
+  id                   Int                     @id @default(autoincrement())
+  userType             UserType                @default(TRAINER)
+  firstName            String
+  lastName             String
+  email                String                  @unique
+  phone                String
+  street               String? // Straße
+  houseNumber          String? // Hausnummer
+  zipCode              String? // PLZ
+  city                 String? // Stadt
+  bio                  String?                 @db.Text
   profilePicture       String?
-  iban                  String?            // IBAN for bank transfers
-  taxId                 String?
-  companyName           String?            // Firmenname falls es eine GmbH ist
-  isCompany             Boolean            @default(false) // Gibt an ob es sich um eine Firma handelt
-  dailyRate             Float?             // Regulärer Netto-Tagessatz für Schulungen 9-16 Uhr
-  status                TrainerStatus      @default(ACTIVE)
-  countryId             Int?               // Reference to Country
-  country               Country?           @relation(fields: [countryId], references: [id])
-  travelRadius          Int?               // Travel radius in km from trainer's address
-  offeredTrainingTypes  TrainerTrainingType[] // Types of training the trainer offers (ONLINE, HYBRID, VOR_ORT)
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  invoices              Invoice[]
-  topics                TrainerTopic[]
-  loginTokens           LoginToken[]
-  topicSuggestions      TopicSuggestion[]
-  profileVersions       TrainerProfileVersion[]
-  availabilities        Availability[]
-  trainingRequests      TrainingRequest[]
+  iban                 String? // IBAN for bank transfers
+  taxId                String?
+  companyName          String? // Firmenname falls es eine GmbH ist
+  isCompany            Boolean                 @default(false) // Gibt an ob es sich um eine Firma handelt
+  dailyRate            Float? // Regulärer Netto-Tagessatz für Schulungen 9-16 Uhr
+  status               TrainerStatus           @default(ACTIVE)
+  countryId            Int? // Reference to Country
+  country              Country?                @relation(fields: [countryId], references: [id])
+  travelRadius         Int? // Travel radius in km from trainer's address
+  offeredTrainingTypes TrainerTrainingType[] // Types of training the trainer offers (ONLINE, HYBRID, VOR_ORT)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  invoices             Invoice[]
+  topics               TrainerTopic[]
+  loginTokens          LoginToken[]
+  topicSuggestions     TopicSuggestion[]
+  profileVersions      TrainerProfileVersion[]
+  availabilities       Availability[]
+  trainingRequests     TrainingRequest[]
 
   @@index([countryId], map: "Trainer_countryId_fkey")
 }
 
 model TrainingCompany {
-  id           Int                  @id @default(autoincrement())
-  userType     UserType             @default(TRAINING_COMPANY)
-  companyName  String               // Company name
-  firstName    String?              // Contact person first name
-  lastName     String?              // Contact person last name
-  email        String               @unique
-  phone        String
-  street       String?              // Straße
-  houseNumber  String?              // Hausnummer
-  zipCode      String?              // PLZ
-  city         String?              // Stadt
-  domain       String?              // Extracted from email for company identification
-  bio          String?              @db.Text
-  logo         String?              // Company logo URL
-  website      String?              // Company website
-  industry     String?              // Industry/sector
-  employees    String?              // Company size (e.g., "1-10", "11-50", "51-200", "200+")
-  vatId        String?              // Umsatzsteuer-ID
-  consultantName String?            // Name of the consultant using the platform
-  billingEmail String?              // Separate billing email
-  billingNotes String?              @db.Text // Additional billing notes
-  tags         String?              @db.Text // Tags/Keywords (JSON or comma-separated)
-  onboardingStatus String?          // Onboarding status (e.g., "Profil unvollständig")
-  status       TrainerStatus        @default(ACTIVE)
-  countryId    Int?                 // Reference to Country
-  country      Country?             @relation(fields: [countryId], references: [id])
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  loginTokens  TrainingCompanyLoginToken[]
-  trainings    Training[]
+  id               Int                         @id @default(autoincrement())
+  userType         UserType                    @default(TRAINING_COMPANY)
+  companyName      String // Company name
+  firstName        String? // Contact person first name
+  lastName         String? // Contact person last name
+  email            String                      @unique
+  phone            String
+  street           String? // Straße
+  houseNumber      String? // Hausnummer
+  zipCode          String? // PLZ
+  city             String? // Stadt
+  domain           String? // Extracted from email for company identification
+  bio              String?                     @db.Text
+  logo             String? // Company logo URL
+  website          String? // Company website
+  industry         String? // Industry/sector
+  employees        String? // Company size (e.g., "1-10", "11-50", "51-200", "200+")
+  vatId            String? // Umsatzsteuer-ID
+  consultantName   String? // Name of the consultant using the platform
+  billingEmail     String? // Separate billing email
+  billingNotes     String?                     @db.Text // Additional billing notes
+  tags             String?                     @db.Text // Tags/Keywords (JSON or comma-separated)
+  onboardingStatus String? // Onboarding status (e.g., "Profil unvollständig")
+  status           TrainerStatus               @default(ACTIVE)
+  countryId        Int? // Reference to Country
+  country          Country?                    @relation(fields: [countryId], references: [id])
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  loginTokens      TrainingCompanyLoginToken[]
+  trainings        Training[]
 
   @@index([countryId], map: "TrainingCompany_countryId_fkey")
 }
 
 model TrainingCompanyLoginToken {
-  id                 Int             @id @default(autoincrement())
-  token              String          @unique
-  trainingCompanyId  Int
-  trainingCompany    TrainingCompany @relation(fields: [trainingCompanyId], references: [id])
-  createdAt          DateTime        @default(now())
-  expiresAt          DateTime
+  id                Int             @id @default(autoincrement())
+  token             String          @unique
+  trainingCompanyId Int
+  trainingCompany   TrainingCompany @relation(fields: [trainingCompanyId], references: [id])
+  createdAt         DateTime        @default(now())
+  expiresAt         DateTime
   // Note: Tokens are now reusable within expiration period
-  used               Boolean         @default(false) // For future use, currently not enforced
-  usedAt             DateTime?       // Tracks last usage timestamp
+  used              Boolean         @default(false) // For future use, currently not enforced
+  usedAt            DateTime? // Tracks last usage timestamp
 
   @@index([trainingCompanyId], map: "TrainingCompanyLoginToken_trainingCompanyId_fkey")
 }
 
 model LoginToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
+  id        Int       @id @default(autoincrement())
+  token     String    @unique
   trainerId Int
-  trainer   Trainer  @relation(fields: [trainerId], references: [id])
-  createdAt DateTime @default(now())
+  trainer   Trainer   @relation(fields: [trainerId], references: [id])
+  createdAt DateTime  @default(now())
   expiresAt DateTime
   // Note: Tokens are now reusable within expiration period
-  used      Boolean  @default(false) // For future use, currently not enforced
+  used      Boolean   @default(false) // For future use, currently not enforced
   usedAt    DateTime? // Tracks last usage timestamp
 
   @@index([trainerId], map: "LoginToken_trainerId_fkey")
 }
 
 model Topic {
-  id            Int              @id @default(autoincrement())
-  state         String           @default("online") // online/offline
-  slug          String           @unique
-  name          String           // title from CSV
-  short_title   String?
-  icon          String?
-  novelty_order Int?
+  id             Int            @id @default(autoincrement())
+  state          String         @default("online") // online/offline
+  slug           String         @unique
+  name           String // title from CSV
+  short_title    String?
+  icon           String?
+  novelty_order  Int?
   featured_order Int?
-  teaser_title  String?
-  teaser_text   String?          @db.Text
-  detail_title  String?
-  detail_text   String?          @db.Text
-  seo_text      String?          @db.Text
-  order         Int?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  trainers      TrainerTopic[]
-  courses       Course[]
-  trainings     Training[]
+  teaser_title   String?
+  teaser_text    String?        @db.Text
+  detail_title   String?
+  detail_text    String?        @db.Text
+  seo_text       String?        @db.Text
+  order          Int?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  trainers       TrainerTopic[]
+  courses        Course[]
+  trainings      Training[]
 }
 
 enum ExpertiseLevel {
@@ -155,51 +155,51 @@ model TrainerTopic {
   expertiseLevel ExpertiseLevel @default(GRUNDLAGE)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+
   @@unique([trainerId, topicId]) // Eindeutiger Index statt Primärschlüssel
 }
 
 model TopicSuggestion {
-  id        Int                 @id @default(autoincrement())
+  id        Int                   @id @default(autoincrement())
   name      String
-  trainer   Trainer             @relation(fields: [trainerId], references: [id])
+  trainer   Trainer               @relation(fields: [trainerId], references: [id])
   trainerId Int
   status    TopicSuggestionStatus @default(PENDING)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
 
   @@index([trainerId], map: "TopicSuggestion_trainerId_fkey")
   @@index([name], map: "TopicSuggestion_name_idx")
 }
 
 model TrainerProfileVersion {
-  id            Int      @id @default(autoincrement())
-  trainerId     Int
-  trainer       Trainer  @relation(fields: [trainerId], references: [id])
-  version       Int      // Version number for this trainer
-  firstName     String?
-  lastName      String?
-  email         String?
-  phone         String?
-  street        String?
-  houseNumber   String?
-  zipCode       String?
-  city          String?
-  countryId     Int?
-  bio           String?
+  id             Int      @id @default(autoincrement())
+  trainerId      Int
+  trainer        Trainer  @relation(fields: [trainerId], references: [id])
+  version        Int // Version number for this trainer
+  firstName      String?
+  lastName       String?
+  email          String?
+  phone          String?
+  street         String?
+  houseNumber    String?
+  zipCode        String?
+  city           String?
+  countryId      Int?
+  bio            String?
   profilePicture String?
-  iban          String?
-  taxId         String?
-  companyName   String?
-  isCompany     Boolean?
-  dailyRate     Float?
-  changedFields String   // JSON string of changed field names
-  changedBy     String   // 'trainer' or 'admin'
-  createdAt     DateTime @default(now())
+  iban           String?
+  taxId          String?
+  companyName    String?
+  isCompany      Boolean?
+  dailyRate      Float?
+  changedFields  String // JSON string of changed field names
+  changedBy      String // 'trainer' or 'admin'
+  createdAt      DateTime @default(now())
 
   @@index([trainerId], map: "TrainerProfileVersion_trainerId_fkey")
   @@index([trainerId, version], map: "TrainerProfileVersion_trainerId_version_key")
 }
-
 
 model Course {
   id          Int         @id @default(autoincrement())
@@ -210,15 +210,15 @@ model Course {
   state       CourseState @default(ONLINE)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
-  trainings   Training[]  // One course can have multiple trainings
+  trainings   Training[] // One course can have multiple trainings
 
   @@index([topicId], map: "Course_topicId_fkey")
 }
 
 model Participant {
   id         Int      @id @default(autoincrement())
-  name       String?  // Optional - can be anonymous
-  email      String?  // Optional
+  name       String? // Optional - can be anonymous
+  email      String? // Optional
   trainingId Int
   training   Training @relation(fields: [trainingId], references: [id])
   createdAt  DateTime @default(now())
@@ -227,17 +227,17 @@ model Participant {
 }
 
 model Invoice {
-  id         Int           @id @default(autoincrement())
-  trainerId  Int
-  trainingId Int?
-  training   Training?     @relation(fields: [trainingId], references: [id])
-  amount     Float
-  status     InvoiceStatus @default(SUBMITTED)
-  invoiceNumber String?    @unique // e.g., "INV-2024-001"
+  id            Int           @id @default(autoincrement())
+  trainerId     Int
+  trainingId    Int?
+  training      Training?     @relation(fields: [trainingId], references: [id])
+  amount        Float
+  status        InvoiceStatus @default(SUBMITTED)
+  invoiceNumber String?       @unique // e.g., "INV-2024-001"
   invoiceDate   DateTime?
   paidDate      DateTime?
-  createdAt  DateTime      @default(now())
-  trainer    Trainer       @relation(fields: [trainerId], references: [id])
+  createdAt     DateTime      @default(now())
+  trainer       Trainer       @relation(fields: [trainerId], references: [id])
 
   @@index([trainerId], map: "Invoice_trainerId_fkey")
   @@index([trainingId], map: "Invoice_trainingId_fkey")
@@ -252,7 +252,6 @@ enum TrainerStatus {
   ACTIVE
   INACTIVE
 }
-
 
 enum CourseState {
   ONLINE
@@ -285,9 +284,9 @@ model Availability {
   id        Int      @id @default(autoincrement())
   trainerId Int
   trainer   Trainer  @relation(fields: [trainerId], references: [id])
-  dayOfWeek Int      // 0 = Sunday, 1 = Monday, etc.
-  startTime String   // Format: "HH:mm"
-  endTime   String   // Format: "HH:mm"
+  dayOfWeek Int // 0 = Sunday, 1 = Monday, etc.
+  startTime String // Format: "HH:mm"
+  endTime   String // Format: "HH:mm"
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -302,36 +301,36 @@ enum TopicSuggestionStatus {
 }
 
 model Training {
-  id                 Int              @id @default(autoincrement())
-  courseId           Int?             // Reference to Course template
-  course             Course?          @relation(fields: [courseId], references: [id])
-  title              String
-  topicId            Int
-  topic              Topic            @relation(fields: [topicId], references: [id])
-  companyId          Int
-  company            TrainingCompany  @relation(fields: [companyId], references: [id])
-  startDate          DateTime
-  endDate            DateTime
-  startTime          String           // Format: "HH:mm"
-  endTime            String           // Format: "HH:mm"
-  type               TrainingType     @default(ONLINE) // Training type: ONLINE, HYBRID, or VOR_ORT
-  location           String           // General location string (for display/backward compatibility)
+  id                  Int               @id @default(autoincrement())
+  courseId            Int? // Reference to Course template
+  course              Course?           @relation(fields: [courseId], references: [id])
+  title               String
+  topicId             Int
+  topic               Topic             @relation(fields: [topicId], references: [id])
+  companyId           Int
+  company             TrainingCompany   @relation(fields: [companyId], references: [id])
+  startDate           DateTime
+  endDate             DateTime
+  startTime           String // Format: "HH:mm"
+  endTime             String // Format: "HH:mm"
+  type                TrainingType      @default(ONLINE) // Training type: ONLINE, HYBRID, or VOR_ORT
+  location            String // General location string (for display/backward compatibility)
   // Detailed location fields for HYBRID and VOR_ORT types
-  locationStreet     String?          // Street address for physical location
-  locationHouseNumber String?          // House number for physical location
-  locationZipCode     String?          // ZIP code for physical location
-  locationCity       String?          // City for physical location
-  locationCountryId  Int?             // Country for physical location
-  locationCountry    Country?         @relation("TrainingLocationCountry", fields: [locationCountryId], references: [id])
-  participantCount   Int              // Number of participants
-  dailyRate          Float
-  description        String?          @db.Text
-  status             TrainingStatus   @default(DRAFT)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  requests           TrainingRequest[] // Training requests from companies to trainers
-  participants       Participant[]     // Actual participant records
-  invoices           Invoice[]         // Generated invoices
+  locationStreet      String? // Street address for physical location
+  locationHouseNumber String? // House number for physical location
+  locationZipCode     String? // ZIP code for physical location
+  locationCity        String? // City for physical location
+  locationCountryId   Int? // Country for physical location
+  locationCountry     Country?          @relation("TrainingLocationCountry", fields: [locationCountryId], references: [id])
+  participantCount    Int // Number of participants
+  dailyRate           Float
+  description         String?           @db.Text
+  status              TrainingStatus    @default(DRAFT)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  requests            TrainingRequest[] // Training requests from companies to trainers
+  participants        Participant[] // Actual participant records
+  invoices            Invoice[] // Generated invoices
 
   @@index([courseId], map: "Training_courseId_fkey")
   @@index([companyId], map: "Training_companyId_fkey")
@@ -340,17 +339,18 @@ model Training {
 }
 
 model TrainingRequest {
-  id          Int                @id @default(autoincrement())
-  trainingId  Int
-  training    Training           @relation(fields: [trainingId], references: [id])
-  trainerId   Int
-  trainer     Trainer            @relation(fields: [trainerId], references: [id])
-  status      TrainingRequestStatus @default(PENDING)
-  message     String?            @db.Text
-  counterPrice Float?            // Counter offer price from trainer
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  messages    TrainingRequestMessage[]
+  id                  Int                   @id @default(autoincrement())
+  trainingId          Int
+  training            Training              @relation(fields: [trainingId], references: [id])
+  trainerId           Int
+  trainer             Trainer               @relation(fields: [trainerId], references: [id])
+  status              TrainingRequestStatus @default(PENDING)
+  counterPrice        Float? // Counter offer price from trainer
+  companyCounterPrice Float? // Counter offer price from company
+  trainerAccepted     Boolean               @default(false) // Trainer has accepted, waiting for company approval
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  messages            Message[] // Messages related to this training request
 
   @@unique([trainingId, trainerId])
   @@index([trainerId], map: "TrainingRequest_trainerId_fkey")
@@ -373,53 +373,37 @@ enum TrainingRequestStatus {
 }
 
 model FileAttachment {
-  id                       Int                      @id @default(autoincrement())
-  trainingRequestMessageId Int
-  trainingRequestMessage   TrainingRequestMessage   @relation(fields: [trainingRequestMessageId], references: [id], onDelete: Cascade)
-  filename                 String                   // Original filename
-  storedFilename           String                   // Unique filename on disk
-  filePath                 String                   // Full path to file on disk
-  fileSize                 Int                      // File size in bytes
-  mimeType                 String                   // MIME type (e.g., "application/pdf")
-  uploadedAt               DateTime                 @default(now())
+  id             Int      @id @default(autoincrement())
+  messageId      Int
+  message        Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  filename       String // Original filename
+  storedFilename String // Unique filename on disk
+  filePath       String // Full path to file on disk
+  fileSize       Int // File size in bytes
+  mimeType       String // MIME type (e.g., "application/pdf")
+  uploadedAt     DateTime @default(now())
 
-  @@index([trainingRequestMessageId], map: "FileAttachment_trainingRequestMessageId_fkey")
+  @@index([messageId], map: "FileAttachment_messageId_fkey")
 }
 
 model Message {
-  id             Int          @id @default(autoincrement())
-  senderId       Int          // Can be trainer or company ID
-  senderType     UserType     // TRAINER or TRAINING_COMPANY
-  recipientId    Int          // Can be trainer or company ID
-  recipientType  UserType     // TRAINER or TRAINING_COMPANY
-  subject        String       // Subject line
-  message        String       @db.Text
-  isRead         Boolean      @default(false)
-  messageType    String       @default("GENERAL") // GENERAL, INQUIRY, NOTIFICATION, etc.
-  relatedId      Int?         // Can reference Inquiry, Training, etc.
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                Int              @id @default(autoincrement())
+  trainingRequestId Int? // Reference to TrainingRequest (if message is related to a request)
+  trainingRequest   TrainingRequest? @relation(fields: [trainingRequestId], references: [id])
+  senderId          Int // Trainer or company ID
+  senderType        UserType // TRAINER or TRAINING_COMPANY
+  recipientId       Int // Trainer or company ID (always the other party)
+  recipientType     UserType // TRAINER or TRAINING_COMPANY (always the other party)
+  subject           String // Subject line
+  message           String           @db.Text
+  isRead            Boolean          @default(false)
+  messageType       String           @default("GENERAL") // GENERAL, INQUIRY, NOTIFICATION, etc.
+  relatedId         Int? // Can reference Inquiry, Training, etc.
+  attachments       FileAttachment[] // File attachments
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([senderId], map: "Message_senderId_fkey")
   @@index([recipientId], map: "Message_recipientId_fkey")
-}
-
-model TrainingRequestMessage {
-  id                 Int                 @id @default(autoincrement())
-  trainingRequestId  Int                 // Reference to TrainingRequest
-  trainingRequest    TrainingRequest     @relation(fields: [trainingRequestId], references: [id])
-  senderId           Int                 // Can be trainer or company ID
-  senderType         UserType            // TRAINER or TRAINING_COMPANY
-  recipientId        Int                 // Can be trainer or company ID
-  recipientType      UserType            // TRAINER or TRAINING_COMPANY
-  subject            String              // Subject line for the message
-  message            String              @db.Text
-  isRead             Boolean             @default(false)
-  attachments        FileAttachment[]    // File attachments
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-
-  @@index([trainingRequestId], map: "TrainingRequestMessage_trainingRequestId_fkey")
-  @@index([senderId], map: "TrainingRequestMessage_senderId_fkey")
-  @@index([recipientId], map: "TrainingRequestMessage_recipientId_fkey")
+  @@index([trainingRequestId], map: "Message_trainingRequestId_fkey")
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserData } from '@/lib/session';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,7 +9,24 @@ export async function GET(request: NextRequest) {
     const companyId = searchParams.get('companyId');
     const type = searchParams.get('type') || 'upcoming'; // 'upcoming' or 'past'
 
+    // Get current user for authorization
+    const currentUser = getUserData();
+    
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
     if (companyId) {
+      // Verify that companies can only see their own trainings
+      if (currentUser.userType === 'TRAINING_COMPANY' && Number(currentUser.id) !== parseInt(companyId)) {
+        return NextResponse.json(
+          { error: 'Unauthorized: You can only view your own trainings' },
+          { status: 403 }
+        );
+      }
       // Fetch trainings created by company
       const trainings = await prisma.training.findMany({
         where: {
@@ -117,6 +135,14 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(availableTrainings);
     } else if (trainerId) {
+      // Verify that trainers can only see their own trainings
+      if (currentUser.userType === 'TRAINER' && Number(currentUser.id) !== parseInt(trainerId)) {
+        return NextResponse.json(
+          { error: 'Unauthorized: You can only view your own trainings' },
+          { status: 403 }
+        );
+      }
+      
       // Fetch trainings for trainer via TrainingRequest with ACCEPTED status
       const now = new Date();
 
@@ -161,7 +187,7 @@ export async function GET(request: NextRequest) {
         participants: request.training.participantCount,
         status: type === 'upcoming' ? 'confirmed' : 'completed',
         description: request.training.description,
-        trainerNotes: request.message,
+        trainerNotes: null, // Message field removed - notes should be in Message table now
         materials: [],
         dailyRate: request.training.dailyRate,
         startTime: request.training.startTime,

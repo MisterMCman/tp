@@ -127,7 +127,6 @@ export interface TrainingRequest {
   originalPrice: number;
   proposedPrice: number;
   counterPrice?: number;
-  message: string;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -269,7 +268,7 @@ export interface BankDetails {
 
 export interface FileAttachment {
   id: number;
-  trainingRequestMessageId: number;
+  messageId: number;
   filename: string;
   storedFilename: string;
   filePath: string;
@@ -278,9 +277,9 @@ export interface FileAttachment {
   uploadedAt: string;
 }
 
-export interface TrainingRequestMessage {
+export interface Message {
   id: number;
-  trainingRequestId: number;
+  trainingRequestId?: number;
   trainingRequest?: TrainingRequest;
   senderId: number;
   senderType: 'TRAINER' | 'TRAINING_COMPANY';
@@ -289,6 +288,8 @@ export interface TrainingRequestMessage {
   subject: string;
   message: string;
   isRead: boolean;
+  messageType?: string;
+  relatedId?: number;
   attachments?: FileAttachment[];
   createdAt: string;
   updatedAt: string;

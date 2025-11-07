@@ -283,18 +283,34 @@ export async function POST(req: Request) {
         path: '/'
       });
 
-      cookieStore.set('trainer_data', JSON.stringify(userResponse), {
-        httpOnly: false, // Allow client-side access
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 60 * 60 * 24 * 7, // 7 days
-        path: '/'
-      });
+      // Set the appropriate cookie based on user type
+      if (userType === 'trainer') {
+        cookieStore.set('trainer_data', JSON.stringify(userResponse), {
+          httpOnly: false, // Allow client-side access
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 60 * 60 * 24 * 7, // 7 days
+          path: '/'
+        });
+        // Clear company_data if it exists (user switched from company to trainer)
+        cookieStore.delete('company_data');
+      } else {
+        cookieStore.set('company_data', JSON.stringify(userResponse), {
+          httpOnly: false, // Allow client-side access
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 60 * 60 * 24 * 7, // 7 days
+          path: '/'
+        });
+        // Clear trainer_data if it exists (user switched from trainer to company)
+        cookieStore.delete('trainer_data');
+      }
 
       // Return success response with user data
       return NextResponse.json({
         message: 'Login erfolgreich!',
-        trainer: userResponse,
+        user: userResponse, // Unified field for both types
+        ...(userType === 'trainer' ? { trainer: userResponse } : { company: userResponse }),
       }, { status: 200 });
     }
 

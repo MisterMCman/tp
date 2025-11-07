@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
         trainingRequestId: formData.get('trainingRequestId'),
         subject: formData.get('subject'),
         message: formData.get('message'),
+        senderId: formData.get('senderId'),
+        senderType: formData.get('senderType'),
       };
 
       // Handle file attachments
@@ -48,11 +50,11 @@ export async function POST(request: NextRequest) {
       body = await request.json();
     }
 
-    const { trainingRequestId, subject, message } = body;
+    const { trainingRequestId, subject, message, senderId, senderType } = body;
 
-    if (!trainingRequestId || !subject || !message) {
+    if (!trainingRequestId || !subject || !message || !senderId || !senderType) {
       return NextResponse.json(
-        { error: 'trainingRequestId, subject, and message are required' },
+        { error: 'trainingRequestId, subject, message, senderId, and senderType are required' },
         { status: 400 }
       );
     }
@@ -80,8 +82,7 @@ export async function POST(request: NextRequest) {
     // Determine sender and recipient from the training request
     // The sender is the one creating the message (from auth/session)
     // The recipient is the other party in the training request
-    const senderId = body.senderId;
-    const senderType = body.senderType; // 'TRAINER' or 'TRAINING_COMPANY'
+    // senderId and senderType are already extracted from body above
     
     // Determine recipient based on sender
     let recipientId: number;
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const trainingRequestMessage = await prisma.trainingRequestMessage.create({
+    const createdMessage = await prisma.message.create({
       data: {
         trainingRequestId: parseInt(trainingRequestId),
         senderId: parseInt(senderId),
@@ -111,7 +112,8 @@ export async function POST(request: NextRequest) {
         recipientType: recipientType as any,
         subject,
         message,
-        isRead: false
+        isRead: false,
+        messageType: 'TRAINING_REQUEST'
       },
       include: {
         trainingRequest: {
@@ -124,7 +126,8 @@ export async function POST(request: NextRequest) {
             },
             trainer: true
           }
-        }
+        },
+        attachments: true
       }
     });
 
@@ -132,7 +135,7 @@ export async function POST(request: NextRequest) {
     if (attachments.length > 0) {
       await prisma.fileAttachment.createMany({
         data: attachments.map((attachment: any) => ({
-          trainingRequestMessageId: trainingRequestMessage.id,
+          messageId: createdMessage.id,
           filename: attachment.filename,
           storedFilename: attachment.storedFilename,
           filePath: attachment.filePath,
@@ -142,8 +145,8 @@ export async function POST(request: NextRequest) {
       });
 
       // Fetch the message with attachments
-      const messageWithAttachments = await prisma.trainingRequestMessage.findUnique({
-        where: { id: trainingRequestMessage.id },
+      const messageWithAttachments = await prisma.message.findUnique({
+        where: { id: createdMessage.id },
         include: {
           trainingRequest: {
             include: {
@@ -163,11 +166,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(messageWithAttachments);
     }
 
-    return NextResponse.json(trainingRequestMessage);
+    return NextResponse.json(createdMessage);
   } catch (error) {
-    console.error('Error creating training request message:', error);
+    console.error('Error creating message:', error);
     return NextResponse.json(
-      { error: 'Failed to create training request message' },
+      { error: 'Failed to create message' },
       { status: 500 }
     );
   }
@@ -183,7 +186,7 @@ export async function GET(request: NextRequest) {
 
     if (trainingRequestId) {
       // Get all messages for a specific training request
-      const messages = await prisma.trainingRequestMessage.findMany({
+      const messages = await prisma.message.findMany({
         where: {
           trainingRequestId: parseInt(trainingRequestId)
         },
@@ -218,38 +221,17 @@ export async function GET(request: NextRequest) {
 
     const userIdInt = parseInt(userId);
 
-    // For companies, we need to also check if they're the company associated with the training
-    // in the training request, not just senderId/recipientId
-    let whereClause: any;
-    
-    if (userType === 'TRAINING_COMPANY') {
-      // For companies: check senderId/recipientId OR check if they're the company in the training
-      whereClause = {
-        OR: [
-          { senderId: userIdInt, senderType: userType as any },
-          { recipientId: userIdInt, recipientType: userType as any },
-          // Also include messages where the company is associated with the training in the request
-          {
-            trainingRequest: {
-              training: {
-                companyId: userIdInt
-              }
-            }
-          }
-        ]
-      };
-    } else {
-      // For trainers: standard query
-      whereClause = {
-        OR: [
-          { senderId: userIdInt, senderType: userType as any },
-          { recipientId: userIdInt, recipientType: userType as any }
-        ]
-      };
-    }
+    // Messages always have 1 trainer and 1 company
+    // Check if user is either sender or recipient
+    const whereClause = {
+      OR: [
+        { senderId: userIdInt, senderType: userType as any },
+        { recipientId: userIdInt, recipientType: userType as any }
+      ]
+    };
 
     // Get messages where user is either sender or recipient
-    const messages = await prisma.trainingRequestMessage.findMany({
+    const messages = await prisma.message.findMany({
       where: whereClause,
       include: {
         trainingRequest: {
@@ -274,9 +256,9 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(messages);
   } catch (error) {
-    console.error('Error fetching training request messages:', error);
+    console.error('Error fetching messages:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch training request messages' },
+      { error: 'Failed to fetch messages' },
       { status: 500 }
     );
   }
@@ -295,16 +277,16 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const updatedMessage = await prisma.trainingRequestMessage.update({
+    const updatedMessage = await prisma.message.update({
       where: { id: parseInt(messageId) },
       data: { isRead }
     });
 
     return NextResponse.json(updatedMessage);
   } catch (error) {
-    console.error('Error updating training request message:', error);
+    console.error('Error updating message:', error);
     return NextResponse.json(
-      { error: 'Failed to update training request message' },
+      { error: 'Failed to update message' },
       { status: 500 }
     );
   }

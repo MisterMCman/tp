@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getTrainerData } from "@/lib/session";
+import { getUserData } from "@/lib/session";
 import Link from "next/link";
 
 interface Trainer {
@@ -79,7 +79,7 @@ export default function CreateTrainingPage() {
 
   useEffect(() => {
     // Check if user is authenticated and is a company
-    const currentUser = getTrainerData();
+    const currentUser = getUserData();
     if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
       router.push('/dashboard');
       return;

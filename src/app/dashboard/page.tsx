@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { getTrainerData, saveTrainerData, saveSession } from "@/lib/session";
+import { getUserData, saveTrainerData, saveCompanyData, saveSession } from "@/lib/session";
 
 interface Training {
   id: number;
@@ -78,8 +78,8 @@ export default function Dashboard() {
       if (response.ok) {
         const data = await response.json();
         
-        // Handle both trainer and company responses
-        const userData = data.trainer || data.company;
+        // Handle user response
+        const userData = data.user;
         if (!userData) {
           console.error('No user data in response:', data);
           setErrorMessage('Login fehlgeschlagen. Bitte versuchen Sie es erneut.');
@@ -88,7 +88,12 @@ export default function Dashboard() {
           return;
         }
         
-        saveTrainerData(userData);
+        // Save to appropriate cookie based on user type
+        if (userData.userType === 'TRAINER') {
+          saveTrainerData(userData);
+        } else if (userData.userType === 'TRAINING_COMPANY') {
+          saveCompanyData(userData);
+        }
         saveSession({ token: token, instructorId: userData.id });
         setUser(userData);
 
@@ -156,12 +161,12 @@ export default function Dashboard() {
           await verifyTokenAndLogin(token);
         } else {
           console.log('Page: No token in URL, checking existing session...');
-          // Check if we already have a valid session
-          const trainerData = getTrainerData();
-          if (trainerData) {
+          // Check if we already have a valid session (works for both trainers and companies)
+          const userData = getUserData();
+          if (userData) {
             console.log('Page: Found existing session, loading dashboard...');
-            setUser(trainerData);
-            await fetchDashboardData(trainerData.id as number, trainerData.userType as string);
+            setUser(userData);
+            await fetchDashboardData(userData.id as number, userData.userType as string);
             setInitialized(true);
             hasProcessedAuth.current = true;
           } else {
@@ -185,40 +190,49 @@ export default function Dashboard() {
   const fetchDashboardData = async (userId: number, userType?: string) => {
     try {
       if (userType === 'TRAINER') {
-        // Fetch training requests from new system
+        // Fetch training requests and upcoming trainings in parallel
         try {
-          const trainingRequestsResponse = await fetch(`/api/training-requests?trainerId=${userId}`);
+          const [trainingRequestsResponse, upcomingTrainingsResponse] = await Promise.all([
+            fetch(`/api/training-requests?trainerId=${userId}`),
+            fetch(`/api/trainings?trainerId=${userId}&type=upcoming`)
+          ]);
+          
           if (trainingRequestsResponse.ok) {
             const trainingRequests = await trainingRequestsResponse.json();
             const pendingRequests = trainingRequests.filter((request: any) => request.status === 'PENDING');
             setPendingRequests(pendingRequests.length);
           } else {
-            console.error('Failed to fetch training requests, falling back to legacy system');
-            // Fall back to legacy system
-            const response = await fetch(`/api/dashboard?trainerId=${userId}`);
-            if (response.ok) {
-              const data = await response.json();
-              setUpcomingTrainings(data.upcomingTrainings);
-              setPendingRequests(data.pendingRequests);
-            } else {
-              console.error('Failed to fetch trainer dashboard data');
-            }
+            console.error('Failed to fetch training requests');
+          }
+          
+          if (upcomingTrainingsResponse.ok) {
+            const upcomingData = await upcomingTrainingsResponse.json();
+            // Limit to next 3 trainings for dashboard
+            setUpcomingTrainings(upcomingData.slice(0, 3));
+          } else {
+            console.error('Failed to fetch upcoming trainings');
           }
         } catch (error) {
-          console.error('Error fetching training requests, falling back to legacy system:', error);
-          // Fall back to legacy system
-          const response = await fetch(`/api/dashboard?trainerId=${userId}`);
-          if (response.ok) {
-            const data = await response.json();
-            setUpcomingTrainings(data.upcomingTrainings);
-            setPendingRequests(data.pendingRequests);
+          console.error('Error fetching dashboard data:', error);
+        }
+      } else if (userType === 'TRAINING_COMPANY') {
+        // Fetch requests that need company attention (counter offers or trainer acceptances)
+        try {
+          const trainingRequestsResponse = await fetch(`/api/training-requests?companyId=${userId}`);
+          if (trainingRequestsResponse.ok) {
+            const trainingRequests = await trainingRequestsResponse.json();
+            // Count requests with counter offers or trainer acceptances waiting for company approval
+            const pendingRequests = trainingRequests.filter((request: any) => 
+              request.status === 'PENDING' && (request.counterPrice || request.trainerAccepted)
+            );
+            setPendingRequests(pendingRequests.length);
           } else {
-            console.error('Failed to fetch trainer dashboard data');
+            console.error('Failed to fetch training requests');
           }
+        } catch (error) {
+          console.error('Error fetching dashboard data:', error);
         }
       }
-      // For training companies, we don't need to fetch dashboard data yet
-      // This will be implemented when we add the trainer search API
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -457,7 +471,7 @@ export default function Dashboard() {
                   SIE HABEN <span className="font-bold" style={{ color: 'var(--ptw-accent-primary)' }}>{pendingRequests} NEUE</span> TRAININGSANFRAGEN
                 </p>
                 <Link
-                  href="/dashboard/requests"
+                  href="/dashboard/requests?status=pending"
                   className="inline-block mt-3 ptw-button-primary text-sm"
                 >
                   ANFRAGEN PRÜFEN
@@ -541,7 +555,7 @@ export default function Dashboard() {
               <span className="font-semibold" style={{ color: 'var(--ptw-text-primary)' }}>TRAININGSPLAN</span>
             </Link>
             <Link
-              href="/dashboard/requests"
+              href="/dashboard/requests?status=pending"
               className="flex items-center p-5 rounded-lg border transition-all duration-200 hover:scale-105 group"
               style={{ background: 'var(--ptw-bg-secondary)', borderColor: 'var(--ptw-border-primary)' }}
             >

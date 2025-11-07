@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { saveTrainerData } from "@/lib/session";
+import { saveTrainerData, saveCompanyData } from "@/lib/session";
 import { Trainer, TrainerProfileUpdateData } from "@/lib/types";
 import { TopicSelector, TopicWithLevel, ExpertiseLevel } from "@/components/TopicSelector";
 
@@ -70,8 +70,11 @@ export default function ProfilePage() {
   const loadProfile = async () => {
     try {
       // First, get the current user to determine their type
-      const currentUser = JSON.parse(localStorage.getItem('trainer_data') || '{}');
-      console.log('Current user from localStorage:', currentUser);
+      const { getTrainerData, getCompanyData } = await import('@/lib/session');
+      const trainerData = getTrainerData();
+      const companyData = getCompanyData();
+      const currentUser = (trainerData || companyData) as any;
+      console.log('Current user from session:', currentUser);
 
       // If localStorage is empty, try both APIs to determine user type
       if (!currentUser.userType || Object.keys(currentUser).length === 0) {
@@ -83,8 +86,8 @@ export default function ProfilePage() {
           const data = await companyResponse.json();
           console.log('Successfully loaded as Training Company:', data);
           setUser(data.company);
-          // Save to localStorage for next time
-          saveTrainerData(data.company);
+          // Save to cookies for next time
+          saveCompanyData(data.company);
           setFormData({
             companyName: data.company.companyName,
             firstName: data.company.firstName,
@@ -118,7 +121,7 @@ export default function ProfilePage() {
           const data = await trainerResponse.json();
           console.log('Successfully loaded as Trainer:', data);
           setUser(data);
-          // Save to localStorage for next time
+          // Save to cookies for next time
           saveTrainerData(data);
           setFormData({
             firstName: data.firstName,
@@ -237,7 +240,7 @@ export default function ProfilePage() {
     try {
       let apiEndpoint = '/api/trainer/profile';
       const bodyData = user?.userType !== 'TRAINING_COMPANY' 
-        ? { ...formData, topics: topics.map(t => t.name), topicsWithLevels: topics, topicSuggestions }
+        ? { ...formData, topicsWithLevels: topics, topicSuggestions }
         : { ...formData };
       
       if (user?.userType === 'TRAINING_COMPANY') {
@@ -256,7 +259,7 @@ export default function ProfilePage() {
         const data = await response.json();
         if (user?.userType === 'TRAINING_COMPANY') {
           setUser(data.company);
-          saveTrainerData(data.company);
+          saveCompanyData(data.company);
         } else {
           setUser(data.trainer);
           saveTrainerData(data.trainer);
@@ -482,6 +485,9 @@ export default function ProfilePage() {
             </label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Straße
+                </label>
                 <input
                   type="text"
                   placeholder="Straße"
@@ -491,6 +497,9 @@ export default function ProfilePage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Hausnummer
+                </label>
                 <input
                   type="text"
                   placeholder="Hausnummer"
@@ -502,6 +511,9 @@ export default function ProfilePage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  PLZ
+                </label>
                 <input
                   type="text"
                   placeholder="PLZ"
@@ -511,6 +523,9 @@ export default function ProfilePage() {
                 />
               </div>
               <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Stadt
+                </label>
                 <input
                   type="text"
                   placeholder="Stadt"
@@ -522,6 +537,9 @@ export default function ProfilePage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Land
+                </label>
                 <select
                   value={formData.countryId || ''}
                   onChange={(e) => handleInputChange('countryId', parseInt(e.target.value) || null)}

@@ -54,7 +54,7 @@ async function main() {
   // Clear existing data in correct order (child tables first)
   console.log('🗑️  Clearing existing data...');
   await prisma.fileAttachment.deleteMany();
-  await prisma.trainingRequestMessage.deleteMany();
+  await prisma.message.deleteMany();
   await prisma.trainingRequest.deleteMany();
   await prisma.participant.deleteMany();
   await prisma.invoice.deleteMany();
@@ -81,7 +81,7 @@ async function main() {
   await prisma.$executeRaw`ALTER TABLE Course AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Training AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainingRequest AUTO_INCREMENT = 1`;
-  await prisma.$executeRaw`ALTER TABLE TrainingRequestMessage AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE Message AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE LoginToken AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TrainingCompanyLoginToken AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE TopicSuggestion AUTO_INCREMENT = 1`;
@@ -345,331 +345,598 @@ async function main() {
   // Create Courses (Templates)
   console.log('\n📚 Creating courses (templates)...');
 
+  // Get topics for all trainers
   const pythonTopic = createdTopics.find(t => t.slug === 'python');
   const reactTopic = createdTopics.find(t => t.slug === 'react');
+  const javascriptTopic = createdTopics.find(t => t.slug === 'javascript');
+  const typescriptTopic = createdTopics.find(t => t.slug === 'typescript');
   const photoshopTopic = createdTopics.find(t => t.slug === 'adobe-photoshop');
+  const illustratorTopic = createdTopics.find(t => t.slug === 'adobe-illustrator');
+  const indesignTopic = createdTopics.find(t => t.slug === 'adobe-indesign');
+  const figmaTopic = createdTopics.find(t => t.slug === 'figma');
   const excelTopic = createdTopics.find(t => t.slug === 'microsoft-excel');
+  const powerBITopic = createdTopics.find(t => t.slug === 'microsoft-power-bi');
+  const powerpointTopic = createdTopics.find(t => t.slug === 'microsoft-powerpoint');
+  const scrumTopic = createdTopics.find(t => t.slug === 'scrum');
+  const agileTopic = createdTopics.find(t => t.slug === 'agiles-projektmanagement');
+  const kanbanTopic = createdTopics.find(t => t.slug === 'kanban');
+  const awsTopic = createdTopics.find(t => t.slug === 'aws');
+  const azureTopic = createdTopics.find(t => t.slug === 'microsoft-azure');
   const dockerTopic = createdTopics.find(t => t.slug === 'docker');
 
-  const pythonCourse = await prisma.course.create({
-    data: {
-      title: 'Python Grundlagen',
-      description: 'Einführung in Python-Programmierung: Syntax, Datenstrukturen, grundlegende Konzepte',
-      topicId: pythonTopic?.id,
-      state: 'ONLINE'
-    }
-  });
+  const courses = [];
 
-  const reactCourse = await prisma.course.create({
-    data: {
-      title: 'React für Fortgeschrittene',
-      description: 'Fortgeschrittene React-Konzepte: Hooks, Context API, Performance-Optimierung',
-      topicId: reactTopic?.id,
-      state: 'ONLINE'
-    }
-  });
+  // Lorenz topics: python, javascript, react, typescript
+  if (pythonTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Python Grundlagen', description: 'Einführung in Python-Programmierung', topicId: pythonTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (javascriptTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'JavaScript Modern', description: 'Moderne JavaScript-Features und Best Practices', topicId: javascriptTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (reactTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'React für Fortgeschrittene', description: 'Fortgeschrittene React-Konzepte', topicId: reactTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (typescriptTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'TypeScript Fundamentals', description: 'TypeScript Grundlagen und erweiterte Typen', topicId: typescriptTopic.id, state: 'ONLINE' }
+    }));
+  }
 
-  const photoshopCourse = await prisma.course.create({
-    data: {
-      title: 'Adobe Photoshop Basics',
-      description: 'Grundlagen der Bildbearbeitung mit Adobe Photoshop',
-      topicId: photoshopTopic?.id,
-      state: 'ONLINE'
-    }
-  });
+  // Anna topics: photoshop, illustrator, indesign, figma
+  if (photoshopTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Adobe Photoshop Basics', description: 'Grundlagen der Bildbearbeitung', topicId: photoshopTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (illustratorTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Adobe Illustrator Workshop', description: 'Vektorgrafiken und Illustrationen erstellen', topicId: illustratorTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (indesignTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Adobe InDesign Layout', description: 'Professionelles Layout und Druckvorbereitung', topicId: indesignTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (figmaTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Figma Design System', description: 'UI/UX Design mit Figma', topicId: figmaTopic.id, state: 'ONLINE' }
+    }));
+  }
 
-  const excelCourse = await prisma.course.create({
-    data: {
-      title: 'Excel für Fortgeschrittene',
-      description: 'Pivot-Tabellen, Formeln, Makros und Datenanalyse',
-      topicId: excelTopic?.id,
-      state: 'ONLINE'
-    }
-  });
+  // Sarah topics: excel, power-bi, powerpoint
+  if (excelTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Excel für Fortgeschrittene', description: 'Pivot-Tabellen, Formeln, Makros', topicId: excelTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (powerBITopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Power BI Datenanalyse', description: 'Datenvisualisierung und Business Intelligence', topicId: powerBITopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (powerpointTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'PowerPoint Präsentationen', description: 'Professionelle Präsentationen erstellen', topicId: powerpointTopic.id, state: 'ONLINE' }
+    }));
+  }
 
-  console.log(`  ✓ Created 4 courses`);
+  // Thomas topics: scrum, agile, kanban
+  if (scrumTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Scrum Master Zertifizierung', description: 'Scrum Framework und Rollen', topicId: scrumTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (agileTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Agiles Projektmanagement', description: 'Agile Methoden und Frameworks', topicId: agileTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (kanbanTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Kanban Workshop', description: 'Kanban Board und Workflow-Optimierung', topicId: kanbanTopic.id, state: 'ONLINE' }
+    }));
+  }
+
+  // Michael topics: aws, azure, docker
+  if (awsTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'AWS Cloud Fundamentals', description: 'Amazon Web Services Grundlagen', topicId: awsTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (azureTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Microsoft Azure Administration', description: 'Azure Cloud Services und Management', topicId: azureTopic.id, state: 'ONLINE' }
+    }));
+  }
+  if (dockerTopic) {
+    courses.push(await prisma.course.create({
+      data: { title: 'Docker Container', description: 'Containerisierung und Orchestrierung', topicId: dockerTopic.id, state: 'ONLINE' }
+    }));
+  }
+
+  console.log(`  ✓ Created ${courses.length} courses`);
 
   // Create Trainings (Concrete instances of courses)
   console.log('\n📅 Creating trainings (concrete course instances)...');
 
-  // Training 1: Python - COMPLETED (past, with invoice)
-  const training1 = await prisma.training.create({
-    data: {
-      courseId: pythonCourse.id,
-      title: 'Python Grundlagen Workshop',
-      topicId: pythonTopic?.id || 1,
-      companyId: powerToWork.id,
-      startDate: new Date('2024-10-15'),
-      endDate: new Date('2024-10-15'),
-      startTime: '09:00',
-      endTime: '16:00',
-      location: 'Bielefeld, PowerToWork Office',
-      participantCount: 12,
-      dailyRate: 850,
-      description: 'Python Workshop für Einsteiger - erfolgreich abgeschlossen',
-      status: 'COMPLETED'
-    }
-  });
+  const allTrainings = [];
+  
+  // Define date ranges based on current date
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Start of today
+  
+  // Completed trainings: 30-60 days ago (spread across this range)
+  const completedTrainingsStartDaysAgo = 60;
+  const completedTrainingsEndDaysAgo = 30;
+  
+  // Future trainings: 7-30 days from now (spread across this range)
+  const futureTrainingsStartDaysFromNow = 7;
+  const futureTrainingsEndDaysFromNow = 30;
+  
+  // All messages must be before today (historical)
+  const maxMessageDate = new Date(today);
+  maxMessageDate.setHours(23, 59, 59, 999);
+  maxMessageDate.setDate(maxMessageDate.getDate() - 1); // Yesterday at end of day
 
-  // Training 2: React - IN_PROGRESS (ongoing)
-  const training2 = await prisma.training.create({
-    data: {
-      courseId: reactCourse.id,
-      title: 'React Advanced Workshop',
-      topicId: reactTopic?.id || 1,
-      companyId: powerToWork.id,
-      startDate: new Date('2024-10-28'),
-      endDate: new Date('2024-10-29'),
-      startTime: '09:00',
-      endTime: '17:00',
-      location: 'Online (Zoom)',
-      participantCount: 15,
-      dailyRate: 900,
-      description: 'Zweitägiger Workshop zu fortgeschrittenen React-Konzepten',
-      status: 'IN_PROGRESS'
-    }
-  });
+  // Create trainings for each course - we need enough for 6 requests per trainer
+  // We'll create 30 trainings (6 per trainer)
+  // Structure: First 2 per trainer = COMPLETED (in the past), Last 4 = PUBLISHED (in the future)
+  const trainingTemplates = [
+    // Lorenz topics (python, javascript, react, typescript) - 6 trainings
+    { course: courses.find(c => c.title === 'Python Grundlagen'), topic: pythonTopic, title: 'Python Grundlagen Workshop', dailyRate: 850 },
+    { course: courses.find(c => c.title === 'Python Grundlagen'), topic: pythonTopic, title: 'Python Advanced Workshop', dailyRate: 900 },
+    { course: courses.find(c => c.title === 'JavaScript Modern'), topic: javascriptTopic, title: 'JavaScript Modern Workshop', dailyRate: 850 },
+    { course: courses.find(c => c.title === 'React für Fortgeschrittene'), topic: reactTopic, title: 'React Advanced Workshop', dailyRate: 900 },
+    { course: courses.find(c => c.title === 'TypeScript Fundamentals'), topic: typescriptTopic, title: 'TypeScript Fundamentals', dailyRate: 850 },
+    { course: courses.find(c => c.title === 'Python Grundlagen'), topic: pythonTopic, title: 'Python für Einsteiger', dailyRate: 800 },
+    
+    // Anna topics (photoshop, illustrator, indesign, figma) - 6 trainings
+    { course: courses.find(c => c.title === 'Adobe Photoshop Basics'), topic: photoshopTopic, title: 'Photoshop Bildbearbeitung', dailyRate: 750 },
+    { course: courses.find(c => c.title === 'Adobe Illustrator Workshop'), topic: illustratorTopic, title: 'Illustrator Vektorgrafiken', dailyRate: 750 },
+    { course: courses.find(c => c.title === 'Adobe InDesign Layout'), topic: indesignTopic, title: 'InDesign Layout Design', dailyRate: 750 },
+    { course: courses.find(c => c.title === 'Figma Design System'), topic: figmaTopic, title: 'Figma UI/UX Design', dailyRate: 700 },
+    { course: courses.find(c => c.title === 'Adobe Photoshop Basics'), topic: photoshopTopic, title: 'Photoshop Retusche', dailyRate: 750 },
+    { course: courses.find(c => c.title === 'Adobe Illustrator Workshop'), topic: illustratorTopic, title: 'Illustrator für Fortgeschrittene', dailyRate: 800 },
+    
+    // Sarah topics (excel, power-bi, powerpoint) - 6 trainings
+    { course: courses.find(c => c.title === 'Excel für Fortgeschrittene'), topic: excelTopic, title: 'Excel für Fortgeschrittene', dailyRate: 650 },
+    { course: courses.find(c => c.title === 'Power BI Datenanalyse'), topic: powerBITopic, title: 'Power BI Datenvisualisierung', dailyRate: 700 },
+    { course: courses.find(c => c.title === 'PowerPoint Präsentationen'), topic: powerpointTopic, title: 'PowerPoint Professionell', dailyRate: 600 },
+    { course: courses.find(c => c.title === 'Excel für Fortgeschrittene'), topic: excelTopic, title: 'Excel Pivot & Makros', dailyRate: 650 },
+    { course: courses.find(c => c.title === 'Power BI Datenanalyse'), topic: powerBITopic, title: 'Power BI Advanced', dailyRate: 750 },
+    { course: courses.find(c => c.title === 'Excel für Fortgeschrittene'), topic: excelTopic, title: 'Excel Datenanalyse', dailyRate: 650 },
+    
+    // Thomas topics (scrum, agile, kanban) - 6 trainings
+    { course: courses.find(c => c.title === 'Scrum Master Zertifizierung'), topic: scrumTopic, title: 'Scrum Master Workshop', dailyRate: 950 },
+    { course: courses.find(c => c.title === 'Agiles Projektmanagement'), topic: agileTopic, title: 'Agiles Projektmanagement', dailyRate: 950 },
+    { course: courses.find(c => c.title === 'Kanban Workshop'), topic: kanbanTopic, title: 'Kanban Methodik', dailyRate: 900 },
+    { course: courses.find(c => c.title === 'Scrum Master Zertifizierung'), topic: scrumTopic, title: 'Scrum für Teams', dailyRate: 950 },
+    { course: courses.find(c => c.title === 'Agiles Projektmanagement'), topic: agileTopic, title: 'Agile Transformation', dailyRate: 1000 },
+    { course: courses.find(c => c.title === 'Kanban Workshop'), topic: kanbanTopic, title: 'Kanban Board Setup', dailyRate: 900 },
+    
+    // Michael topics (aws, azure, docker) - 6 trainings
+    { course: courses.find(c => c.title === 'AWS Cloud Fundamentals'), topic: awsTopic, title: 'AWS Cloud Fundamentals', dailyRate: 1100 },
+    { course: courses.find(c => c.title === 'Microsoft Azure Administration'), topic: azureTopic, title: 'Azure Administration', dailyRate: 1100 },
+    { course: courses.find(c => c.title === 'Docker Container'), topic: dockerTopic, title: 'Docker Container Workshop', dailyRate: 1000 },
+    { course: courses.find(c => c.title === 'AWS Cloud Fundamentals'), topic: awsTopic, title: 'AWS Advanced', dailyRate: 1200 },
+    { course: courses.find(c => c.title === 'Microsoft Azure Administration'), topic: azureTopic, title: 'Azure Cloud Services', dailyRate: 1100 },
+    { course: courses.find(c => c.title === 'Docker Container'), topic: dockerTopic, title: 'Docker & Kubernetes', dailyRate: 1050 },
+  ];
 
-  // Training 3: Photoshop - PUBLISHED (upcoming, has requests)
-  const training3 = await prisma.training.create({
-    data: {
-      courseId: photoshopCourse.id,
-      title: 'Photoshop Bildbearbeitung',
-      topicId: photoshopTopic?.id || 1,
-      companyId: powerToWork.id,
-      startDate: new Date('2025-11-15'),
-      endDate: new Date('2025-11-15'),
-      startTime: '10:00',
-      endTime: '16:00',
-      location: 'Berlin, Schulungsraum A',
-      participantCount: 10,
-      dailyRate: 750,
-      description: 'Grundlagen der Bildbearbeitung mit Adobe Photoshop',
-      status: 'PUBLISHED'
+  // Create trainings with proper dates
+  // Each trainer has 6 trainings: first 2 are COMPLETED (October 2025), last 4 are PUBLISHED (after 15.11.2025)
+  for (let i = 0; i < trainingTemplates.length; i++) {
+    const template = trainingTemplates[i];
+    if (!template.course || !template.topic) continue;
+    
+    // Determine which trainer group this belongs to (0-5 = Lorenz, 6-11 = Anna, etc.)
+    const trainerGroup = Math.floor(i / 6);
+    const trainingIndexInGroup = i % 6;
+    
+    // First 2 per trainer = COMPLETED (in the past)
+    // Last 4 per trainer = PUBLISHED (in the future)
+    const isCompleted = trainingIndexInGroup < 2;
+    const status = isCompleted ? 'COMPLETED' : 'PUBLISHED';
+    
+    // Set dates: completed in the past, others in the future
+    let trainingDate: Date;
+    if (isCompleted) {
+      // Completed trainings: spread across 30-60 days ago
+      const daysAgo = completedTrainingsEndDaysAgo + 
+        ((completedTrainingsStartDaysAgo - completedTrainingsEndDaysAgo) / 10) * 
+        (trainerGroup * 2 + trainingIndexInGroup);
+      trainingDate = new Date(today);
+      trainingDate.setDate(trainingDate.getDate() - Math.round(daysAgo));
+    } else {
+      // Future trainings: spread across 7-30 days from now
+      const daysFromNow = futureTrainingsStartDaysFromNow + 
+        ((futureTrainingsEndDaysFromNow - futureTrainingsStartDaysFromNow) / 20) * 
+        (trainerGroup * 4 + (trainingIndexInGroup - 2));
+      trainingDate = new Date(today);
+      trainingDate.setDate(trainingDate.getDate() + Math.round(daysFromNow));
     }
-  });
+    
+    // Randomly assign start time (8:00 or 9:00) and end time (15:00 or 16:00)
+    const startHour = (i % 2 === 0) ? '08' : '09';
+    const endHour = (i % 2 === 0) ? '15' : '16';
+    
+    const training = await prisma.training.create({
+      data: {
+        courseId: template.course.id,
+        title: template.title,
+        topicId: template.topic.id,
+        companyId: powerToWork.id,
+        startDate: trainingDate,
+        endDate: trainingDate,
+        startTime: `${startHour}:00`,
+        endTime: `${endHour}:00`,
+        //todo locations should also be a table with name, address, city, country, etc.
+        location: i % 3 === 0 ? 'Online (Zoom)' : i % 3 === 1 ? 'Berlin, Schulungsraum A' : 'München, TechHub',
+        participantCount: 10 + (i % 5),
+        dailyRate: template.dailyRate,
+        description: `${template.title} - Professionelle Schulung`,
+        status: status as 'PUBLISHED' | 'DRAFT' | 'COMPLETED' | 'IN_PROGRESS' | 'CANCELLED'
+      }
+    });
+    allTrainings.push(training);
+  }
 
-  // Training 4: Excel - PUBLISHED (upcoming, has requests)
-  const training4 = await prisma.training.create({
-    data: {
-      courseId: excelCourse.id,
-      title: 'Excel für Fortgeschrittene',
-      topicId: excelTopic?.id || 1,
-      companyId: powerToWork.id,
-      startDate: new Date('2025-12-01'),
-      endDate: new Date('2025-12-01'),
-      startTime: '09:00',
-      endTime: '15:00',
-      location: 'München, TechHub',
-      participantCount: 8,
-      dailyRate: 650,
-      description: 'Pivot-Tabellen, Formeln, Makros',
-      status: 'PUBLISHED'
-    }
-  });
-
-  // Training 5: Python Advanced - DRAFT (being planned)
-  const training5 = await prisma.training.create({
-    data: {
-      courseId: pythonCourse.id,
-      title: 'Python für Fortgeschrittene',
-      topicId: pythonTopic?.id || 1,
-      companyId: powerToWork.id,
-      startDate: new Date('2026-01-20'),
-      endDate: new Date('2026-01-20'),
-      startTime: '09:00',
-      endTime: '16:00',
-      location: 'Online (Microsoft Teams)',
-      participantCount: 10,
-      dailyRate: 900,
-      description: 'Fortgeschrittene Python-Themen: OOP, Testing, Best Practices',
-      status: 'DRAFT'
-    }
-  });
-
-  console.log(`  ✓ Created 5 trainings`);
+  console.log(`  ✓ Created ${allTrainings.length} trainings (2 COMPLETED per trainer in the past, 4 PUBLISHED per trainer in the future)`);
 
   // Create Participants for trainings
   console.log('\n👥 Creating participants...');
-
-  // Training 1 participants (COMPLETED)
-  for (let i = 1; i <= training1.participantCount; i++) {
-    await prisma.participant.create({
-      data: {
-        trainingId: training1.id,
-        name: i <= 3 ? `Teilnehmer ${i}` : null, // First 3 have names
-        email: i <= 3 ? `teilnehmer${i}@example.com` : null
-      }
-    });
+  
+  // Create participants for all trainings (especially important for completed ones)
+  let participantCount = 0;
+  for (let i = 0; i < allTrainings.length; i++) {
+    const training = allTrainings[i];
+    for (let j = 1; j <= training.participantCount; j++) {
+      await prisma.participant.create({
+        data: {
+          trainingId: training.id,
+          name: j <= 3 ? `Teilnehmer ${j}` : null,
+          email: j <= 3 ? `teilnehmer${i}_${j}@example.com` : null
+        }
+      });
+      participantCount++;
+    }
   }
 
-  // Training 2 participants (IN_PROGRESS)
-  for (let i = 1; i <= training2.participantCount; i++) {
-    await prisma.participant.create({
-      data: {
-        trainingId: training2.id,
-        name: i <= 5 ? `Teilnehmer React ${i}` : null,
-        email: i <= 5 ? `react${i}@example.com` : null
-      }
-    });
-  }
-
-  console.log(`  ✓ Created ${training1.participantCount + training2.participantCount} participants`);
+  console.log(`  ✓ Created ${participantCount} participants for all trainings`);
 
   // Create Training Requests (Trainer-Anfragen)
-  console.log('\n📬 Creating training requests (trainer applications)...');
+  console.log('\n📬 Creating training requests (6 per trainer: 2 PENDING, 2 DECLINED, 2 ACCEPTED)...');
 
   const annaTrainer = createdTrainers.find(t => t.firstName === 'Anna');
+  const thomasTrainer = createdTrainers.find(t => t.firstName === 'Thomas');
   const sarahTrainer = createdTrainers.find(t => t.firstName === 'Sarah');
+  const michaelTrainer = createdTrainers.find(t => t.firstName === 'Michael');
 
-  // Training Request 1: Photoshop - Anna (ACCEPTED)
-  const request1 = await prisma.trainingRequest.create({
-    data: {
-      trainingId: training3.id,
-      trainerId: annaTrainer?.id || 2,
-      status: 'ACCEPTED',
-      counterPrice: training3.dailyRate, // Accepted at original price
-      message: 'Ich habe bereits viele Photoshop-Workshops gegeben und würde mich freuen!'
+  // Helper function to get trainings for a trainer's topics
+  const getTrainingsForTrainer = (trainerName: string) => {
+    if (trainerName === 'Lorenz') {
+      // Lorenz: python, javascript, react, typescript (first 6 trainings)
+      return allTrainings.slice(0, 6);
+    } else if (trainerName === 'Anna') {
+      // Anna: photoshop, illustrator, indesign, figma (trainings 6-11)
+      return allTrainings.slice(6, 12);
+    } else if (trainerName === 'Sarah') {
+      // Sarah: excel, power-bi, powerpoint (trainings 12-17)
+      return allTrainings.slice(12, 18);
+    } else if (trainerName === 'Thomas') {
+      // Thomas: scrum, agile, kanban (trainings 18-23)
+      return allTrainings.slice(18, 24);
+    } else if (trainerName === 'Michael') {
+      // Michael: aws, azure, docker (trainings 24-29)
+      return allTrainings.slice(24, 30);
     }
-  });
+    return [];
+  };
 
-  // Training Request 2: Photoshop - Lorenz (PENDING)
-  const request2 = await prisma.trainingRequest.create({
-    data: {
-      trainingId: training3.id,
-      trainerId: lorenz.id,
-      status: 'PENDING',
-      message: 'Ich kenne mich auch mit Photoshop aus und wäre verfügbar.'
+  // Create 6 requests per trainer with distribution: 2 PENDING, 2 DECLINED, 2 ACCEPTED
+  const trainerInfos = [
+    { name: 'Lorenz', trainer: lorenz },
+    { name: 'Anna', trainer: annaTrainer },
+    { name: 'Sarah', trainer: sarahTrainer },
+    { name: 'Thomas', trainer: thomasTrainer },
+    { name: 'Michael', trainer: michaelTrainer }
+  ];
+
+  const allRequests = [];
+  
+  for (const trainerInfo of trainerInfos) {
+    if (!trainerInfo.trainer) continue;
+    
+    const trainerTrainings = getTrainingsForTrainer(trainerInfo.name);
+    if (trainerTrainings.length < 6) continue;
+    
+    // Create 6 requests: 2 ACCEPTED (for first 2 COMPLETED trainings), 2 PENDING, 2 DECLINED
+    // First 2 trainings are COMPLETED -> should have ACCEPTED requests
+    // Last 4 trainings are PUBLISHED -> should have PENDING and DECLINED requests
+    const statuses = ['ACCEPTED', 'ACCEPTED', 'PENDING', 'PENDING', 'DECLINED', 'DECLINED'];
+    
+    for (let i = 0; i < 6; i++) {
+      const training = trainerTrainings[i];
+      const status = statuses[i] as 'PENDING' | 'DECLINED' | 'ACCEPTED';
+      const counterPrice = status === 'ACCEPTED' ? training.dailyRate : (status === 'PENDING' && i === 1 ? training.dailyRate + 50 : null);
+      
+      const request = await prisma.trainingRequest.create({
+        data: {
+          trainingId: training.id,
+          trainerId: trainerInfo.trainer.id,
+          status: status,
+          counterPrice: counterPrice
+        }
+      });
+      allRequests.push(request);
     }
-  });
+    
+    console.log(`  ✓ Created 6 requests for ${trainerInfo.name} (2 PENDING, 2 DECLINED, 2 ACCEPTED)`);
+  }
 
-  // Training Request 3: Excel - Sarah (PENDING with counter offer)
-  const request3 = await prisma.trainingRequest.create({
-    data: {
-      trainingId: training4.id,
-      trainerId: sarahTrainer?.id || 3,
-      status: 'PENDING',
-      counterPrice: 700, // Sarah wants more (original was 650)
-      message: 'Excel ist mein Spezialgebiet! Ich würde 700€ vorschlagen aufgrund meiner umfangreichen Erfahrung.'
+  console.log(`  ✓ Created ${allRequests.length} training requests total`);
+
+  // Create Messages for training requests
+  console.log('\n💬 Creating messages for training requests...');
+
+  let messageCount = 0;
+  
+  // Create messages for different request statuses
+  for (const request of allRequests) {
+    const trainer = createdTrainers.find(t => t.id === request.trainerId);
+    if (!trainer) continue;
+    
+    const training = allTrainings.find(t => t.id === request.trainingId);
+    if (!training) continue;
+    
+    if (request.status === 'ACCEPTED') {
+      // For accepted requests: create conversation thread
+      // Messages should be in the past, relative to the training date (if training is completed) or relative to today
+      const trainingDate = new Date(training.startDate);
+      
+      // Base date: if training is completed, use training date - 7 days, otherwise use today - 7 days
+      const baseDaysBefore = training.status === 'COMPLETED' 
+        ? Math.max(7, Math.floor((today.getTime() - trainingDate.getTime()) / (24 * 60 * 60 * 1000)) + 7)
+        : 7;
+      const baseDate = new Date(today);
+      baseDate.setDate(baseDate.getDate() - baseDaysBefore);
+      baseDate.setHours(10, 0, 0, 0);
+      
+      const messageDate1 = new Date(baseDate.getTime() + (request.id * 2 * 60 * 60 * 1000)); // First message: base + hours based on request ID
+      const messageDate2 = new Date(messageDate1.getTime() + 2 * 60 * 60 * 1000); // Reply: 2 hours later
+      const notificationDate = new Date(messageDate1.getTime() - 1 * 60 * 60 * 1000); // Notification: 1 hour before first message
+      
+      // Ensure all dates are before maxMessageDate (yesterday)
+      const finalNotificationDate = notificationDate > maxMessageDate ? new Date(maxMessageDate.getTime() - 2 * 60 * 60 * 1000) : notificationDate;
+      const finalMessageDate1 = messageDate1 > maxMessageDate ? new Date(maxMessageDate.getTime() - 1 * 60 * 60 * 1000) : messageDate1;
+      const finalMessageDate2 = messageDate2 > maxMessageDate ? new Date(maxMessageDate.getTime()) : messageDate2;
+      
+      // Create notification message for acceptance (as if auto-created by system) - comes first chronologically
+      await prisma.message.create({
+        data: {
+          trainingRequestId: request.id,
+          senderId: powerToWork.id,
+          senderType: 'TRAINING_COMPANY',
+          recipientId: trainer.id,
+          recipientType: 'TRAINER',
+          subject: `Anfrage angenommen: ${training.title}`,
+          message: `Herzlichen Glückwunsch! Ihre Anfrage für das Training "${training.title}" wurde angenommen. Sie können nun weitere Details im Dashboard einsehen.`,
+          isRead: false,
+          messageType: 'NOTIFICATION',
+          createdAt: finalNotificationDate
+        }
+      });
+      messageCount++;
+      
+      // Trainer sends initial acceptance message
+      await prisma.message.create({
+        data: {
+          trainingRequestId: request.id,
+          senderId: trainer.id,
+          senderType: 'TRAINER',
+          recipientId: powerToWork.id,
+          recipientType: 'TRAINING_COMPANY',
+          subject: `Zusage für ${training.title}`,
+          message: `Hallo PowerToWork Team,\n\nich freue mich sehr, dass meine Bewerbung für "${training.title}" angenommen wurde!\n\nHaben Sie schon Materialien, oder soll ich eigene mitbringen?\n\nViele Grüße,\n${trainer.firstName} ${trainer.lastName}`,
+          isRead: true,
+          messageType: 'TRAINING_REQUEST',
+          createdAt: finalMessageDate1
+        }
+      });
+      messageCount++;
+      
+      // Company responds
+      await prisma.message.create({
+        data: {
+          trainingRequestId: request.id,
+          senderId: powerToWork.id,
+          senderType: 'TRAINING_COMPANY',
+          recipientId: trainer.id,
+          recipientType: 'TRAINER',
+          subject: `Re: Zusage für ${training.title}`,
+          message: `Hallo ${trainer.firstName},\n\nwir freuen uns auch sehr!\n\nBitte bringen Sie gerne Ihre eigenen Materialien mit. Die Teilnehmer haben unterschiedliche Vorkenntnisse.\n\nBis bald!\nSarah Müller\nPowerToWork`,
+          isRead: false,
+          messageType: 'TRAINING_REQUEST',
+          createdAt: finalMessageDate2
+        }
+      });
+      messageCount++;
+    } else if (request.status === 'PENDING') {
+      // For pending requests: create initial inquiry from trainer or company
+      // Sometimes trainer asks questions, sometimes company provides more info
+      const shouldTrainerAsk = Math.random() > 0.5;
+      
+      // Messages should be in the past (before today), but recent (within last 14 days)
+      const baseDaysBefore = 3 + (request.id % 11); // 3-13 days ago
+      const baseDate = new Date(today);
+      baseDate.setDate(baseDate.getDate() - baseDaysBefore);
+      baseDate.setHours(14, 0, 0, 0);
+      
+      const messageDate1 = new Date(baseDate.getTime() + (request.id * 3 * 60 * 60 * 1000)); // First message: base + hours based on request ID
+      const messageDate2 = new Date(messageDate1.getTime() + 3 * 60 * 60 * 1000); // Reply: 3 hours later
+      
+      // Ensure all dates are before maxMessageDate (yesterday)
+      const finalMessageDate1 = messageDate1 > maxMessageDate ? new Date(maxMessageDate.getTime() - 3 * 60 * 60 * 1000) : messageDate1;
+      const finalMessageDate2 = messageDate2 > maxMessageDate ? new Date(maxMessageDate.getTime()) : messageDate2;
+      
+      if (shouldTrainerAsk) {
+        // Trainer asks a question about the training
+        await prisma.message.create({
+          data: {
+            trainingRequestId: request.id,
+            senderId: trainer.id,
+            senderType: 'TRAINER',
+            recipientId: powerToWork.id,
+            recipientType: 'TRAINING_COMPANY',
+            subject: `Rückfrage zu ${training.title}`,
+            message: `Hallo PowerToWork Team,\n\nich habe eine Frage zu "${training.title}": Welche Vorkenntnisse haben die Teilnehmer? Soll ich bestimmte Materialien vorbereiten?\n\nViele Grüße,\n${trainer.firstName} ${trainer.lastName}`,
+            isRead: true,
+            messageType: 'TRAINING_REQUEST',
+            createdAt: finalMessageDate1
+          }
+        });
+        messageCount++;
+        
+        // Company responds
+        await prisma.message.create({
+          data: {
+            trainingRequestId: request.id,
+            senderId: powerToWork.id,
+            senderType: 'TRAINING_COMPANY',
+            recipientId: trainer.id,
+            recipientType: 'TRAINER',
+            subject: `Re: Rückfrage zu ${training.title}`,
+            message: `Hallo ${trainer.firstName},\n\nvielen Dank für Ihre Rückfrage!\n\nDie Teilnehmer haben unterschiedliche Vorkenntnisse. Bitte bereiten Sie Materialien für Anfänger bis Fortgeschrittene vor.\n\nBeste Grüße\nSarah Müller\nPowerToWork`,
+            isRead: false,
+            messageType: 'TRAINING_REQUEST',
+            createdAt: finalMessageDate2
+          }
+        });
+        messageCount++;
+      } else {
+        // Company provides additional information
+        await prisma.message.create({
+          data: {
+            trainingRequestId: request.id,
+            senderId: powerToWork.id,
+            senderType: 'TRAINING_COMPANY',
+            recipientId: trainer.id,
+            recipientType: 'TRAINER',
+            subject: `Zusätzliche Informationen zu ${training.title}`,
+            message: `Hallo ${trainer.firstName},\n\nwir möchten Ihnen noch einige wichtige Informationen zu "${training.title}" mitteilen:\n\n- Die Teilnehmer haben unterschiedliche Vorkenntnisse\n- Bitte bringen Sie Ihre eigenen Materialien mit\n- Der Raum ist mit Beamer und Whiteboard ausgestattet\n\nBei Fragen stehen wir gerne zur Verfügung.\n\nBeste Grüße\nSarah Müller\nPowerToWork`,
+            isRead: false,
+            messageType: 'TRAINING_REQUEST',
+            createdAt: finalMessageDate1
+          }
+        });
+        messageCount++;
+      }
+    } else if (request.status === 'DECLINED') {
+      // For declined requests: create decline notification or message
+      const shouldHaveNotification = Math.random() > 0.3; // 70% chance
+      
+      // Messages should be in the past (before today), spread across last 20 days
+      const baseDaysBefore = 5 + (request.id % 15); // 5-19 days ago
+      const baseDate = new Date(today);
+      baseDate.setDate(baseDate.getDate() - baseDaysBefore);
+      baseDate.setHours(16, 0, 0, 0);
+      
+      const messageDate = new Date(baseDate.getTime() + (request.id * 4 * 60 * 60 * 1000)); // Message date based on request ID
+      
+      // Ensure all dates are before maxMessageDate (yesterday)
+      const finalMessageDate = messageDate > maxMessageDate ? new Date(maxMessageDate.getTime()) : messageDate;
+      
+      if (shouldHaveNotification) {
+        // Create decline notification (as if auto-created when another trainer was accepted)
+        await prisma.message.create({
+          data: {
+            trainingRequestId: request.id,
+            senderId: powerToWork.id,
+            senderType: 'TRAINING_COMPANY',
+            recipientId: trainer.id,
+            recipientType: 'TRAINER',
+            subject: `Anfrage abgelehnt: ${training.title}`,
+            message: `Ihre Anfrage für das Training "${training.title}" wurde abgelehnt, da ein anderer Trainer die Anfrage bereits angenommen hat.`,
+            isRead: false,
+            messageType: 'NOTIFICATION',
+            createdAt: finalMessageDate
+          }
+        });
+        messageCount++;
+      } else {
+        // Trainer declined themselves
+        await prisma.message.create({
+          data: {
+            trainingRequestId: request.id,
+            senderId: trainer.id,
+            senderType: 'TRAINER',
+            recipientId: powerToWork.id,
+            recipientType: 'TRAINING_COMPANY',
+            subject: `Absage für ${training.title}`,
+            message: `Hallo PowerToWork Team,\n\nleider muss ich mich für "${training.title}" absagen, da ich zu diesem Zeitpunkt nicht verfügbar bin.\n\nIch hoffe, wir können in Zukunft zusammenarbeiten.\n\nViele Grüße\n${trainer.firstName} ${trainer.lastName}`,
+            isRead: true,
+            messageType: 'TRAINING_REQUEST',
+            createdAt: finalMessageDate
+          }
+        });
+        messageCount++;
+      }
     }
-  });
+  }
 
-  // Training Request 4: Excel - Lorenz (DECLINED)
-  const request4 = await prisma.trainingRequest.create({
-    data: {
-      trainingId: training4.id,
-      trainerId: lorenz.id,
-      status: 'DECLINED',
-      message: 'Leider bin ich zu diesem Zeitpunkt nicht verfügbar.'
-    }
-  });
+  console.log(`  ✓ Created ${messageCount} messages for training requests`);
 
-  // Training Request 5: Python COMPLETED (past training with invoice)
-  const request5 = await prisma.trainingRequest.create({
-    data: {
-      trainingId: training1.id,
-      trainerId: lorenz.id,
-      status: 'ACCEPTED', // Was COMPLETED, but TrainingRequest uses ACCEPTED + training.status = COMPLETED
-      counterPrice: training1.dailyRate,
-      message: 'Gerne! Python ist mein Spezialgebiet.',
-      createdAt: new Date('2024-10-01'),
-      updatedAt: new Date('2024-10-16')
-    }
-  });
-
-  console.log(`  ✓ Created 5 training requests (1 ACCEPTED, 2 PENDING, 1 DECLINED, 1 ACCEPTED for completed training)`);
-
-  // Create Training Request Messages
-  console.log('\n💬 Creating training request messages...');
-
-  // Conversation 1: Photoshop - Anna (request1 - ACCEPTED)
-  await prisma.trainingRequestMessage.create({
-    data: {
-      trainingRequestId: request1.id,
-      senderId: annaTrainer?.id || 2,
-      senderType: 'TRAINER',
-      recipientId: powerToWork.id,
-      recipientType: 'TRAINING_COMPANY',
-      subject: 'Zusage für Photoshop Workshop',
-      message: 'Hallo PowerToWork Team,\n\nich freue mich sehr, dass meine Bewerbung angenommen wurde!\n\nHaben Sie schon Materialien, oder soll ich eigene mitbringen?\n\nViele Grüße,\nAnna Schmidt',
-      isRead: true,
-      createdAt: new Date('2024-10-20T10:00:00')
-    }
-  });
-
-  await prisma.trainingRequestMessage.create({
-    data: {
-      trainingRequestId: request1.id,
-      senderId: powerToWork.id,
-      senderType: 'TRAINING_COMPANY',
-      recipientId: annaTrainer?.id || 2,
-      recipientType: 'TRAINER',
-      subject: 'Re: Zusage für Photoshop Workshop',
-      message: 'Hallo Anna,\n\nwir freuen uns auch sehr!\n\nBitte bringen Sie gerne Ihre eigenen Materialien mit. Die Teilnehmer haben unterschiedliche Vorkenntnisse.\n\nBis bald!\nSarah Müller',
-      isRead: false,
-      createdAt: new Date('2024-10-20T14:30:00')
-    }
-  });
-
-  // Conversation 2: Excel - Sarah (request3 - PENDING with counter offer)
-  await prisma.trainingRequestMessage.create({
-    data: {
-      trainingRequestId: request3.id,
-      senderId: sarahTrainer?.id || 3,
-      senderType: 'TRAINER',
-      recipientId: powerToWork.id,
-      recipientType: 'TRAINING_COMPANY',
-      subject: 'Bewerbung Excel Workshop',
-      message: 'Sehr geehrtes PowerToWork Team,\n\nich habe über 500 Excel-Schulungen durchgeführt.\n\nAufgrund meiner Expertise würde ich 700€ vorschlagen statt 650€.\n\nKönnen wir darüber sprechen?\n\nMit freundlichen Grüßen,\nSarah Weber',
-      isRead: true,
-      createdAt: new Date('2024-10-25T09:00:00')
-    }
-  });
-
-  await prisma.trainingRequestMessage.create({
-    data: {
-      trainingRequestId: request3.id,
-      senderId: powerToWork.id,
-      senderType: 'TRAINING_COMPANY',
-      recipientId: sarahTrainer?.id || 3,
-      recipientType: 'TRAINER',
-      subject: 'Re: Bewerbung Excel Workshop',
-      message: 'Hallo Sarah,\n\nIhr Profil ist sehr beeindruckend! Wir können über 700€ sprechen.\n\nKönnen Sie uns noch ein paar Referenzen schicken?\n\nViele Grüße,\nSarah Müller\nPowerToWork',
-      isRead: false,
-      createdAt: new Date('2024-10-25T14:00:00')
-    }
-  });
-
-  console.log(`  ✓ Created 4 training request messages across 2 conversations`);
-
-  // Create Invoice for completed training
+  // Create Invoice for completed trainings (accepted requests that are COMPLETED)
   console.log('\n💰 Creating invoices...');
 
-  const invoice1 = await prisma.invoice.create({
-    data: {
-      trainerId: lorenz.id,
-      trainingId: training1.id,
-      amount: training1.dailyRate * 1, // 1 day
-      invoiceNumber: 'INV-2024-10-001',
-      invoiceDate: new Date('2024-10-16'),
-      status: 'SUBMITTED',
-      createdAt: new Date('2024-10-16')
+  let invoiceCount = 0;
+  // Get all accepted requests for completed trainings (2 per trainer = 10 total)
+  // The first 2 trainings per trainer are COMPLETED, and the last 2 requests per trainer are ACCEPTED
+  for (const trainerInfo of trainerInfos) {
+    if (!trainerInfo.trainer) continue;
+    
+    const trainerTrainings = getTrainingsForTrainer(trainerInfo.name);
+    if (trainerTrainings.length < 6) continue;
+    
+    // Get the first 2 trainings (which are COMPLETED) and find their ACCEPTED requests
+    const completedTrainings = trainerTrainings.slice(0, 2);
+    
+    for (let i = 0; i < completedTrainings.length; i++) {
+      const training = completedTrainings[i];
+      if (training.status !== 'COMPLETED') continue;
+      
+      // Find the ACCEPTED request for this training
+      const acceptedRequest = allRequests.find(r => 
+        r.trainingId === training.id && 
+        r.trainerId === trainerInfo.trainer.id && 
+        r.status === 'ACCEPTED'
+      );
+      
+      if (!acceptedRequest) continue;
+      
+      await prisma.invoice.create({
+        data: {
+          trainerId: acceptedRequest.trainerId,
+          trainingId: training.id,
+          amount: training.dailyRate,
+          invoiceNumber: `INV-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(invoiceCount + 1).padStart(3, '0')}`,
+          invoiceDate: new Date(training.startDate.getTime() + 24 * 60 * 60 * 1000), // Day after training
+          status: 'SUBMITTED',
+          createdAt: new Date(training.startDate.getTime() + 24 * 60 * 60 * 1000)
+        }
+      });
+      invoiceCount++;
     }
-  });
+  }
 
-  const invoice2 = await prisma.invoice.create({
-    data: {
-      trainerId: lorenz.id,
-      trainingId: training2.id,
-      amount: training2.dailyRate * 2, // 2 days
-      invoiceNumber: 'INV-2024-10-002',
-      invoiceDate: new Date('2024-10-30'),
-      status: 'SUBMITTED',
-      createdAt: new Date('2024-10-30')
-    }
-  });
-
-  console.log(`  ✓ Created 2 invoices for Lorenz`);
+  console.log(`  ✓ Created ${invoiceCount} invoices for completed trainings (2 per trainer)`);
 
   // Create Availability for Lorenz
   console.log('\n📅 Creating trainer availability...');
@@ -694,26 +961,25 @@ async function main() {
   console.log(`  - ${createdTopics.length} topics from CSV`);
   console.log(`  - 1 Training Company: PowerToWork GmbH`);
   console.log(`  - 5 Trainers (Lorenz Surkemper + 4 others)`);
-  console.log(`  - 4 Courses (templates for recurring trainings)`);
-  console.log(`  - 5 Trainings (concrete course instances):`);
-  console.log(`    • 1 COMPLETED (2024-10-15, mit Invoice)`);
-  console.log(`    • 1 IN_PROGRESS (2024-10-28/29)`);
-  console.log(`    • 2 PUBLISHED (Nov/Dez 2025, mit Training Requests)`);
-  console.log(`    • 1 DRAFT (Jan 2026)`);
-  console.log(`  - ${training1.participantCount + training2.participantCount} Participants`);
-  console.log(`  - 5 Training Requests (trainer applications):`);
-  console.log(`    • 1 ACCEPTED, 2 PENDING, 1 DECLINED, 1 ACCEPTED (for completed training)`);
-  console.log(`  - 4 Training Request Messages (trainer-company communication)`);
-  console.log(`  - 2 Invoices for Lorenz (completed trainings)`);
+  console.log(`  - ${courses.length} Courses (templates for recurring trainings)`);
+  console.log(`  - ${allTrainings.length} Trainings (concrete course instances):`);
+  console.log(`    • 2 COMPLETED per trainer in the past (30-60 days ago, with invoices)`);
+  console.log(`    • 4 PUBLISHED per trainer in the future (7-30 days from now)`);
+  console.log(`  - Participants created for all trainings`);
+  console.log(`  - ${allRequests.length} Training Requests (6 per trainer):`);
+  console.log(`    • Each trainer: 2 PENDING (future trainings), 2 DECLINED, 2 ACCEPTED (completed trainings)`);
+  console.log(`  - ${messageCount} Messages (conversations and notifications for training requests)`);
+  console.log(`  - ${invoiceCount} Invoices (for accepted trainings)`);
   console.log(`  - 5 Availability slots for Lorenz (Mon-Fri, 9-17)`);
   console.log('\n🎯 Demo Login Credentials:');
   console.log(`  Email: surkemper@powertowork.com`);
   console.log(`  (Works for both Company and Trainer login)`);
   console.log('\n📋 Test Scenarios:');
-  console.log(`  ✓ View training requests and messages`);
-  console.log(`  ✓ Accept/Reject trainer requests`);
-  console.log(`  ✓ See completed trainings with invoices`);
-  console.log(`  ✓ Check trainer availability`);
+  console.log(`  ✓ View training requests (6 per trainer with proper distribution)`);
+  console.log(`  ✓ Accept/Reject trainer requests (auto-decline others)`);
+  console.log(`  ✓ See notifications when requests are accepted/declined`);
+  console.log(`  ✓ Check trainer privacy (only see own assigned trainings)`);
+  console.log(`  ✓ See accepted trainings with invoices`);
   console.log(`  ✓ View participants`);
   console.log('\n🎉 Database is ready for comprehensive demo!');
 }

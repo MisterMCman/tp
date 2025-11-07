@@ -95,8 +95,8 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json() as Record<string, unknown>;
     
-    // Extract topics, topicsWithLevels, topicSuggestions, and offeredTrainingTypes separately
-    const { topics: topicsToUpdate, topicsWithLevels: topicsWithLevelsToUpdate, topicSuggestions: suggestionsToUpdate, offeredTrainingTypes: offeredTrainingTypesToUpdate, ...updateData } = body;
+    // Extract topicsWithLevels, topicSuggestions, and offeredTrainingTypes separately
+    const { topicsWithLevels: topicsWithLevelsToUpdate, topicSuggestions: suggestionsToUpdate, offeredTrainingTypes: offeredTrainingTypesToUpdate, ...updateData } = body;
 
     // Hole aktuelle Trainer-Daten für Vergleich
     const currentTrainer = await prisma.trainer.findUnique({
@@ -170,8 +170,8 @@ export async function PATCH(request: NextRequest) {
       }
     });
 
-    // Update topics if provided - use topicsWithLevels if available, otherwise fall back to topics
-    const topicsToProcess = topicsWithLevelsToUpdate || (topicsToUpdate ? topicsToUpdate.map((name: string) => ({ name, level: 'GRUNDLAGE' as const })) : null);
+    // Update topics if provided
+    const topicsToProcess = topicsWithLevelsToUpdate || null;
     
     if (topicsToProcess && Array.isArray(topicsToProcess) && topicsToProcess.length > 0) {
       // Delete all existing trainer topics
@@ -208,8 +208,8 @@ export async function PATCH(request: NextRequest) {
           }
         });
       }
-    } else if (topicsToUpdate === null || (Array.isArray(topicsToUpdate) && topicsToUpdate.length === 0)) {
-      // If topics array is explicitly empty, delete all topics
+    } else if (topicsToProcess === null) {
+      // If topicsWithLevels is explicitly null, delete all topics
       await prisma.trainerTopic.deleteMany({
         where: { trainerId: trainerData.id as number }
       });
