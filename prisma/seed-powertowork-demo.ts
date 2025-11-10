@@ -157,9 +157,6 @@ async function main() {
   const powerToWork = await prisma.trainingCompany.create({
     data: {
       companyName: 'PowerToWork GmbH',
-      firstName: 'Sarah',
-      lastName: 'Müller',
-      email: 'sarah.mueller@powertowork.com',
       phone: '+49 521 12345678',
       street: 'Hermannstraße',
       houseNumber: '3',
@@ -170,10 +167,21 @@ async function main() {
       website: 'https://www.powertowork.com',
       industry: 'consulting',
       employees: '51-200',
-      consultantName: 'Sarah Müller',
+      companyType: 'GMBH',
       status: 'ACTIVE',
       countryId: germany?.id,
-      onboardingStatus: 'Aktiv'
+      onboardingStatus: 'Aktiv',
+      // Create the first CompanyUser (ADMIN) along with the company
+      users: {
+        create: {
+          email: 'sarah.mueller@powertowork.com',
+          firstName: 'Sarah',
+          lastName: 'Müller',
+          phone: '+49 521 12345678',
+          role: 'ADMIN',
+          isActive: true
+        }
+      }
     }
   });
 

@@ -55,6 +55,8 @@ async function main() {
   console.log('🗑️  Clearing existing data...');
   await prisma.fileAttachment.deleteMany();
   await prisma.message.deleteMany();
+  // Delete training ratings
+  await prisma.trainingRating.deleteMany();
   await prisma.trainingRequest.deleteMany();
   await prisma.participant.deleteMany();
   await prisma.invoice.deleteMany();
@@ -95,6 +97,7 @@ async function main() {
   await prisma.$executeRaw`ALTER TABLE FileAttachment AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Message AUTO_INCREMENT = 1`;
   await prisma.$executeRaw`ALTER TABLE Location AUTO_INCREMENT = 1`;
+  await prisma.$executeRaw`ALTER TABLE TrainingRating AUTO_INCREMENT = 1`;
 
   // Create countries
   console.log('🌍 Creating countries...');
@@ -163,9 +166,6 @@ async function main() {
   const powerToWork = await prisma.trainingCompany.create({
     data: {
       companyName: 'PowerToWork GmbH',
-      firstName: 'Sarah',
-      lastName: 'Müller',
-      email: 'sarah.mueller@powertowork.com',
       phone: '+49 521 12345678',
       street: 'Hermannstraße',
       houseNumber: '3',
@@ -176,10 +176,16 @@ async function main() {
       website: 'https://www.powertowork.com',
       industry: 'consulting',
       employees: '51-200',
-      consultantName: 'Sarah Müller',
+      companyType: 'GMBH',
       status: 'ACTIVE',
       countryId: germany?.id,
-      onboardingStatus: 'Aktiv'
+      onboardingStatus: 'Aktiv',
+      // Company billing details
+      iban: 'DE89 3704 0044 0532 0130 00',
+      taxId: '123/456/78901', // Steuernummer (local tax office number)
+      vatId: 'DE123456789', // Umsatzsteuer-ID (VAT ID for EU transactions)
+      billingEmail: 'rechnung@powertowork.com',
+      billingNotes: 'Bitte überweisen Sie den Betrag innerhalb von 14 Tagen auf das angegebene Konto. Bei Fragen zur Rechnung wenden Sie sich bitte an unsere Buchhaltung unter rechnung@powertowork.com.'
     }
   });
 
@@ -800,34 +806,60 @@ async function main() {
 
   const allRequests = [];
   
-  for (const trainerInfo of trainerInfos) {
+  for (let trainerIndex = 0; trainerIndex < trainerInfos.length; trainerIndex++) {
+    const trainerInfo = trainerInfos[trainerIndex];
     if (!trainerInfo.trainer) continue;
     
     const trainerTrainings = getTrainingsForTrainer(trainerInfo.name);
     if (trainerTrainings.length < 6) continue;
     
-    // Create 6 requests: 2 ACCEPTED (for first 2 COMPLETED trainings), 2 PENDING, 2 DECLINED
-    // First 2 trainings are COMPLETED -> should have ACCEPTED requests
-    // Last 4 trainings are PUBLISHED -> should have PENDING and DECLINED requests
-    const statuses = ['ACCEPTED', 'ACCEPTED', 'PENDING', 'PENDING', 'DECLINED', 'DECLINED'];
+    // Create 6 requests: 
+    // - First 2 trainings are COMPLETED -> should have GEBUCHT requests (fully booked)
+    // - Last 4 trainings are PUBLISHED -> should have mix of GEBUCHT, ACCEPTED (trainer accepted, waiting for company), PENDING, DECLINED
+    // Special case for trainer 1 (Lorenz): 2 completed trainings + 2 open requests (1 ACCEPTED, 1 PENDING)
+    // Other trainers: 1 GEBUCHT for upcoming + mix of other statuses
+    let statuses: ('PENDING' | 'DECLINED' | 'ACCEPTED' | 'GEBUCHT')[];
+    if (trainerIndex === 0) {
+      // Trainer 1 (Lorenz): 2 completed (GEBUCHT), 1 upcoming booked (GEBUCHT), 1 ACCEPTED, 1 PENDING
+      statuses = ['GEBUCHT', 'GEBUCHT', 'GEBUCHT', 'ACCEPTED', 'PENDING', 'DECLINED'];
+    } else if (trainerIndex < 3) {
+      // Trainers 2-3: 2 completed (GEBUCHT), 1 upcoming booked (GEBUCHT), 1 ACCEPTED, 1 PENDING, 1 DECLINED
+      statuses = ['GEBUCHT', 'GEBUCHT', 'GEBUCHT', 'ACCEPTED', 'PENDING', 'DECLINED'];
+    } else {
+      // Trainers 4-5: 2 completed (GEBUCHT), 1 upcoming booked (GEBUCHT), 2 PENDING, 1 DECLINED
+      statuses = ['GEBUCHT', 'GEBUCHT', 'GEBUCHT', 'PENDING', 'PENDING', 'DECLINED'];
+    }
+    // Index 0-1: COMPLETED trainings -> GEBUCHT (fully booked)
+    // Index 2: First PUBLISHED training -> GEBUCHT (upcoming with trainer, fully booked)
+    // Index 3: Second PUBLISHED training -> ACCEPTED (for trainers 1-3) or PENDING (for trainers 4-5)
+    // Index 4: Third PUBLISHED training -> PENDING
+    // Index 5: Fourth PUBLISHED training -> DECLINED
     
     for (let i = 0; i < 6; i++) {
       const training = trainerTrainings[i];
-      const status = statuses[i] as 'PENDING' | 'DECLINED' | 'ACCEPTED';
-      const counterPrice = status === 'ACCEPTED' ? training.dailyRate : (status === 'PENDING' && i === 1 ? training.dailyRate + 50 : null);
+      const status = statuses[i] as 'PENDING' | 'DECLINED' | 'ACCEPTED' | 'GEBUCHT';
+      // For GEBUCHT and ACCEPTED status, set trainerAccepted = true (trainer has accepted)
+      // For GEBUCHT, this means both trainer and company have confirmed
+      const trainerAccepted = status === 'GEBUCHT' || status === 'ACCEPTED';
+      const counterPrice = (status === 'GEBUCHT' || status === 'ACCEPTED') ? training.dailyRate : (status === 'PENDING' && i === 4 ? training.dailyRate + 50 : null);
       
       const request = await prisma.trainingRequest.create({
         data: {
           trainingId: training.id,
           trainerId: trainerInfo.trainer.id,
           status: status,
+          trainerAccepted: trainerAccepted,
           counterPrice: counterPrice
         }
       });
       allRequests.push(request);
     }
     
-    console.log(`  ✓ Created 6 requests for ${trainerInfo.name} (2 PENDING, 2 DECLINED, 2 ACCEPTED)`);
+    const gebuchtCount = statuses.filter(s => s === 'GEBUCHT').length;
+    const acceptedCount = statuses.filter(s => s === 'ACCEPTED').length;
+    const pendingCount = statuses.filter(s => s === 'PENDING').length;
+    const declinedCount = statuses.filter(s => s === 'DECLINED').length;
+    console.log(`  ✓ Created 6 requests for ${trainerInfo.name} (${pendingCount} PENDING, ${declinedCount} DECLINED, ${acceptedCount} ACCEPTED, ${gebuchtCount} GEBUCHT - 1 upcoming booked)`);
   }
 
   console.log(`  ✓ Created ${allRequests.length} training requests total`);
@@ -845,8 +877,8 @@ async function main() {
     const training = allTrainings.find(t => t.id === request.trainingId);
     if (!training) continue;
     
-    if (request.status === 'ACCEPTED') {
-      // For accepted requests: create conversation thread
+    if (request.status === 'GEBUCHT' || request.status === 'ACCEPTED') {
+      // For booked/accepted requests: create conversation thread
       // Messages should be in the past, relative to the training date (if training is completed) or relative to today
       const trainingDate = new Date(training.startDate);
       
@@ -1042,37 +1074,37 @@ async function main() {
 
   console.log(`  ✓ Created ${messageCount} messages for training requests`);
 
-  // Create Invoice for completed trainings (accepted requests that are COMPLETED)
+  // Create Invoice for completed trainings (booked requests that are COMPLETED)
   console.log('\n💰 Creating invoices...');
 
   let invoiceCount = 0;
-  // Get all accepted requests for completed trainings (2 per trainer = 10 total)
-  // The first 2 trainings per trainer are COMPLETED, and the last 2 requests per trainer are ACCEPTED
+  // Get all booked requests for completed trainings (2 per trainer = 10 total)
+  // The first 2 trainings per trainer are COMPLETED, and the first 2 requests per trainer are GEBUCHT
   for (const trainerInfo of trainerInfos) {
     if (!trainerInfo.trainer) continue;
     
     const trainerTrainings = getTrainingsForTrainer(trainerInfo.name);
     if (trainerTrainings.length < 6) continue;
     
-    // Get the first 2 trainings (which are COMPLETED) and find their ACCEPTED requests
+    // Get the first 2 trainings (which are COMPLETED) and find their GEBUCHT requests
     const completedTrainings = trainerTrainings.slice(0, 2);
     
     for (let i = 0; i < completedTrainings.length; i++) {
       const training = completedTrainings[i];
       if (training.status !== 'COMPLETED') continue;
       
-      // Find the ACCEPTED request for this training
-      const acceptedRequest = allRequests.find(r => 
+      // Find the GEBUCHT request for this training
+      const bookedRequest = allRequests.find(r => 
         r.trainingId === training.id && 
         r.trainerId === trainerInfo.trainer.id && 
-        r.status === 'ACCEPTED'
+        r.status === 'GEBUCHT'
       );
       
-      if (!acceptedRequest) continue;
+      if (!bookedRequest) continue;
       
       await prisma.invoice.create({
         data: {
-          trainerId: acceptedRequest.trainerId,
+          trainerId: bookedRequest.trainerId,
           trainingId: training.id,
           amount: training.dailyRate,
           invoiceNumber: `INV-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(invoiceCount + 1).padStart(3, '0')}`,
@@ -1105,6 +1137,63 @@ async function main() {
 
   console.log(`  ✓ Created weekly availability for Lorenz`);
 
+  // Create Ratings for completed trainings (some trainers, not all for variety)
+  console.log('\n⭐ Creating ratings for completed trainings...');
+  
+  let ratingCount = 0;
+  const ratingsToCreate = [
+    // Trainer 0 (Lorenz) - Both trainings rated
+    { trainerIndex: 0, trainingIndex: 0, rating: 5, comment: 'Ausgezeichnetes Training! Sehr kompetent und praxisnah.' },
+    { trainerIndex: 0, trainingIndex: 1, rating: 4, comment: 'Gutes Training, sehr strukturiert aufgebaut.' },
+    
+    // Trainer 1 (Anna) - Both trainings rated
+    { trainerIndex: 1, trainingIndex: 0, rating: 5, comment: 'Perfekt! Der Trainer hat alle Fragen ausführlich beantwortet.' },
+    { trainerIndex: 1, trainingIndex: 1, rating: 4, comment: 'Sehr gutes Training mit vielen praktischen Beispielen.' },
+    
+    // Trainer 2 (Sarah) - Only first training rated (for variety)
+    { trainerIndex: 2, trainingIndex: 0, rating: 4, comment: 'Gutes Training, hat unsere Erwartungen erfüllt.' },
+    
+    // Trainer 3 (Thomas) - No ratings (for variety)
+    // Trainer 4 (Michael) - No ratings (for variety)
+  ];
+
+  for (const ratingData of ratingsToCreate) {
+    const trainerInfo = trainerInfos[ratingData.trainerIndex];
+    if (!trainerInfo || !trainerInfo.trainer) continue;
+    
+    const trainerTrainings = getTrainingsForTrainer(trainerInfo.name);
+    if (trainerTrainings.length < 2) continue;
+    
+    const training = trainerTrainings[ratingData.trainingIndex];
+    if (!training || training.status !== 'COMPLETED') continue;
+    
+    // Find the GEBUCHT request for this training
+    const bookedRequest = allRequests.find(r => 
+      r.trainingId === training.id && 
+      r.trainerId === trainerInfo.trainer.id && 
+      r.status === 'GEBUCHT'
+    );
+    
+    if (!bookedRequest) continue;
+    
+    await prisma.trainingRating.create({
+      data: {
+        trainingId: training.id,
+        trainerId: bookedRequest.trainerId,
+        companyId: powerToWork.id,
+        topicId: training.topicId,
+        rating: ratingData.rating,
+        comment: ratingData.comment
+      }
+    });
+    ratingCount++;
+  }
+
+  console.log(`  ✓ Created ${ratingCount} ratings for completed trainings`);
+  console.log(`    • 2 trainers with full ratings (both trainings)`);
+  console.log(`    • 1 trainer with partial rating (1 training)`);
+  console.log(`    • 2 trainers without ratings (for variety)`);
+
   console.log('\n✅ PowerToWork Demo Seed completed successfully!');
   console.log('\n📊 Summary:');
   console.log(`  - ${createdTopics.length} topics from CSV`);
@@ -1120,7 +1209,9 @@ async function main() {
   console.log(`    • 4 PUBLISHED per trainer in the future (7-30 days from now)`);
   console.log(`  - Participants created for all trainings`);
   console.log(`  - ${allRequests.length} Training Requests (6 per trainer):`);
-  console.log(`    • Each trainer: 2 PENDING (future trainings), 2 DECLINED, 2 ACCEPTED (completed trainings)`);
+  console.log(`    • Trainer 1 (Lorenz): 2 completed (GEBUCHT), 1 upcoming booked (GEBUCHT), 2 open requests (1 ACCEPTED, 1 PENDING)`);
+  console.log(`    • Other trainers: 2 completed (GEBUCHT), 1 upcoming booked (GEBUCHT), mix of ACCEPTED/PENDING/DECLINED`);
+  console.log(`    • Total: 5 upcoming trainings with GEBUCHT status (1 per trainer)`);
   console.log(`  - ${messageCount} Messages (conversations and notifications for training requests)`);
   console.log(`  - ${invoiceCount} Invoices (for accepted trainings)`);
   console.log(`  - 5 Availability slots for Lorenz (Mon-Fri, 9-17)`);

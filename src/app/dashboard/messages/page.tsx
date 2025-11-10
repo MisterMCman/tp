@@ -93,9 +93,14 @@ export default function MessagesPage() {
       });
       setConversations(conversationsArray);
 
-      // Auto-select first conversation if none selected
+      // Auto-select first conversation if none selected and conversations exist
       if (!selectedConversation && conversationsArray.length > 0) {
         setSelectedConversation(conversationsArray[0]);
+      }
+      
+      // If no conversations, ensure selectedConversation is null
+      if (conversationsArray.length === 0) {
+        setSelectedConversation(null);
       }
     } catch (error) {
       console.error("Error fetching messages:", error);

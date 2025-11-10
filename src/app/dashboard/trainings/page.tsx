@@ -26,6 +26,14 @@ interface Training {
     lastName: string;
     fullName: string;
   } | null;
+  trainerPrice?: number | null;
+  requestedTrainers?: Array<{
+    id: number;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+  }>;
+  hasAcceptedTrainer?: boolean;
 }
 
 interface User {
@@ -33,6 +41,8 @@ interface User {
 }
 
 type ViewMode = "upcoming" | "history" | "calendar";
+type SortField = "date" | "location" | "participants" | null;
+type SortOrder = "asc" | "desc";
 
 export default function TrainingsPage() {
   const router = useRouter();
@@ -41,6 +51,8 @@ export default function TrainingsPage() {
   const [pastTrainings, setPastTrainings] = useState<Training[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [sortBy, setSortBy] = useState<SortField>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
   // Initialize viewMode from URL or default
   const getInitialViewMode = (): ViewMode => {
@@ -476,11 +488,18 @@ export default function TrainingsPage() {
   const calendarTrainings = viewMode === "calendar" ? trainings : [];
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">
-          {user?.userType === 'TRAINING_COMPANY' ? 'Geplante Trainings' : 'Meine Trainings'}
-        </h1>
+    <>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4 flex justify-between items-start" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {user?.userType === 'TRAINING_COMPANY' ? 'Geplante Trainings' : 'Meine Trainings'}
+          </h1>
+          <p className="text-gray-600 mt-1">
+            {user?.userType === 'TRAINING_COMPANY' 
+              ? 'Verwalten Sie Ihre geplanten Trainings und Termine'
+              : 'Übersicht über Ihre Trainings und Termine'}
+          </p>
+        </div>
         {user?.userType === 'TRAINING_COMPANY' && (
           <Link
             href="/dashboard/trainings/create"
@@ -493,6 +512,7 @@ export default function TrainingsPage() {
           </Link>
         )}
       </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
       
       {/* View Mode Selector */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -634,13 +654,17 @@ export default function TrainingsPage() {
                         title={isMultiDay ? `${training.title} (Tag ${dayIndex + 1} von ${totalDays})` : training.title}
                       >
                         <div className="text-xs font-semibold text-primary-800 truncate">
-                          {isMultiDay && !isFirstDay ? '...' : training.title}
-                          {isMultiDay && (
-                            <span className="ml-1 text-primary-600">({dayIndex + 1}/{totalDays})</span>
-                          )}
+                          {training.title}
                         </div>
-                        <div className="text-xs text-gray-600 mt-1">
-                          {isFirstDay || !isMultiDay ? `${training.startTime || '09:00'} - ${training.endTime ? (training.endTime.includes('T') ? formatTime(training.endTime) : training.endTime) : '17:00'}` : 'Ganztägig'}
+                        <div className="flex items-center justify-between mt-1">
+                          <div className="text-xs text-gray-600">
+                            {isFirstDay || !isMultiDay ? `${training.startTime || '09:00'} - ${training.endTime ? (training.endTime.includes('T') ? formatTime(training.endTime) : training.endTime) : '17:00'}` : 'Ganztägig'}
+                          </div>
+                          {isMultiDay && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-primary-200 text-primary-800 font-medium">
+                              {dayIndex + 1}/{totalDays}
+                            </span>
+                          )}
                         </div>
                         {training.assignedTrainer && (isFirstDay || !isMultiDay) && (
                           <div className="text-xs text-gray-500 mt-1 truncate">
@@ -657,7 +681,68 @@ export default function TrainingsPage() {
           </div>
         </div>
       ) : currentData.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4">
+        <>
+          {/* Sort Controls */}
+          {viewMode !== "calendar" && (
+            <div className="bg-white rounded-lg shadow p-4 mb-4">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium text-gray-700">Sortieren nach:</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSort("date")}
+                    className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                      sortBy === "date"
+                        ? "bg-primary-600 text-white border-primary-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    Datum
+                    {sortBy === "date" && (
+                      <span className="ml-1">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleSort("location")}
+                    className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                      sortBy === "location"
+                        ? "bg-primary-600 text-white border-primary-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    Ort
+                    {sortBy === "location" && (
+                      <span className="ml-1">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleSort("participants")}
+                    className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                      sortBy === "participants"
+                        ? "bg-primary-600 text-white border-primary-600"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    Teilnehmer
+                    {sortBy === "participants" && (
+                      <span className="ml-1">{sortOrder === "asc" ? "↑" : "↓"}</span>
+                    )}
+                  </button>
+                  {sortBy && (
+                    <button
+                      onClick={() => {
+                        setSortBy(null);
+                        setSortOrder("asc");
+                      }}
+                      className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                    >
+                      Zurücksetzen
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-4">
           {currentData.map((training) => (
             <div key={training.id} className="bg-white rounded-lg shadow overflow-hidden">
               <div className="p-5 border-b">
@@ -700,12 +785,13 @@ export default function TrainingsPage() {
                   </div>
                 </div>
 
-                {/* Show assigned trainer prominently */}
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  {training.assignedTrainer ? (
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="block text-xs text-gray-500 mb-1">Zugewiesener Trainer</span>
+                {/* Show trainer information */}
+                <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+                  {/* Show booked trainer (ACCEPTED) */}
+                  {training.hasAcceptedTrainer && training.assignedTrainer ? (
+                    <div>
+                      <span className="block text-xs text-gray-500 mb-1">Gebuchter Trainer</span>
+                      <div className="flex items-center justify-between">
                         <Link
                           href={(() => {
                             // Preserve current view state when linking to trainer profile
@@ -727,14 +813,52 @@ export default function TrainingsPage() {
                           </svg>
                           {training.assignedTrainer.fullName}
                         </Link>
+                        {training.trainerPrice && (
+                          <span className="text-sm font-medium text-gray-700">
+                            {training.trainerPrice.toFixed(2)} €/Tag
+                          </span>
+                        )}
                       </div>
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="block text-xs text-gray-500 mb-1">Zugewiesener Trainer</span>
-                        <span className="text-sm text-gray-400 italic">Kein Trainer zugewiesen</span>
+                  ) : null}
+                  
+                  {/* Show requested trainers (PENDING) */}
+                  {training.requestedTrainers && training.requestedTrainers.length > 0 && (
+                    <div>
+                      <span className="block text-xs text-gray-500 mb-1">Angefragte Trainer</span>
+                      <div className="space-y-1">
+                        {training.requestedTrainers.map((trainer) => (
+                          <Link
+                            key={trainer.id}
+                            href={(() => {
+                              const params = new URLSearchParams();
+                              if (viewMode !== 'upcoming') {
+                                params.set('view', viewMode);
+                              }
+                              if (viewMode === 'calendar') {
+                                params.set('week', weekStart.toISOString().split('T')[0]);
+                              }
+                              params.set('returnTo', 'trainings');
+                              const queryString = params.toString();
+                              return `/dashboard/trainer/${trainer.id}${queryString ? `?${queryString}` : ''}`;
+                            })()}
+                            className="text-sm text-gray-600 hover:text-primary-600 hover:underline flex items-center gap-1"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                            </svg>
+                            {trainer.fullName}
+                          </Link>
+                        ))}
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* Show "No trainer" message if neither booked nor requested */}
+                  {!training.hasAcceptedTrainer && (!training.requestedTrainers || training.requestedTrainers.length === 0) && (
+                    <div>
+                      <span className="block text-xs text-gray-500 mb-1">Trainer</span>
+                      <span className="text-sm text-gray-400 italic">Kein Trainer zugewiesen</span>
                     </div>
                   )}
                 </div>
@@ -767,8 +891,8 @@ export default function TrainingsPage() {
                   </button>
                 )}
                 
-                {/* Show Contract download button for past trainings OR confirmed upcoming trainings */}
-                {(viewMode === "history" || (viewMode === "upcoming" && training.status === "confirmed")) && (
+                {/* Show Contract download button only when trainer has ACCEPTED status */}
+                {training.hasAcceptedTrainer && (
                   <button
                     onClick={() => downloadContract(training)}
                     className="px-3 py-1 bg-green-50 border border-green-300 rounded text-sm font-medium text-green-700 hover:bg-green-100 flex items-center"
@@ -806,7 +930,8 @@ export default function TrainingsPage() {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        </>
       ) : (
         <div className="bg-white rounded-lg shadow p-6 text-center">
           <p className="text-gray-500">
@@ -816,7 +941,7 @@ export default function TrainingsPage() {
           </p>
         </div>
       )}
-      
-    </div>
+      </div>
+    </>
   );
 } 

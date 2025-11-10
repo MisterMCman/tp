@@ -67,16 +67,40 @@ export async function POST(request: NextRequest) {
                       select: {
                         id: true,
                         companyName: true,
-                        firstName: true,
-                        lastName: true,
-                        email: true
+                        users: {
+                          where: {
+                            role: 'ADMIN',
+                            isActive: true
+                          },
+                          select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            email: true
+                          },
+                          take: 1
+                        }
                       }
                     }
                   }
                 }
               }
             });
-            return { request: existingRequest, isDuplicate: true, trainingId };
+            // Transform existing request to include company user data
+            const transformedExisting = existingRequest ? {
+              ...existingRequest,
+              training: {
+                ...existingRequest.training,
+                company: {
+                  ...existingRequest.training.company,
+                  firstName: existingRequest.training.company.users?.[0]?.firstName || '',
+                  lastName: existingRequest.training.company.users?.[0]?.lastName || '',
+                  email: existingRequest.training.company.users?.[0]?.email || '',
+                  users: undefined
+                }
+              }
+            } : null;
+            return { request: transformedExisting, isDuplicate: true, trainingId };
           }
 
           const newRequest = await prisma.trainingRequest.create({
@@ -101,16 +125,40 @@ export async function POST(request: NextRequest) {
                     select: {
                       id: true,
                       companyName: true,
-                      firstName: true,
-                      lastName: true,
-                      email: true
+                      users: {
+                        where: {
+                          role: 'ADMIN',
+                          isActive: true
+                        },
+                        select: {
+                          id: true,
+                          firstName: true,
+                          lastName: true,
+                          email: true
+                        },
+                        take: 1
+                      }
                     }
                   }
                 }
               }
             }
           });
-          return { request: newRequest, isDuplicate: false, trainingId };
+          // Transform to include company user data
+          const transformedRequest = {
+            ...newRequest,
+            training: {
+              ...newRequest.training,
+              company: {
+                ...newRequest.training.company,
+                firstName: newRequest.training.company.users?.[0]?.firstName || '',
+                lastName: newRequest.training.company.users?.[0]?.lastName || '',
+                email: newRequest.training.company.users?.[0]?.email || '',
+                users: undefined
+              }
+            }
+          };
+          return { request: transformedRequest, isDuplicate: false, trainingId };
         })
       );
 
@@ -182,16 +230,40 @@ export async function POST(request: NextRequest) {
                       select: {
                         id: true,
                         companyName: true,
-                        firstName: true,
-                        lastName: true,
-                        email: true
+                        users: {
+                          where: {
+                            role: 'ADMIN',
+                            isActive: true
+                          },
+                          select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            email: true
+                          },
+                          take: 1
+                        }
                       }
                     }
                   }
                 }
               }
             });
-            return { request: existingRequest, isDuplicate: true, trainerId };
+            // Transform existing request to include company user data
+            const transformedExisting = existingRequest ? {
+              ...existingRequest,
+              training: {
+                ...existingRequest.training,
+                company: {
+                  ...existingRequest.training.company,
+                  firstName: existingRequest.training.company.users?.[0]?.firstName || '',
+                  lastName: existingRequest.training.company.users?.[0]?.lastName || '',
+                  email: existingRequest.training.company.users?.[0]?.email || '',
+                  users: undefined
+                }
+              }
+            } : null;
+            return { request: transformedExisting, isDuplicate: true, trainerId };
           }
 
           const newRequest = await prisma.trainingRequest.create({
@@ -216,16 +288,40 @@ export async function POST(request: NextRequest) {
                     select: {
                       id: true,
                       companyName: true,
-                      firstName: true,
-                      lastName: true,
-                      email: true
+                      users: {
+                        where: {
+                          role: 'ADMIN',
+                          isActive: true
+                        },
+                        select: {
+                          id: true,
+                          firstName: true,
+                          lastName: true,
+                          email: true
+                        },
+                        take: 1
+                      }
                     }
                   }
                 }
               }
             }
           });
-          return { request: newRequest, isDuplicate: false, trainerId };
+          // Transform to include company user data
+          const transformedRequest = {
+            ...newRequest,
+            training: {
+              ...newRequest.training,
+              company: {
+                ...newRequest.training.company,
+                firstName: newRequest.training.company.users?.[0]?.firstName || '',
+                lastName: newRequest.training.company.users?.[0]?.lastName || '',
+                email: newRequest.training.company.users?.[0]?.email || '',
+                users: undefined
+              }
+            }
+          };
+          return { request: transformedRequest, isDuplicate: false, trainerId };
         })
       );
 
@@ -314,10 +410,20 @@ export async function GET(request: NextRequest) {
                 select: {
                   id: true,
                   companyName: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                  logo: true
+                  logo: true,
+                  users: {
+                    where: {
+                      role: 'ADMIN',
+                      isActive: true
+                    },
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true
+                    },
+                    take: 1
+                  }
                 }
               }
             }
@@ -337,7 +443,22 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      return NextResponse.json(requests);
+      // Transform requests to include company user data
+      const transformedRequests = requests.map(req => ({
+        ...req,
+        training: {
+          ...req.training,
+          company: {
+            ...req.training.company,
+            firstName: req.training.company.users?.[0]?.firstName || '',
+            lastName: req.training.company.users?.[0]?.lastName || '',
+            email: req.training.company.users?.[0]?.email || '',
+            users: undefined // Remove users array from response
+          }
+        }
+      }));
+
+      return NextResponse.json(transformedRequests);
     } else if (trainerId) {
       // Verify that trainers can only see their own requests
       if (currentUser.userType === 'TRAINER' && Number(currentUser.id) !== parseInt(trainerId)) {
@@ -360,10 +481,20 @@ export async function GET(request: NextRequest) {
                 select: {
                   id: true,
                   companyName: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                  logo: true
+                  logo: true,
+                  users: {
+                    where: {
+                      role: 'ADMIN',
+                      isActive: true
+                    },
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true
+                    },
+                    take: 1
+                  }
                 }
               }
             }
@@ -374,7 +505,22 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      return NextResponse.json(requests);
+      // Transform requests to include company user data
+      const transformedRequests = requests.map(req => ({
+        ...req,
+        training: {
+          ...req.training,
+          company: {
+            ...req.training.company,
+            firstName: req.training.company.users?.[0]?.firstName || '',
+            lastName: req.training.company.users?.[0]?.lastName || '',
+            email: req.training.company.users?.[0]?.email || '',
+            users: undefined // Remove users array from response
+          }
+        }
+      }));
+
+      return NextResponse.json(transformedRequests);
     } else if (trainingId) {
       // Verify that companies can only see requests for their own trainings
       if (currentUser.userType === 'TRAINING_COMPANY') {
@@ -438,8 +584,19 @@ export async function GET(request: NextRequest) {
                 select: {
                   id: true,
                   companyName: true,
-                  firstName: true,
-                  lastName: true
+                  users: {
+                    where: {
+                      role: 'ADMIN',
+                      isActive: true
+                    },
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true
+                    },
+                    take: 1
+                  }
                 }
               }
             }
@@ -450,7 +607,22 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      return NextResponse.json(requests);
+      // Transform requests to include company user data
+      const transformedRequests = requests.map(req => ({
+        ...req,
+        training: {
+          ...req.training,
+          company: {
+            ...req.training.company,
+            firstName: req.training.company.users?.[0]?.firstName || '',
+            lastName: req.training.company.users?.[0]?.lastName || '',
+            email: req.training.company.users?.[0]?.email || '',
+            users: undefined // Remove users array from response
+          }
+        }
+      }));
+
+      return NextResponse.json(transformedRequests);
     } else {
       return NextResponse.json(
         { error: 'Either trainerId or trainingId is required' },
@@ -567,15 +739,26 @@ export async function PATCH(request: NextRequest) {
       updateData.trainerAccepted = true;
       updateData.status = TrainingRequestStatus.PENDING; // Keep as PENDING until company accepts
     } 
-    // If company is accepting and trainer has already accepted, then set status to ACCEPTED
+    // If company is accepting and trainer has already accepted, then set status to GEBUCHT (booked)
     else if (currentUser.userType === 'TRAINING_COMPANY' && status === TrainingRequestStatus.ACCEPTED) {
-      // If trainer already accepted, then fully accept
+      // If trainer already accepted, then set to GEBUCHT (fully booked)
       if (currentRequest.trainerAccepted) {
-        updateData.status = TrainingRequestStatus.ACCEPTED;
+        updateData.status = TrainingRequestStatus.GEBUCHT;
       } else {
-        // Company accepting a counter offer or accepting before trainer - set status to ACCEPTED
+        // Company accepting before trainer - set status to ACCEPTED (waiting for trainer)
         updateData.status = TrainingRequestStatus.ACCEPTED;
       }
+    }
+    // Handle GEBUCHT status directly (for company confirming after trainer accepted)
+    else if (currentUser.userType === 'TRAINING_COMPANY' && status === TrainingRequestStatus.GEBUCHT) {
+      // Only allow GEBUCHT if trainer has already accepted
+      if (!currentRequest.trainerAccepted) {
+        return NextResponse.json(
+          { error: 'Cannot book: Trainer has not accepted the request yet' },
+          { status: 400 }
+        );
+      }
+      updateData.status = TrainingRequestStatus.GEBUCHT;
     }
     // For other status changes (DECLINED, etc.), update status normally
     else {
@@ -627,16 +810,16 @@ export async function PATCH(request: NextRequest) {
       }
     });
 
-    // If a request is being fully accepted (status = ACCEPTED), automatically decline all other pending requests for the same training
-    // Only do this when the final status is ACCEPTED (not just trainerAccepted)
+    // If a request is being fully booked (status = GEBUCHT), automatically decline all other pending/accepted requests for the same training
+    // Only do this when the final status is GEBUCHT (fully booked)
     const finalStatus = updateData.status || updatedRequest.status;
-    if (finalStatus === TrainingRequestStatus.ACCEPTED && currentRequest.status !== TrainingRequestStatus.ACCEPTED) {
-      // Find all other pending requests for this training
-      const otherPendingRequests = await prisma.trainingRequest.findMany({
+    if (finalStatus === TrainingRequestStatus.GEBUCHT && currentRequest.status !== TrainingRequestStatus.GEBUCHT) {
+      // Find all other pending and accepted requests for this training
+      const otherRequests = await prisma.trainingRequest.findMany({
         where: {
           trainingId: currentRequest.trainingId,
           id: { not: parseInt(requestId) },
-          status: TrainingRequestStatus.PENDING
+          status: { in: [TrainingRequestStatus.PENDING, TrainingRequestStatus.ACCEPTED] }
         },
         include: {
           trainer: true,
@@ -649,11 +832,11 @@ export async function PATCH(request: NextRequest) {
         }
       });
 
-      // Decline all other pending requests
-      if (otherPendingRequests.length > 0) {
+      // Decline all other pending/accepted requests
+      if (otherRequests.length > 0) {
         await prisma.trainingRequest.updateMany({
           where: {
-            id: { in: otherPendingRequests.map(r => r.id) }
+            id: { in: otherRequests.map(r => r.id) }
           },
           data: {
             status: TrainingRequestStatus.DECLINED
@@ -661,7 +844,7 @@ export async function PATCH(request: NextRequest) {
         });
 
         // Send notifications to all declined trainers
-        for (const declinedRequest of otherPendingRequests) {
+        for (const declinedRequest of otherRequests) {
           const declineMessage = `Ihre Anfrage für das Training "${currentRequest.training.title}" wurde abgelehnt, da ein anderer Trainer die Anfrage bereits angenommen hat.`;
           
           await prisma.message.create({
@@ -680,8 +863,8 @@ export async function PATCH(request: NextRequest) {
         }
       }
 
-      // Send notification to the accepted trainer
-      const acceptMessage = `Herzlichen Glückwunsch! Ihre Anfrage für das Training "${currentRequest.training.title}" wurde angenommen. Sie können nun weitere Details im Dashboard einsehen.`;
+      // Send notification to the booked trainer
+      const bookMessage = `Herzlichen Glückwunsch! Ihre Anfrage für das Training "${currentRequest.training.title}" wurde gebucht. Sie können nun weitere Details im Dashboard einsehen.`;
       
       await prisma.message.create({
         data: {
@@ -690,8 +873,8 @@ export async function PATCH(request: NextRequest) {
           senderType: 'TRAINING_COMPANY',
           recipientId: currentRequest.trainerId,
           recipientType: 'TRAINER',
-          subject: `Anfrage angenommen: ${currentRequest.training.title}`,
-          message: acceptMessage,
+          subject: `Training gebucht: ${currentRequest.training.title}`,
+          message: bookMessage,
           isRead: false,
           messageType: 'NOTIFICATION'
         }

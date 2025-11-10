@@ -44,6 +44,10 @@ export async function GET() {
       where: { id: currentUserId },
       select: {
         id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
         role: true,
         isActive: true,
         companyId: true
@@ -55,10 +59,10 @@ export async function GET() {
         id: company.id,
         userType: company.userType,
         companyName: company.companyName,
-        firstName: company.firstName,
-        lastName: company.lastName,
-        email: company.email,
-        phone: company.phone,
+        firstName: companyUser?.firstName || '',
+        lastName: companyUser?.lastName || '',
+        email: companyUser?.email || '',
+        phone: companyUser?.phone || company.phone || '',
         street: company.street,
         houseNumber: company.houseNumber,
         zipCode: company.zipCode,
@@ -70,12 +74,12 @@ export async function GET() {
         website: company.website,
         industry: company.industry,
         employees: company.employees,
-        consultantName: company.consultantName,
+        companyType: company.companyType,
         vatId: company.vatId,
-        billingEmail: company.billingEmail,
-        billingNotes: company.billingNotes,
         iban: company.iban,
         taxId: company.taxId,
+        billingEmail: company.billingEmail,
+        billingNotes: company.billingNotes,
         tags: company.tags,
         onboardingStatus: company.onboardingStatus,
         status: company.status,
@@ -106,8 +110,26 @@ export async function PATCH(req: Request) {
       );
     }
     
+    // Get the current user's role from the database to ensure it's up to date
+    const currentUserId = currentUser.id as number;
+    const companyUser = await prisma.companyUser.findUnique({
+      where: { id: currentUserId },
+      select: {
+        role: true,
+        isActive: true,
+        companyId: true
+      }
+    });
+    
+    if (!companyUser || !companyUser.isActive) {
+      return NextResponse.json(
+        { message: 'Benutzer nicht gefunden oder inaktiv' },
+        { status: 403 }
+      );
+    }
+    
     // Only ADMIN can edit company data
-    if (currentUser.role !== 'ADMIN') {
+    if (companyUser.role !== 'ADMIN') {
       return NextResponse.json(
         { message: 'Nur Administratoren können Unternehmensdaten bearbeiten' },
         { status: 403 }
@@ -131,84 +153,107 @@ export async function PATCH(req: Request) {
       website,
       industry,
       employees,
-      consultantName,
+      companyType,
       vatId,
-      billingEmail,
-      billingNotes,
       iban,
       taxId,
+      billingEmail,
+      billingNotes,
       tags
     } = body;
 
-    // Validate required fields
-    if (!companyName || !email || !phone) {
+    // Validate required fields (company data only, user data is optional)
+    if (!companyName || !street || !houseNumber || !zipCode || !city || !countryId) {
       return NextResponse.json(
         { message: 'Alle erforderlichen Felder müssen ausgefüllt werden.' },
         { status: 400 }
       );
     }
 
-    // Get company ID from CompanyUser (companyId) or fallback to id for legacy support
-    const companyId = (currentUser.companyId || currentUser.id) as number;
+    // Get company ID (use the one from database query)
+    const companyId = (companyUser.companyId || currentUser.companyId || currentUser.id) as number;
     
-    // Check if email is already taken by another user (excluding current user)
-    const existingUser = await prisma.trainer.findFirst({
-      where: {
-        email,
-        id: { not: currentUser.id }
-      }
-    });
+    // Update CompanyUser only if user data is provided (firstName, lastName, email, phone)
+    if (firstName !== undefined || lastName !== undefined || email !== undefined || phone !== undefined) {
+      // If email is being updated, check if it's already taken
+      if (email) {
+        const existingTrainer = await prisma.trainer.findFirst({
+          where: {
+            email,
+            id: { not: currentUserId }
+          }
+        });
 
-    const existingCompanyUser = await prisma.companyUser.findFirst({
-      where: {
-        email,
-        id: { not: currentUser.id }
-      }
-    });
+        const existingCompanyUser = await prisma.companyUser.findFirst({
+          where: {
+            email,
+            id: { not: currentUserId }
+          }
+        });
 
-    const existingCompany = await prisma.trainingCompany.findFirst({
-      where: {
-        email,
-        id: { not: companyId }
+        if (existingTrainer || existingCompanyUser) {
+          return NextResponse.json(
+            { message: 'Diese E-Mail-Adresse ist bereits vergeben.' },
+            { status: 409 }
+          );
+        }
       }
-    });
 
-    if (existingUser || existingCompanyUser || existingCompany) {
-      return NextResponse.json(
-        { message: 'Diese E-Mail-Adresse ist bereits vergeben.' },
-        { status: 409 }
-      );
+      // Update CompanyUser with provided fields
+      await prisma.companyUser.update({
+        where: { id: currentUserId },
+        data: {
+          ...(firstName !== undefined && { firstName: firstName || '' }),
+          ...(lastName !== undefined && { lastName: lastName || '' }),
+          ...(email !== undefined && { email: email }),
+          ...(phone !== undefined && { phone: phone || null })
+        }
+      });
     }
 
-    // Update training company
+    // Update training company (company data only, not user data)
     const updatedCompany = await prisma.trainingCompany.update({
       where: { id: companyId },
       data: {
         companyName,
-        firstName: firstName || null,
-        lastName: lastName || null,
-        email,
-        phone,
-        street: street || null,
-        houseNumber: houseNumber || null,
-        zipCode: zipCode || null,
-        city: city || null,
-        countryId: countryId || null,
+        phone: phone || null, // Keep as fallback for legacy
+        street: street,
+        houseNumber: houseNumber,
+        zipCode: zipCode,
+        city: city,
+        country: {
+          connect: { id: countryId }
+        },
         bio: bio || null,
         logo: logo || null,
         website: website || null,
         industry: industry || null,
         employees: employees || null,
-        consultantName: consultantName || null,
+        companyType: companyType || null,
         vatId: vatId || null,
-        billingEmail: billingEmail || null,
-        billingNotes: billingNotes || null,
         iban: iban || null,
         taxId: taxId || null,
+        billingEmail: billingEmail || null,
+        billingNotes: billingNotes || null,
         tags: tags || null
       },
       include: {
         country: true
+      }
+    });
+
+    // Get updated CompanyUser for response
+    const updatedCompanyUser = await prisma.companyUser.findUnique({
+      where: { id: currentUserId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        companyId: true
       }
     });
 
@@ -218,10 +263,10 @@ export async function PATCH(req: Request) {
         id: updatedCompany.id,
         userType: updatedCompany.userType,
         companyName: updatedCompany.companyName,
-        firstName: updatedCompany.firstName,
-        lastName: updatedCompany.lastName,
-        email: updatedCompany.email,
-        phone: updatedCompany.phone,
+        firstName: updatedCompanyUser?.firstName || '',
+        lastName: updatedCompanyUser?.lastName || '',
+        email: updatedCompanyUser?.email || '',
+        phone: updatedCompanyUser?.phone || updatedCompany.phone || '',
         street: updatedCompany.street,
         houseNumber: updatedCompany.houseNumber,
         zipCode: updatedCompany.zipCode,
@@ -232,12 +277,11 @@ export async function PATCH(req: Request) {
         website: updatedCompany.website,
         industry: updatedCompany.industry,
         employees: updatedCompany.employees,
-        consultantName: updatedCompany.consultantName,
         vatId: updatedCompany.vatId,
-        billingEmail: updatedCompany.billingEmail,
-        billingNotes: updatedCompany.billingNotes,
         iban: updatedCompany.iban,
         taxId: updatedCompany.taxId,
+        billingEmail: updatedCompany.billingEmail,
+        billingNotes: updatedCompany.billingNotes,
         tags: updatedCompany.tags,
         onboardingStatus: updatedCompany.onboardingStatus,
         status: updatedCompany.status

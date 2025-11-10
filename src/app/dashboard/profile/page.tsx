@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { saveTrainerData, saveCompanyData } from "@/lib/session";
 import { Trainer } from "@/lib/types";
 import { TopicSelector, TopicWithLevel, ExpertiseLevel } from "@/components/TopicSelector";
 import { canEditCompany, canManageUsers } from "@/lib/permissions";
+import { useToast } from "@/components/Toast";
 
 interface TrainingCompany {
   id: number;
@@ -27,7 +28,6 @@ interface TrainingCompany {
   website?: string;
   industry?: string;
   employees?: string;
-  consultantName?: string;
   vatId?: string;
   billingEmail?: string;
   billingNotes?: string;
@@ -43,11 +43,21 @@ interface TrainingCompany {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { addToast, ToastManager } = useToast();
   const [user, setUser] = useState<Trainer | TrainingCompany | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<any>({});
   const [countries, setCountries] = useState<{id: number, name: string, code: string}[]>([]);
+  
+  // Initial state for change detection
+  const [initialFormData, setInitialFormData] = useState<any>({});
+  const [initialTopics, setInitialTopics] = useState<TopicWithLevel[]>([]);
+  const [initialTopicSuggestions, setInitialTopicSuggestions] = useState<string[]>([]);
+  const [initialOfferedTrainingTypes, setInitialOfferedTrainingTypes] = useState<string[]>([]);
+  
+  // Track if there are changes (for re-rendering)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   // Topic management state
   const [topics, setTopics] = useState<TopicWithLevel[]>([]);
@@ -112,7 +122,26 @@ export default function ProfilePage() {
       const response = await fetch('/api/company-users');
       if (response.ok) {
         const data = await response.json();
-        setCompanyUsers(data.users || []);
+        const users = data.users || [];
+        // Get current user ID from session
+        const { getCompanyData } = await import('@/lib/session');
+        const currentUser = getCompanyData();
+        const currentUserId = currentUser?.id;
+        
+        // Sort: current user (main user) at the bottom, others by role and creation date
+        const sortedUsers = users.sort((a: any, b: any) => {
+          // If one is the current user, put it at the end
+          if (a.id === currentUserId && b.id !== currentUserId) return 1;
+          if (b.id === currentUserId && a.id !== currentUserId) return -1;
+          // Otherwise sort by role (ADMIN first) then by creation date
+          if (a.role !== b.role) {
+            const roleOrder = { ADMIN: 1, EDITOR: 2, VIEWER: 3 };
+            return (roleOrder[a.role as keyof typeof roleOrder] || 99) - (roleOrder[b.role as keyof typeof roleOrder] || 99);
+          }
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+        
+        setCompanyUsers(sortedUsers);
       }
     } catch (error) {
       console.error('Error loading company users:', error);
@@ -132,6 +161,7 @@ export default function ProfilePage() {
   };
 
   const loadProfile = async () => {
+    console.log('🚀 loadProfile called');
     try {
       // First, get the current user to determine their type
       const { getTrainerData, getCompanyData } = await import('@/lib/session');
@@ -154,12 +184,8 @@ export default function ProfilePage() {
             isActive: currentUser.isActive ?? true
           };
           setUser(userData);
-          setFormData({
+          const formDataObj = {
             companyName: data.company.companyName,
-            firstName: data.company.firstName,
-            lastName: data.company.lastName,
-            email: data.company.email,
-            phone: data.company.phone,
             street: data.company.street,
             houseNumber: data.company.houseNumber,
             zipCode: data.company.zipCode,
@@ -170,20 +196,23 @@ export default function ProfilePage() {
             website: data.company.website,
             industry: data.company.industry,
             employees: data.company.employees,
-            consultantName: data.company.consultantName,
             vatId: data.company.vatId,
             billingEmail: data.company.billingEmail,
             billingNotes: data.company.billingNotes,
             iban: data.company.iban,
             taxId: data.company.taxId,
-            tags: data.company.tags,
-          });
+            companyType: data.company.companyType,
+          };
+          setFormData(formDataObj);
+          const initialData = JSON.parse(JSON.stringify(formDataObj));
+          console.log('📥 Setting initialFormData for company (from session):', initialData);
+          setInitialFormData(initialData);
           return; // Exit early
         }
       }
       
       // If localStorage is empty, try both APIs to determine user type
-      if (!currentUser.userType || Object.keys(currentUser).length === 0) {
+      if (!currentUser || !currentUser.userType || Object.keys(currentUser).length === 0) {
         console.log('No userType found, trying both APIs...');
         
         // Try training company first
@@ -203,30 +232,29 @@ export default function ProfilePage() {
           setUser(userData);
           // Save to cookies for next time
           saveCompanyData(userData);
-          setFormData({
+          const formDataObj = {
             companyName: data.company.companyName,
-            firstName: data.company.firstName,
-            lastName: data.company.lastName,
-            email: data.company.email,
-            phone: data.company.phone,
             street: data.company.street,
             houseNumber: data.company.houseNumber,
             zipCode: data.company.zipCode,
             city: data.company.city,
-            countryId: data.company.country?.id,
+            countryId: data.company.country?.id || (countries.find(c => c.code === 'DE')?.id),
             bio: data.company.bio,
             logo: data.company.logo,
             website: data.company.website,
             industry: data.company.industry,
             employees: data.company.employees,
-            consultantName: data.company.consultantName,
+            companyType: data.company.companyType,
             vatId: data.company.vatId,
             billingEmail: data.company.billingEmail,
             billingNotes: data.company.billingNotes,
             iban: data.company.iban,
             taxId: data.company.taxId,
-            tags: data.company.tags,
-          });
+          };
+          setFormData(formDataObj);
+          const initialData = JSON.parse(JSON.stringify(formDataObj));
+          console.log('📥 Setting initialFormData for company (early return):', initialData);
+          setInitialFormData(initialData);
           return; // Exit early
         }
         
@@ -238,7 +266,7 @@ export default function ProfilePage() {
           setUser(data);
           // Save to cookies for next time
           saveTrainerData(data);
-          setFormData({
+          const formDataObj = {
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
@@ -257,14 +285,24 @@ export default function ProfilePage() {
             dailyRate: data.dailyRate,
             offeredTrainingTypes: data.offeredTrainingTypes || [],
             travelRadius: data.travelRadius,
-          });
+          };
+          setFormData(formDataObj);
+          setInitialFormData(JSON.parse(JSON.stringify(formDataObj)));
           
           // Load topics and suggestions - handle both old format (string[]) and new format (TopicWithLevel[])
           const topicsData = data.topics || [];
-          setTopics(topicsData.map((t: string | TopicWithLevel) => 
+          console.log('Loading topics from API response:', { topicsData, rawData: data });
+          const mappedTopics = topicsData.map((t: string | TopicWithLevel) => 
             typeof t === 'string' ? { name: t, level: 'GRUNDLAGE' as ExpertiseLevel } : t
-          ));
+          );
+          console.log('Mapped topics for state:', mappedTopics);
+          // Sort topics by level when loading
+          const sortedTopics = sortTopicsByLevel(mappedTopics);
+          setTopics(sortedTopics);
+          setInitialTopics(JSON.parse(JSON.stringify(sortedTopics)));
           setTopicSuggestions(data.pendingSuggestions || []);
+          setInitialTopicSuggestions([...(data.pendingSuggestions || [])]);
+          setInitialOfferedTrainingTypes([...(data.offeredTrainingTypes || [])]);
           return; // Exit early
         }
         
@@ -273,7 +311,7 @@ export default function ProfilePage() {
         return;
       }
 
-      if (currentUser.userType === 'TRAINING_COMPANY') {
+      if (currentUser && currentUser.userType === 'TRAINING_COMPANY') {
         // Load training company profile
         const response = await fetch('/api/training-company/profile');
         console.log('Training company profile response status:', response.status);
@@ -281,30 +319,27 @@ export default function ProfilePage() {
           const data = await response.json();
           console.log('Training company profile data:', data);
           setUser(data.company);
-          setFormData({
+          const formDataObj = {
             companyName: data.company.companyName,
-            firstName: data.company.firstName,
-            lastName: data.company.lastName,
-            email: data.company.email,
-            phone: data.company.phone,
             street: data.company.street,
             houseNumber: data.company.houseNumber,
             zipCode: data.company.zipCode,
             city: data.company.city,
-            countryId: data.company.country?.id,
+            countryId: data.company.country?.id || (countries.find(c => c.code === 'DE')?.id),
             bio: data.company.bio,
             logo: data.company.logo,
             website: data.company.website,
             industry: data.company.industry,
             employees: data.company.employees,
-            consultantName: data.company.consultantName,
+            companyType: data.company.companyType,
             vatId: data.company.vatId,
             billingEmail: data.company.billingEmail,
             billingNotes: data.company.billingNotes,
             iban: data.company.iban,
             taxId: data.company.taxId,
-            tags: data.company.tags,
-          });
+          };
+          setFormData(formDataObj);
+          setInitialFormData(JSON.parse(JSON.stringify(formDataObj)));
         }
       } else {
         // Load trainer profile
@@ -312,7 +347,7 @@ export default function ProfilePage() {
         if (response.ok) {
           const data = await response.json();
           setUser(data);
-          setFormData({
+          const formDataObj = {
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
@@ -321,7 +356,7 @@ export default function ProfilePage() {
             houseNumber: data.houseNumber,
             zipCode: data.zipCode,
             city: data.city,
-            countryId: data.country?.id,
+            countryId: data.country?.id || (countries.find(c => c.code === 'DE')?.id),
             bio: data.bio,
             profilePicture: data.profilePicture,
             iban: data.iban,
@@ -331,14 +366,24 @@ export default function ProfilePage() {
             dailyRate: data.dailyRate,
             offeredTrainingTypes: data.offeredTrainingTypes || [],
             travelRadius: data.travelRadius,
-          });
+          };
+          setFormData(formDataObj);
+          setInitialFormData(JSON.parse(JSON.stringify(formDataObj)));
           
           // Load topics and suggestions - handle both old format (string[]) and new format (TopicWithLevel[])
           const topicsData = data.topics || [];
-          setTopics(topicsData.map((t: string | TopicWithLevel) => 
+          console.log('Loading topics from API (company user path):', { topicsData, rawData: data });
+          const mappedTopics = topicsData.map((t: string | TopicWithLevel) => 
             typeof t === 'string' ? { name: t, level: 'GRUNDLAGE' as ExpertiseLevel } : t
-          ));
+          );
+          console.log('Mapped topics for state (company user path):', mappedTopics);
+          // Sort topics by level when loading
+          const sortedTopics = sortTopicsByLevel(mappedTopics);
+          setTopics(sortedTopics);
+          setInitialTopics(JSON.parse(JSON.stringify(sortedTopics)));
           setTopicSuggestions(data.pendingSuggestions || []);
+          setInitialTopicSuggestions([...(data.pendingSuggestions || [])]);
+          setInitialOfferedTrainingTypes([...(data.offeredTrainingTypes || [])]);
         }
       }
     } catch (error) {
@@ -372,38 +417,269 @@ export default function ProfilePage() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Profile update response:', data);
+        
         if (user?.userType === 'TRAINING_COMPANY') {
-          setUser(data.company);
-          saveCompanyData(data.company);
-        } else {
-          setUser(data.trainer);
-          saveTrainerData(data.trainer);
-          // Reload topics and suggestions after save - handle both formats
-          if (data.trainer.topics) {
-            const topicsData = data.trainer.topics;
-            setTopics(topicsData.map((t: string | TopicWithLevel) => 
-              typeof t === 'string' ? { name: t, level: 'GRUNDLAGE' as ExpertiseLevel } : t
-            ));
+          if (data.company) {
+            setUser(data.company);
+            saveCompanyData(data.company);
+            // Update initial state after successful save
+            const formDataObj = {
+              companyName: data.company.companyName,
+              street: data.company.street,
+              houseNumber: data.company.houseNumber,
+              zipCode: data.company.zipCode,
+              city: data.company.city,
+              countryId: data.company.country?.id,
+              bio: data.company.bio,
+              logo: data.company.logo,
+              website: data.company.website,
+              industry: data.company.industry,
+              employees: data.company.employees,
+              vatId: data.company.vatId,
+              billingEmail: data.company.billingEmail,
+              billingNotes: data.company.billingNotes,
+              iban: data.company.iban,
+              taxId: data.company.taxId,
+              companyType: data.company.companyType,
+            };
+            setInitialFormData(JSON.parse(JSON.stringify(formDataObj)));
+          } else {
+            console.warn('Company data missing in response');
           }
-          if (data.trainer.pendingSuggestions) {
-            setTopicSuggestions(data.trainer.pendingSuggestions);
+        } else {
+          if (data.trainer) {
+            setUser(data.trainer);
+            saveTrainerData(data.trainer);
+            // Reload topics and suggestions after save - handle both formats
+            console.log('Profile update response - trainer topics:', data.trainer.topics);
+            if (data.trainer.topics && Array.isArray(data.trainer.topics)) {
+              const topicsData = data.trainer.topics;
+              const mappedTopics = topicsData.map((t: string | TopicWithLevel) => 
+                typeof t === 'string' ? { name: t, level: 'GRUNDLAGE' as ExpertiseLevel } : t
+              );
+              console.log('Setting topics after update:', mappedTopics);
+              // Sort topics by level after update
+              const sortedTopics = sortTopicsByLevel(mappedTopics);
+              setTopics(sortedTopics);
+              setInitialTopics(JSON.parse(JSON.stringify(sortedTopics)));
+            } else {
+              console.warn('Topics data missing or not an array:', data.trainer.topics);
+              // Reload profile to get latest topics
+              setTimeout(() => loadProfile(), 500);
+            }
+            if (data.trainer.pendingSuggestions && Array.isArray(data.trainer.pendingSuggestions)) {
+              setTopicSuggestions(data.trainer.pendingSuggestions);
+              setInitialTopicSuggestions([...data.trainer.pendingSuggestions]);
+            }
+            // Update initial form data and training types
+            const formDataObj = {
+              firstName: data.trainer.firstName,
+              lastName: data.trainer.lastName,
+              email: data.trainer.email,
+              phone: data.trainer.phone,
+              street: data.trainer.street,
+              houseNumber: data.trainer.houseNumber,
+              zipCode: data.trainer.zipCode,
+              city: data.trainer.city,
+              countryId: data.trainer.country?.id,
+              bio: data.trainer.bio,
+              profilePicture: data.trainer.profilePicture,
+              iban: data.trainer.iban,
+              taxId: data.trainer.taxId,
+              companyName: data.trainer.companyName,
+              isCompany: data.trainer.isCompany,
+              dailyRate: data.trainer.dailyRate,
+              offeredTrainingTypes: data.trainer.offeredTrainingTypes || [],
+              travelRadius: data.trainer.travelRadius,
+            };
+            setInitialFormData(JSON.parse(JSON.stringify(formDataObj)));
+            setInitialOfferedTrainingTypes([...(data.trainer.offeredTrainingTypes || [])]);
+          } else {
+            console.warn('Trainer data missing in response:', data);
+            // Try to reload profile data
+            loadProfile();
           }
         }
-        alert('Profil erfolgreich aktualisiert!');
+        addToast('Profil erfolgreich aktualisiert!', 'success');
       } else {
         const error = await response.json();
-        alert(`Fehler: ${error.error}`);
+        addToast(`Fehler: ${error.error}`, 'error');
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Fehler beim Aktualisieren des Profils');
+      addToast('Fehler beim Aktualisieren des Profils', 'error');
     } finally {
       setSaving(false);
     }
   };
 
+  // Helper function to deep compare objects
+  const deepEqual = (obj1: any, obj2: any): boolean => {
+    if (obj1 === obj2) return true;
+    
+    // Handle null/undefined/empty string normalization for comparison
+    const normalize = (val: any): any => {
+      if (val === undefined || val === null || val === '') return null;
+      return val;
+    };
+    
+    const norm1 = normalize(obj1);
+    const norm2 = normalize(obj2);
+    
+    if (norm1 === norm2) return true;
+    if (norm1 == null && norm2 == null) return true;
+    if (norm1 == null || norm2 == null) return false;
+    
+    if (typeof norm1 !== 'object' || typeof norm2 !== 'object') {
+      return norm1 === norm2;
+    }
+    
+    const keys1 = Object.keys(norm1);
+    const keys2 = Object.keys(norm2);
+    
+    if (keys1.length !== keys2.length) return false;
+    
+    for (const key of keys1) {
+      if (!keys2.includes(key)) return false;
+      const val1 = normalize(norm1[key]);
+      const val2 = normalize(norm2[key]);
+      if (!deepEqual(val1, val2)) return false;
+    }
+    
+    return true;
+  };
+
+  // Helper function to compare arrays of TopicWithLevel
+  const topicsEqual = (topics1: TopicWithLevel[], topics2: TopicWithLevel[]): boolean => {
+    if (topics1.length !== topics2.length) return false;
+    const sorted1 = [...topics1].sort((a, b) => a.name.localeCompare(b.name));
+    const sorted2 = [...topics2].sort((a, b) => a.name.localeCompare(b.name));
+    return sorted1.every((t1, i) => t1.name === sorted2[i].name && t1.level === sorted2[i].level);
+  };
+
+  // Helper function to compare arrays of strings
+  const arraysEqual = (arr1: string[], arr2: string[]): boolean => {
+    if (arr1.length !== arr2.length) return false;
+    const sorted1 = [...arr1].sort();
+    const sorted2 = [...arr2].sort();
+    return sorted1.every((val, i) => val === sorted2[i]);
+  };
+
+  // Check if there are any changes (internal function)
+  // Using useCallback to memoize and ensure it's available for useEffect
+  const checkForChanges = useCallback((): boolean => {
+    console.log('🔍 checkForChanges called');
+    console.log('  initialFormData keys:', Object.keys(initialFormData || {}));
+    console.log('  formData keys:', Object.keys(formData || {}));
+    
+    // If initialFormData is empty (not yet loaded), don't show changes
+    if (!initialFormData || Object.keys(initialFormData).length === 0) {
+      console.log('  ❌ No initialFormData, returning false');
+      return false;
+    }
+
+    // If formData is empty (not yet loaded), don't show changes
+    if (!formData || Object.keys(formData).length === 0) {
+      console.log('  ❌ No formData, returning false');
+      return false;
+    }
+
+    // Normalize function for comparison
+    const normalize = (val: any): any => {
+      if (val === undefined || val === null || val === '') return null;
+      if (typeof val === 'string' && val.trim() === '') return null;
+      return val;
+    };
+
+    // Compare form data - merge keys from both objects to catch missing fields
+    const allKeys = new Set([...Object.keys(formData), ...Object.keys(initialFormData)]);
+    console.log('  🔑 Comparing keys:', Array.from(allKeys));
+    
+    for (const key of allKeys) {
+      const formVal = formData[key];
+      const initialVal = initialFormData[key];
+      
+      const normForm = normalize(formVal);
+      const normInitial = normalize(initialVal);
+      
+      console.log(`  📊 ${key}: form="${formVal}" (norm: ${normForm}) vs initial="${initialVal}" (norm: ${normInitial})`);
+      
+      // Handle objects and arrays
+      if (typeof normForm === 'object' && typeof normInitial === 'object' && normForm !== null && normInitial !== null) {
+        if (Array.isArray(normForm) && Array.isArray(normInitial)) {
+          if (!arraysEqual(normForm, normInitial)) {
+            console.log(`  ✅ CHANGE DETECTED: ${key} (arrays differ)`);
+            return true;
+          }
+        } else if (!Array.isArray(normForm) && !Array.isArray(normInitial)) {
+          if (!deepEqual(normForm, normInitial)) {
+            console.log(`  ✅ CHANGE DETECTED: ${key} (objects differ)`);
+            return true;
+          }
+        } else {
+          // One is array, one is object
+          console.log(`  ✅ CHANGE DETECTED: ${key} (type mismatch)`);
+          return true;
+        }
+      } else if (normForm !== normInitial) {
+        console.log(`  ✅ CHANGE DETECTED: ${key} (${normForm} !== ${normInitial})`);
+        return true;
+      }
+    }
+
+    // For trainers, also compare topics, suggestions, and training types
+    if (user?.userType !== 'TRAINING_COMPANY') {
+      if (!topicsEqual(topics, initialTopics)) {
+        console.log('  ✅ CHANGE DETECTED: topics differ');
+        return true;
+      }
+      if (!arraysEqual(topicSuggestions, initialTopicSuggestions)) {
+        console.log('  ✅ CHANGE DETECTED: topicSuggestions differ');
+        return true;
+      }
+      const currentTrainingTypes = formData.offeredTrainingTypes || [];
+      if (!arraysEqual(currentTrainingTypes, initialOfferedTrainingTypes)) {
+        console.log('  ✅ CHANGE DETECTED: offeredTrainingTypes differ');
+        return true;
+      }
+    }
+
+    console.log('  ❌ No changes detected');
+    return false;
+  }, [formData, initialFormData, topics, initialTopics, topicSuggestions, initialTopicSuggestions, initialOfferedTrainingTypes, user]);
+
+  // Update hasUnsavedChanges whenever formData, topics, or other relevant state changes
+  useEffect(() => {
+    console.log('🔄 useEffect triggered for change detection');
+    const hasChanges = checkForChanges();
+    console.log('  Result:', hasChanges);
+    setHasUnsavedChanges(hasChanges);
+    console.log('  hasUnsavedChanges set to:', hasChanges);
+  }, [checkForChanges]);
+
   const handleInputChange = (field: string, value: string | number | boolean | string[]) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    console.log(`✏️ handleInputChange: ${field} = ${value}`);
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      console.log(`  Updated formData:`, newData);
+      return newData;
+    });
+  };
+
+  // Helper function to sort topics by expertise level: EXPERTE first, then FORTGESCHRITTEN, then GRUNDLAGEN
+  const sortTopicsByLevel = (topicsList: TopicWithLevel[]): TopicWithLevel[] => {
+    const levelOrder: Record<ExpertiseLevel, number> = {
+      'EXPERTE': 1,
+      'FORTGESCHRITTEN': 2,
+      'GRUNDLAGE': 3
+    };
+    return [...topicsList].sort((a, b) => {
+      const levelDiff = levelOrder[a.level] - levelOrder[b.level];
+      if (levelDiff !== 0) return levelDiff;
+      // If same level, sort alphabetically by name
+      return a.name.localeCompare(b.name);
+    });
   };
 
   // Topic handlers
@@ -414,7 +690,8 @@ export default function ProfilePage() {
       }
     } else {
       if (!topics.some(t => t.name === topicName)) {
-        setTopics(prev => [...prev, { name: topicName, level }]);
+        // Add topic and immediately sort
+        setTopics(prev => sortTopicsByLevel([...prev, { name: topicName, level }]));
       }
     }
   };
@@ -475,20 +752,30 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Page Header */}
-      <div className="flex justify-between items-center">
+    <>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4 flex justify-between items-start" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">
+          <h1 className="text-2xl font-bold text-gray-900">
             {user?.userType === 'TRAINING_COMPANY' ? 'Einstellungen' : 'Mein Profil'}
           </h1>
           <p className="text-gray-600 mt-1">
-            {user?.userType === 'TRAINING_COMPANY' 
+            {user?.userType === 'TRAINING_COMPANY'
               ? 'Verwalten Sie Ihr Unternehmensprofil und Benutzer'
               : 'Verwalten Sie Ihre persönlichen Daten und Kompetenzen'}
           </p>
         </div>
+        {hasUnsavedChanges && (
+          <button
+            type="submit"
+            form="profile-form"
+            disabled={saving}
+            className="px-6 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          >
+            {saving ? 'Speichere...' : 'Änderungen speichern'}
+          </button>
+        )}
       </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
 
       {/* Profile Information Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -498,11 +785,11 @@ export default function ProfilePage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
             <h2 className="text-xl font-semibold text-gray-800">
-              {user?.userType === 'TRAINING_COMPANY' ? 'Persönliche Informationen' : 'Persönliche Daten'}
+              {user?.userType === 'TRAINING_COMPANY' ? 'Unternehmensinformationen' : 'Persönliche Daten'}
             </h2>
           </div>
         </div>
-        <form onSubmit={handleSubmit} className="p-6">
+        <form id="profile-form" onSubmit={handleSubmit} className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {user?.userType === 'TRAINING_COMPANY' ? (
             // Training Company Fields
@@ -534,29 +821,63 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              <div>
+              {/* Company Information Fields - moved from "Zusätzliche Unternehmensinformationen" */}
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Vorname (Ansprechpartner) *
+                  Branche
                 </label>
-                <input
-                  type="text"
-                  value={formData.firstName || ''}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
+                <select
+                  value={formData.industry || ''}
+                  onChange={(e) => handleInputChange('industry', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  required
-                />
+                >
+                  <option value="">Branche auswählen</option>
+                  <option value="it">Informationstechnologie</option>
+                  <option value="finance">Finanzwesen</option>
+                  <option value="healthcare">Gesundheitswesen</option>
+                  <option value="education">Bildung</option>
+                  <option value="manufacturing">Fertigung</option>
+                  <option value="retail">Einzelhandel</option>
+                  <option value="consulting">Beratung</option>
+                  <option value="energy">Energie</option>
+                  <option value="automotive">Automobil</option>
+                  <option value="pharmaceutical">Pharmazeutisch</option>
+                  <option value="construction">Bauwesen</option>
+                  <option value="logistics">Logistik</option>
+                  <option value="telecommunications">Telekommunikation</option>
+                  <option value="other">Sonstige</option>
+                </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nachname (Ansprechpartner) *
+                  Mitarbeiterzahl
+                </label>
+                <select
+                  value={formData.employees || ''}
+                  onChange={(e) => handleInputChange('employees', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Bitte wählen</option>
+                  <option value="1-10">1-10 Mitarbeiter</option>
+                  <option value="11-50">11-50 Mitarbeiter</option>
+                  <option value="51-200">51-200 Mitarbeiter</option>
+                  <option value="201-500">201-500 Mitarbeiter</option>
+                  <option value="501-1000">501-1000 Mitarbeiter</option>
+                  <option value="1000+">Über 1000 Mitarbeiter</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Website
                 </label>
                 <input
-                  type="text"
-                  value={formData.lastName || ''}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
+                  type="url"
+                  value={formData.website || ''}
+                  onChange={(e) => handleInputChange('website', e.target.value)}
+                  placeholder="https://www.example.com"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  required
                 />
               </div>
             </>
@@ -588,44 +909,44 @@ export default function ProfilePage() {
                   required
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  E-Mail *
+                </label>
+                <input
+                  type="email"
+                  value={formData.email || ''}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Telefon *
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone || ''}
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
+                />
+              </div>
             </>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              E-Mail *
-            </label>
-            <input
-              type="email"
-              value={formData.email || ''}
-              onChange={(e) => handleInputChange('email', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Telefon *
-            </label>
-            <input
-              type="tel"
-              value={formData.phone || ''}
-              onChange={(e) => handleInputChange('phone', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
-          </div>
-
-          {/* Address Fields - Trainer */}
+          {/* Address Fields */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Adresse
+              Adresse {user?.userType === 'TRAINING_COMPANY' && '*'}
             </label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Straße
+                  Straße {user?.userType === 'TRAINING_COMPANY' && '*'}
                 </label>
                 <input
                   type="text"
@@ -633,11 +954,12 @@ export default function ProfilePage() {
                   value={formData.street || ''}
                   onChange={(e) => handleInputChange('street', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required={user?.userType === 'TRAINING_COMPANY'}
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Hausnummer
+                  Hausnummer {user?.userType === 'TRAINING_COMPANY' && '*'}
                 </label>
                 <input
                   type="text"
@@ -645,13 +967,14 @@ export default function ProfilePage() {
                   value={formData.houseNumber || ''}
                   onChange={(e) => handleInputChange('houseNumber', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required={user?.userType === 'TRAINING_COMPANY'}
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  PLZ
+                  PLZ {user?.userType === 'TRAINING_COMPANY' && '*'}
                 </label>
                 <input
                   type="text"
@@ -659,11 +982,12 @@ export default function ProfilePage() {
                   value={formData.zipCode || ''}
                   onChange={(e) => handleInputChange('zipCode', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required={user?.userType === 'TRAINING_COMPANY'}
                 />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Stadt
+                  Stadt {user?.userType === 'TRAINING_COMPANY' && '*'}
                 </label>
                 <input
                   type="text"
@@ -671,18 +995,20 @@ export default function ProfilePage() {
                   value={formData.city || ''}
                   onChange={(e) => handleInputChange('city', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required={user?.userType === 'TRAINING_COMPANY'}
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Land
+                  Land {user?.userType === 'TRAINING_COMPANY' && '*'}
                 </label>
                 <select
-                  value={formData.countryId || ''}
+                  value={formData.countryId || (countries.find(c => c.code === 'DE')?.id || '')}
                   onChange={(e) => handleInputChange('countryId', parseInt(e.target.value) || null)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required={user?.userType === 'TRAINING_COMPANY'}
                 >
                   <option value="">Land auswählen</option>
                   {countries.map((country) => (
@@ -757,10 +1083,15 @@ export default function ProfilePage() {
                         if (e.target.checked) {
                           handleInputChange('offeredTrainingTypes', [...current, 'ONLINE']);
                         } else {
-                          handleInputChange('offeredTrainingTypes', current.filter((t: string) => t !== 'ONLINE'));
+                          const remaining = current.filter((t: string) => t !== 'ONLINE');
+                          handleInputChange('offeredTrainingTypes', remaining);
+                          // Clear travelRadius if only ONLINE remains or no types selected
+                          if (remaining.length === 0 || (remaining.length === 1 && remaining[0] === 'ONLINE')) {
+                            handleInputChange('travelRadius', null);
+                          }
                         }
                       }}
-                      className="mr-2"
+                      className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
                     Online
                   </label>
@@ -773,10 +1104,15 @@ export default function ProfilePage() {
                         if (e.target.checked) {
                           handleInputChange('offeredTrainingTypes', [...current, 'HYBRID']);
                         } else {
-                          handleInputChange('offeredTrainingTypes', current.filter((t: string) => t !== 'HYBRID'));
+                          const remaining = current.filter((t: string) => t !== 'HYBRID');
+                          handleInputChange('offeredTrainingTypes', remaining);
+                          // Clear travelRadius if only ONLINE remains or no types selected
+                          if (remaining.length === 0 || (remaining.length === 1 && remaining[0] === 'ONLINE')) {
+                            handleInputChange('travelRadius', null);
+                          }
                         }
                       }}
-                      className="mr-2"
+                      className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
                     Hybrid
                   </label>
@@ -789,10 +1125,15 @@ export default function ProfilePage() {
                         if (e.target.checked) {
                           handleInputChange('offeredTrainingTypes', [...current, 'VOR_ORT']);
                         } else {
-                          handleInputChange('offeredTrainingTypes', current.filter((t: string) => t !== 'VOR_ORT'));
+                          const remaining = current.filter((t: string) => t !== 'VOR_ORT');
+                          handleInputChange('offeredTrainingTypes', remaining);
+                          // Clear travelRadius if only ONLINE remains or no types selected
+                          if (remaining.length === 0 || (remaining.length === 1 && remaining[0] === 'ONLINE')) {
+                            handleInputChange('travelRadius', null);
+                          }
                         }
                       }}
-                      className="mr-2"
+                      className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
                     Vor Ort
                   </label>
@@ -806,20 +1147,20 @@ export default function ProfilePage() {
               {((formData.offeredTrainingTypes || []).includes('HYBRID') || (formData.offeredTrainingTypes || []).includes('VOR_ORT')) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Reiseradius (km) *
+                    Reiseradius (km)
                   </label>
                   <input
                     type="number"
                     value={formData.travelRadius || ''}
-                    onChange={(e) => handleInputChange('travelRadius', parseInt(e.target.value) || 0)}
+                    onChange={(e) => handleInputChange('travelRadius', e.target.value ? parseInt(e.target.value) : null)}
                     min="0"
-                    step="50"
-                    required={(formData.offeredTrainingTypes || []).includes('HYBRID') || (formData.offeredTrainingTypes || []).includes('VOR_ORT')}
+                    step="1"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="z.B. 200"
+                    placeholder="z.B. 50"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Wie weit sind Sie bereit zu reisen (von Ihrer Adresse aus)?
+                    Maximale Entfernung in Kilometern, die Sie für Vor-Ort-Trainings reisen können. 
+                    Die Koordinaten werden automatisch basierend auf Ihrer Adresse berechnet.
                   </p>
                 </div>
               )}
@@ -828,100 +1169,31 @@ export default function ProfilePage() {
 
           {user?.userType === 'TRAINING_COMPANY' && (
             <>
-              {/* Additional Company Information */}
-              <div className="md:col-span-2 mt-6">
-                <h2 className="text-lg font-semibold mb-4">Zusätzliche Unternehmensinformationen</h2>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Branche
-                </label>
-                <select
-                  value={formData.industry || ''}
-                  onChange={(e) => handleInputChange('industry', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">Branche auswählen</option>
-                  <option value="it">Informationstechnologie</option>
-                  <option value="finance">Finanzwesen</option>
-                  <option value="healthcare">Gesundheitswesen</option>
-                  <option value="education">Bildung</option>
-                  <option value="manufacturing">Fertigung</option>
-                  <option value="retail">Einzelhandel</option>
-                  <option value="consulting">Beratung</option>
-                  <option value="energy">Energie</option>
-                  <option value="automotive">Automobil</option>
-                  <option value="pharmaceutical">Pharmazeutisch</option>
-                  <option value="construction">Bauwesen</option>
-                  <option value="logistics">Logistik</option>
-                  <option value="telecommunications">Telekommunikation</option>
-                  <option value="other">Sonstige</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mitarbeiterzahl
-                </label>
-                <select
-                  value={formData.employees || ''}
-                  onChange={(e) => handleInputChange('employees', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">Bitte wählen</option>
-                  <option value="1-10">1-10 Mitarbeiter</option>
-                  <option value="11-50">11-50 Mitarbeiter</option>
-                  <option value="51-200">51-200 Mitarbeiter</option>
-                  <option value="201-500">201-500 Mitarbeiter</option>
-                  <option value="501-1000">501-1000 Mitarbeiter</option>
-                  <option value="1000+">Über 1000 Mitarbeiter</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Website
-                </label>
-                <input
-                  type="url"
-                  value={formData.website || ''}
-                  onChange={(e) => handleInputChange('website', e.target.value)}
-                  placeholder="https://www.example.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Kundenberater
-                </label>
-                <input
-                  type="text"
-                  value={formData.consultantName || ''}
-                  onChange={(e) => handleInputChange('consultantName', e.target.value)}
-                  placeholder="Name des zuständigen Beraters"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tags / Stichworte
-                </label>
-                <input
-                  type="text"
-                  value={formData.tags || ''}
-                  onChange={(e) => handleInputChange('tags', e.target.value)}
-                  placeholder="z.B. IT, Schulungen, Remote"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">Komma-getrennte Stichworte für bessere Suche</p>
-              </div>
-
               {/* Financial Data Section for Companies */}
               <div className="md:col-span-2 mt-6">
-                <h2 className="text-lg font-semibold mb-4">Finanzielle Daten</h2>
+                <h2 className="text-lg font-semibold mb-4">Finanzdaten</h2>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rechtsform
+                </label>
+                <select
+                  value={formData.companyType || ''}
+                  onChange={(e) => handleInputChange('companyType', e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Rechtsform auswählen</option>
+                  <option value="GMBH">GmbH</option>
+                  <option value="GBR">GbR</option>
+                  <option value="UG">UG (haftungsbeschränkt)</option>
+                  <option value="EK">E.K. (Einzelkaufmann/-frau)</option>
+                  <option value="AG">AG</option>
+                  <option value="KG">KG</option>
+                  <option value="OHG">OHG</option>
+                  <option value="PARTG">PartG</option>
+                  <option value="SONSTIGE">Sonstige</option>
+                </select>
               </div>
 
               <div>
@@ -990,11 +1262,11 @@ export default function ProfilePage() {
             </>
           )}
 
-          {/* Finanzielle Daten - Only for trainers */}
+          {/* Finanzdaten - Only for trainers */}
           {user?.userType === 'TRAINER' && (
             <>
               <div className="md:col-span-2">
-                <h2 className="text-lg font-semibold mb-4">Finanzielle Daten</h2>
+                <h2 className="text-lg font-semibold mb-4">Finanzdaten</h2>
               </div>
 
               <div>
@@ -1042,6 +1314,7 @@ export default function ProfilePage() {
             </>
           )}
 
+
           {/* Profil-Beschreibung / Unternehmensbeschreibung */}
           <div className="md:col-span-2">
             <h2 className="text-lg font-semibold mb-4">
@@ -1067,7 +1340,7 @@ export default function ProfilePage() {
             <div className="md:col-span-2">
               <h2 className="text-lg font-semibold mb-4">Fachgebiete & Kompetenzen</h2>
               <TopicSelector
-                topics={topics}
+                topics={sortTopicsByLevel(topics)}
                 topicSuggestions={topicSuggestions}
                 onAddTopic={handleTopicAdd}
                 onRemoveTopic={handleTopicRemove}
@@ -1215,39 +1488,8 @@ export default function ProfilePage() {
           </div>
         </div>
 
-          {/* Submit Button */}
-          <div className="mt-8 flex justify-end pt-6 border-t border-gray-200">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {saving ? 'Speichere...' : 'Änderungen speichern'}
-            </button>
-          </div>
         </form>
       </div>
-
-      {/* Company Settings Section (Admin only) */}
-      {user?.userType === 'TRAINING_COMPANY' && canEditCompany(user as any) && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-6 py-4 border-b border-blue-200">
-            <div className="flex items-center gap-3">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-              <h2 className="text-xl font-semibold text-gray-800">Unternehmenseinstellungen</h2>
-            </div>
-            <p className="text-sm text-gray-600 mt-1 ml-9">Verwalten Sie die Daten Ihres Unternehmens</p>
-          </div>
-          <div className="p-6">
-            <p className="text-gray-600 mb-4">
-              Unternehmensdaten können nur von Administratoren bearbeitet werden. 
-              Diese Einstellungen finden Sie im Formular oben.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Company Users Management Section (Admin only) */}
       {user?.userType === 'TRAINING_COMPANY' && canManageUsers(user as any) && (
@@ -1339,7 +1581,7 @@ export default function ProfilePage() {
                               <div className="text-sm font-medium text-gray-900">
                                 {companyUser.firstName} {companyUser.lastName}
                                 {companyUser.id === (user as any)?.id && (
-                                  <span className="ml-2 text-xs text-gray-500">(Sie)</span>
+                                  <span className="ml-2 text-xs font-semibold text-purple-600">(Hauptbenutzer)</span>
                                 )}
                               </div>
                             </div>
@@ -1571,6 +1813,8 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
-    </div>
+      <ToastManager />
+      </div>
+    </>
   );
 }

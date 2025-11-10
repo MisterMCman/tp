@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getUserData } from "@/lib/session";
 import Link from "next/link";
@@ -387,19 +387,28 @@ export default function CreateTrainingPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-6">
-        <Link
-          href="/dashboard/trainings"
-          className="inline-flex items-center text-primary-600 hover:text-primary-800 mb-4"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 01.029-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-          </svg>
-          Zurück zu Trainings
-        </Link>
-        <h1 className="text-3xl font-bold text-gray-800">Neues Training erstellen</h1>
+    <React.Fragment>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
+        <div className="max-w-4xl mx-auto">
+          <Link
+            href="/dashboard/trainings"
+            className="inline-flex items-center text-primary-600 hover:text-primary-800 mb-4"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 01.029-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+            </svg>
+            Zurück zu Trainings
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Neues Training erstellen</h1>
+            <p className="text-gray-600 mt-1">
+              Erstellen Sie ein neues Training für Ihre Teilnehmer
+            </p>
+          </div>
+        </div>
       </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
+        <div className="max-w-4xl mx-auto">
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Training Details */}
@@ -873,7 +882,7 @@ export default function CreateTrainingPage() {
                     </div>
                   ))}
                 </div>
-                )}
+                
                 {!Array.isArray(filteredTrainers) && (
                   <div className="text-center text-red-500 py-4">
                     Fehler beim Laden der Trainer.
@@ -917,6 +926,8 @@ export default function CreateTrainingPage() {
           </button>
         </div>
       </form>
-    </div>
+        </div>
+      </div>
+    </React.Fragment>
   );
 }

@@ -100,10 +100,26 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { firstName, lastName, phone, role, isActive } = body;
+    const { email, firstName, lastName, phone, role, isActive } = body;
 
     // Build update data
     const updateData: any = {};
+    if (email !== undefined) {
+      // Check if email is already taken by another user
+      const emailTaken = await prisma.companyUser.findFirst({
+        where: {
+          email,
+          id: { not: userId }
+        }
+      });
+      if (emailTaken) {
+        return NextResponse.json(
+          { error: 'Diese E-Mail-Adresse ist bereits vergeben' },
+          { status: 409 }
+        );
+      }
+      updateData.email = email;
+    }
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
     if (phone !== undefined) updateData.phone = phone;

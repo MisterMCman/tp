@@ -2,11 +2,13 @@
  * Utility functions for consistent navigation with state preservation
  */
 
+import { buildUrlWithNavigation, buildBackUrl as getBackUrlFromStack } from './navigationStack';
+
 /**
- * Builds a URL with preserved state parameters
+ * Builds a URL with preserved state parameters and navigation tracking
  * @param basePath - The base path (e.g., '/dashboard/trainer/123')
  * @param state - Object containing state to preserve (filters, view mode, etc.)
- * @param returnTo - Optional identifier for where we're coming from
+ * @param returnTo - Optional identifier for where we're coming from (deprecated, use navigation stack)
  * @returns Complete URL with query parameters
  */
 export function buildUrlWithState(
@@ -14,22 +16,8 @@ export function buildUrlWithState(
   state: Record<string, string | number | undefined | null> = {},
   returnTo?: string
 ): string {
-  const params = new URLSearchParams();
-  
-  // Add state parameters (skip empty/null/undefined values)
-  Object.entries(state).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      params.set(key, String(value));
-    }
-  });
-  
-  // Add returnTo if provided
-  if (returnTo) {
-    params.set('returnTo', returnTo);
-  }
-  
-  const queryString = params.toString();
-  return queryString ? `${basePath}?${queryString}` : basePath;
+  // Use navigation stack-aware URL building
+  return buildUrlWithNavigation(basePath, state);
 }
 
 /**
@@ -53,27 +41,18 @@ export function extractStateFromUrl(
 }
 
 /**
- * Builds a back URL preserving all state from current URL
- * @param targetPath - The path to navigate back to
- * @param searchParams - Current URL search params
- * @param preserveKeys - Keys to preserve from current URL
- * @returns URL with preserved state
+ * Builds a back URL using the navigation stack
+ * If stack is empty, returns dashboard
+ * @returns URL with preserved state from navigation stack or '/dashboard'
  */
-export function buildBackUrl(
-  targetPath: string,
-  searchParams: URLSearchParams,
-  preserveKeys: string[]
-): string {
-  const params = new URLSearchParams();
-  
-  preserveKeys.forEach(key => {
-    const value = searchParams.get(key);
-    if (value) {
-      params.set(key, value);
-    }
-  });
-  
-  const queryString = params.toString();
-  return queryString ? `${targetPath}?${queryString}` : targetPath;
+export function buildBackUrl(): string {
+  // Try to get back URL from navigation stack first
+  const stackBackUrl = getBackUrlFromStack();
+  if (stackBackUrl) {
+    return stackBackUrl;
+  }
+
+  // If stack is empty, always go to dashboard
+  return '/dashboard';
 }
 

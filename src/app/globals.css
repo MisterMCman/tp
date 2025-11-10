@@ -500,8 +500,8 @@ p {
 }
 
 .suggestions-dropdown li:hover {
-  background: var(--ptw-accent-primary);
-  color: white;
+  background: #f9fafb; /* gray-50 */
+  color: var(--ptw-text-primary);
 }
 
 .suggestions-dropdown li:last-child {
@@ -660,7 +660,6 @@ form h2 {
 
 .ptw-dashboard-header {
   @apply flex justify-between items-center mb-6;
-  border-bottom: 1px solid var(--ptw-border-primary);
   padding-bottom: 1rem;
 }
 

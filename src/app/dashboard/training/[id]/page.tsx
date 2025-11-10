@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getUserData } from "@/lib/session";
 import TrainingDetails, { TrainingData } from "@/components/shared/TrainingDetails";
+import { buildBackUrl } from "@/lib/navigation";
+import { initializeNavigation } from "@/lib/navigationStack";
 
 interface User {
   userType: 'TRAINER' | 'TRAINING_COMPANY';
@@ -20,25 +22,21 @@ export default function TrainingDetailsPage() {
   const [user, setUser] = useState<User | null>(null);
 
   const trainingId = params.id as string;
-  const from = searchParams.get('from'); // Get the referrer URL
-  const returnTo = searchParams.get('returnTo'); // Get returnTo parameter
-  const trainerId = searchParams.get('trainerId'); // Get trainerId if returning to trainer profile
+  const pathname = `/dashboard/training/${trainingId}`;
 
-  // Construct back URL based on returnTo parameter
+  // Initialize navigation tracking for this page
+  useEffect(() => {
+    const queryParams: Record<string, string> = {};
+    searchParams.forEach((value, key) => {
+      queryParams[key] = value;
+    });
+    initializeNavigation(pathname, queryParams);
+  }, [pathname, searchParams]);
+
+  // Construct back URL using navigation stack
   const getBackUrl = () => {
-    if (returnTo === 'trainer' && trainerId) {
-      // Return to trainer profile with preserved state
-      const params = new URLSearchParams();
-      // Preserve any other URL parameters that might be in the current URL
-      searchParams.forEach((value, key) => {
-        if (key !== 'returnTo' && key !== 'trainerId' && key !== 'id') {
-          params.set(key, value);
-        }
-      });
-      const queryString = params.toString();
-      return `/dashboard/trainer/${trainerId}${queryString ? `?${queryString}` : ''}`;
-    }
-    return from || undefined;
+    // buildBackUrl() already returns '/dashboard' if stack is empty
+    return buildBackUrl();
   };
 
   useEffect(() => {

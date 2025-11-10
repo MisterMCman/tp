@@ -276,7 +276,7 @@ export async function POST(req: Request) {
           website: userData.user.company.website || '',
           industry: userData.user.company.industry || '',
           employees: userData.user.company.employees || '',
-          consultantName: userData.user.company.consultantName || '',
+          companyType: userData.user.company.companyType || '',
         };
       }
 

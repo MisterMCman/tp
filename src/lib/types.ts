@@ -27,6 +27,10 @@ export interface Trainer {
   companyName?: string;
   isCompany?: boolean;
   dailyRate?: number;
+  travelRadius?: number;
+  offeredTrainingTypes?: ('ONLINE' | 'HYBRID' | 'VOR_ORT')[];
+  latitude?: number;
+  longitude?: number;
   status: 'ACTIVE' | 'INACTIVE';
   countryId?: number;
   country?: Country;
@@ -54,7 +58,7 @@ export interface TrainingCompany {
   website?: string;
   industry?: string;
   employees?: string;
-  consultantName?: string;
+  companyType?: string;
   vatId?: string;
   billingEmail?: string;
   billingNotes?: string;

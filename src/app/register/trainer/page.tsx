@@ -3,391 +3,31 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { saveTrainerData } from "@/lib/session";
-import { TopicSelector, TopicWithLevel, ExpertiseLevel } from "@/components/TopicSelector";
 import { useToast } from "@/components/Toast";
-import { RegistrationFormData } from "@/lib/types";
-import { sortCountries } from "@/lib/countrySort";
 
 function TrainerRegistrationContent() {
   const router = useRouter();
   const { addToast, ToastManager } = useToast();
 
-  // Zustände für Registrierungsdaten
-  const [countries, setCountries] = useState<{ id: number; name: string; code: string }[]>([]);
-
-  const [formData, setFormData] = useState<RegistrationFormData>({
-    salutation: "male",
+  const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
-    phone: "",
-    phoneType: "mobile",
-    street: "",
-    zip: "",
-    city: "",
-    addressLine2: "",
-    countryId: undefined, // Will be set to Germany ID when countries are loaded
-    isVisitorAddress: false,
-    isInvoiceAddress: false,
-    isDeliveryAddress: false,
-    isHeadquarterAddress: true,
-    bio: "",
-    topics: [],
-    isCompany: false,
-    companyName: "",
-    dailyRate: undefined,
   });
-
-  // Separate state for topics with levels (for TopicSelector component)
-  const [topicsWithLevels, setTopicsWithLevels] = useState<TopicWithLevel[]>([]);
-
-  // Separate state for topic suggestions
-  const [topicSuggestionsList, setTopicSuggestionsList] = useState<string[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Zustände für Themen-Suche
-  const [topicSearch, setTopicSearch] = useState(""); // Eingabe des Trainers
-  const [topicSuggestions, setTopicSuggestions] = useState<{ id: number; name: string; type?: 'existing' | 'suggestion'; status?: string }[]>([]);// Vorschläge aus der Datenbank
-
   // Ladezustand
   const [loading, setLoading] = useState(false);
 
-  // Lade Länder beim ersten Laden der Seite
-  useEffect(() => {
-    const loadCountries = async () => {
-      try {
-        // Try to fetch from API first
-        const response = await fetch('/api/countries');
-        if (response.ok) {
-          const data = await response.json();
-          setCountries(data.countries || []);
-          // Set Germany as default country
-          setFormData(prev => ({ ...prev, countryId: 1 }));
-          return;
-        }
-      } catch (error) {
-        console.error('Error fetching countries from API, using fallback:', error);
-      }
-      
-      // Fallback to hardcoded data (if API call failed or returned non-ok)
-      try {
-        const hardcodedCountries = [
-          { id: 1, name: 'Deutschland', code: 'DE' },
-          { id: 2, name: 'Österreich', code: 'AT' },
-          { id: 3, name: 'Schweiz', code: 'CH' },
-          { id: 4, name: 'Frankreich', code: 'FR' },
-          { id: 5, name: 'Niederlande', code: 'NL' },
-          { id: 6, name: 'Belgien', code: 'BE' },
-          { id: 7, name: 'Luxemburg', code: 'LU' },
-          { id: 8, name: 'Dänemark', code: 'DK' },
-          { id: 9, name: 'Schweden', code: 'SE' },
-          { id: 10, name: 'Norwegen', code: 'NO' },
-          { id: 11, name: 'Finnland', code: 'FI' },
-          { id: 12, name: 'Estland', code: 'EE' },
-          { id: 13, name: 'Lettland', code: 'LV' },
-          { id: 14, name: 'Litauen', code: 'LT' },
-          { id: 15, name: 'Polen', code: 'PL' },
-          { id: 16, name: 'Tschechien', code: 'CZ' },
-          { id: 17, name: 'Slowakei', code: 'SK' },
-          { id: 18, name: 'Ungarn', code: 'HU' },
-          { id: 19, name: 'Slowenien', code: 'SI' },
-          { id: 20, name: 'Kroatien', code: 'HR' },
-          { id: 21, name: 'Serbien', code: 'RS' },
-          { id: 22, name: 'Bosnien und Herzegowina', code: 'BA' },
-          { id: 23, name: 'Montenegro', code: 'ME' },
-          { id: 24, name: 'Albanien', code: 'AL' },
-          { id: 25, name: 'Nordmazedonien', code: 'MK' },
-          { id: 26, name: 'Bulgarien', code: 'BG' },
-          { id: 27, name: 'Rumänien', code: 'RO' },
-          { id: 28, name: 'Moldau', code: 'MD' },
-          { id: 29, name: 'Ukraine', code: 'UA' },
-          { id: 30, name: 'Weißrussland', code: 'BY' },
-          { id: 31, name: 'Russland', code: 'RU' },
-          { id: 32, name: 'Georgien', code: 'GE' },
-          { id: 33, name: 'Armenien', code: 'AM' },
-          { id: 34, name: 'Aserbaidschan', code: 'AZ' },
-          { id: 35, name: 'Kasachstan', code: 'KZ' },
-          { id: 36, name: 'Kirgisistan', code: 'KG' },
-          { id: 37, name: 'Tadschikistan', code: 'TJ' },
-          { id: 38, name: 'Turkmenistan', code: 'TM' },
-          { id: 39, name: 'Usbekistan', code: 'UZ' },
-          { id: 40, name: 'Vereinigtes Königreich', code: 'GB' },
-          { id: 41, name: 'Irland', code: 'IE' },
-          { id: 42, name: 'Island', code: 'IS' },
-          { id: 43, name: 'Portugal', code: 'PT' },
-          { id: 44, name: 'Spanien', code: 'ES' },
-          { id: 45, name: 'Italien', code: 'IT' },
-          { id: 46, name: 'San Marino', code: 'SM' },
-          { id: 47, name: 'Vatikanstadt', code: 'VA' },
-          { id: 48, name: 'Malta', code: 'MT' },
-          { id: 49, name: 'Griechenland', code: 'GR' },
-          { id: 50, name: 'Zypern', code: 'CY' },
-          { id: 51, name: 'Türkei', code: 'TR' },
-          { id: 52, name: 'Israel', code: 'IL' },
-          { id: 53, name: 'Jordanien', code: 'JO' },
-          { id: 54, name: 'Libanon', code: 'LB' },
-          { id: 55, name: 'Syrien', code: 'SY' },
-          { id: 56, name: 'Saudi-Arabien', code: 'SA' },
-          { id: 57, name: 'Vereinigte Arabische Emirate', code: 'AE' },
-          { id: 58, name: 'Oman', code: 'OM' },
-          { id: 59, name: 'Jemen', code: 'YE' },
-          { id: 60, name: 'Katar', code: 'QA' },
-          { id: 61, name: 'Kuwait', code: 'KW' },
-          { id: 62, name: 'Bahrain', code: 'BH' },
-          { id: 63, name: 'Irak', code: 'IQ' },
-          { id: 64, name: 'Iran', code: 'IR' },
-          { id: 65, name: 'Afghanistan', code: 'AF' },
-          { id: 66, name: 'Pakistan', code: 'PK' },
-          { id: 67, name: 'Indien', code: 'IN' },
-          { id: 68, name: 'Bangladesch', code: 'BD' },
-          { id: 69, name: 'Nepal', code: 'NP' },
-          { id: 70, name: 'Bhutan', code: 'BT' },
-          { id: 71, name: 'Sri Lanka', code: 'LK' },
-          { id: 72, name: 'Maldiven', code: 'MV' },
-          { id: 73, name: 'Thailand', code: 'TH' },
-          { id: 74, name: 'Kambodscha', code: 'KH' },
-          { id: 75, name: 'Laos', code: 'LA' },
-          { id: 76, name: 'Vietnam', code: 'VN' },
-          { id: 77, name: 'Myanmar', code: 'MM' },
-          { id: 78, name: 'Malaysia', code: 'MY' },
-          { id: 79, name: 'Singapur', code: 'SG' },
-          { id: 80, name: 'Indonesien', code: 'ID' },
-          { id: 81, name: 'Brunei', code: 'BN' },
-          { id: 82, name: 'Philippinen', code: 'PH' },
-          { id: 83, name: 'Osttimor', code: 'TL' },
-          { id: 84, name: 'Australien', code: 'AU' },
-          { id: 85, name: 'Neuseeland', code: 'NZ' },
-          { id: 86, name: 'Fidschi', code: 'FJ' },
-          { id: 87, name: 'Papua-Neuguinea', code: 'PG' },
-          { id: 88, name: 'Salomonen', code: 'SB' },
-          { id: 89, name: 'Vanuatu', code: 'VU' },
-          { id: 90, name: 'Samoa', code: 'WS' },
-          { id: 91, name: 'Kiribati', code: 'KI' },
-          { id: 92, name: 'Tuvalu', code: 'TV' },
-          { id: 93, name: 'Tonga', code: 'TO' },
-          { id: 94, name: 'Niue', code: 'NU' },
-          { id: 95, name: 'Cookinseln', code: 'CK' },
-          { id: 96, name: 'Amerikanisch-Samoa', code: 'AS' },
-          { id: 97, name: 'Nördliche Marianen', code: 'MP' },
-          { id: 98, name: 'Guam', code: 'GU' },
-          { id: 99, name: 'Palau', code: 'PW' },
-          { id: 100, name: 'Mikronesien', code: 'FM' },
-          { id: 101, name: 'Marshallinseln', code: 'MH' },
-          { id: 102, name: 'Nauru', code: 'NR' },
-          { id: 103, name: 'Japan', code: 'JP' },
-          { id: 104, name: 'Südkorea', code: 'KR' },
-          { id: 105, name: 'Nordkorea', code: 'KP' },
-          { id: 106, name: 'China', code: 'CN' },
-          { id: 107, name: 'Mongolei', code: 'MN' },
-          { id: 108, name: 'Taiwan', code: 'TW' },
-          { id: 109, name: 'Hongkong', code: 'HK' },
-          { id: 110, name: 'Macau', code: 'MO' },
-          { id: 111, name: 'Kanada', code: 'CA' },
-          { id: 112, name: 'Vereinigte Staaten', code: 'US' },
-          { id: 113, name: 'Mexiko', code: 'MX' },
-          { id: 114, name: 'Guatemala', code: 'GT' },
-          { id: 115, name: 'Belize', code: 'BZ' },
-          { id: 116, name: 'El Salvador', code: 'SV' },
-          { id: 117, name: 'Honduras', code: 'HN' },
-          { id: 118, name: 'Nicaragua', code: 'NI' },
-          { id: 119, name: 'Costa Rica', code: 'CR' },
-          { id: 120, name: 'Panama', code: 'PA' },
-          { id: 121, name: 'Kolumbien', code: 'CO' },
-          { id: 122, name: 'Venezuela', code: 'VE' },
-          { id: 123, name: 'Guyana', code: 'GY' },
-          { id: 124, name: 'Suriname', code: 'SR' },
-          { id: 125, name: 'Französisch-Guayana', code: 'GF' },
-          { id: 126, name: 'Brasilien', code: 'BR' },
-          { id: 127, name: 'Bolivien', code: 'BO' },
-          { id: 128, name: 'Chile', code: 'CL' },
-          { id: 129, name: 'Argentinien', code: 'AR' },
-          { id: 130, name: 'Uruguay', code: 'UY' },
-          { id: 131, name: 'Paraguay', code: 'PY' },
-          { id: 132, name: 'Ecuador', code: 'EC' },
-          { id: 133, name: 'Peru', code: 'PE' },
-          { id: 134, name: 'Trinidad und Tobago', code: 'TT' },
-          { id: 135, name: 'Barbados', code: 'BB' },
-          { id: 136, name: 'Jamaika', code: 'JM' },
-          { id: 137, name: 'Haiti', code: 'HT' },
-          { id: 138, name: 'Dominikanische Republik', code: 'DO' },
-          { id: 139, name: 'Kuba', code: 'CU' },
-          { id: 140, name: 'Bahamas', code: 'BS' },
-          { id: 141, name: 'Puerto Rico', code: 'PR' },
-          { id: 142, name: 'Jungferninseln (USA)', code: 'VI' },
-          { id: 143, name: 'Anguilla', code: 'AI' },
-          { id: 144, name: 'Saint Kitts und Nevis', code: 'KN' },
-          { id: 145, name: 'Antigua und Barbuda', code: 'AG' },
-          { id: 146, name: 'Montserrat', code: 'MS' },
-          { id: 147, name: 'Guadeloupe', code: 'GP' },
-          { id: 148, name: 'Martinique', code: 'MQ' },
-          { id: 149, name: 'Saint Lucia', code: 'LC' },
-          { id: 150, name: 'Saint Vincent und die Grenadinen', code: 'VC' },
-          { id: 151, name: 'Grenada', code: 'GD' },
-          { id: 152, name: 'Aruba', code: 'AW' },
-          { id: 153, name: 'Curaçao', code: 'CW' },
-          { id: 154, name: 'Bonaire', code: 'BQ' },
-          { id: 155, name: 'Saba', code: 'BQ' },
-          { id: 156, name: 'Sint Eustatius', code: 'BQ' },
-          { id: 157, name: 'Sint Maarten', code: 'SX' },
-          { id: 158, name: 'Turks- und Caicosinseln', code: 'TC' },
-          { id: 159, name: 'Cayman Islands', code: 'KY' },
-          { id: 160, name: 'Bermuda', code: 'BM' },
-          { id: 161, name: 'Grönland', code: 'GL' },
-          { id: 162, name: 'Färöer', code: 'FO' },
-          { id: 163, name: 'Ägypten', code: 'EG' },
-          { id: 164, name: 'Libyen', code: 'LY' },
-          { id: 165, name: 'Tunesien', code: 'TN' },
-          { id: 166, name: 'Algerien', code: 'DZ' },
-          { id: 167, name: 'Marokko', code: 'MA' },
-          { id: 168, name: 'Westsahara', code: 'EH' },
-          { id: 169, name: 'Mauretanien', code: 'MR' },
-          { id: 170, name: 'Mali', code: 'ML' },
-          { id: 171, name: 'Burkina Faso', code: 'BF' },
-          { id: 172, name: 'Niger', code: 'NE' },
-          { id: 173, name: 'Tschad', code: 'TD' },
-          { id: 174, name: 'Sudan', code: 'SD' },
-          { id: 175, name: 'Eritrea', code: 'ER' },
-          { id: 176, name: 'Dschibuti', code: 'DJ' },
-          { id: 177, name: 'Somalia', code: 'SO' },
-          { id: 178, name: 'Äthiopien', code: 'ET' },
-          { id: 179, name: 'Kenia', code: 'KE' },
-          { id: 180, name: 'Tansania', code: 'TZ' },
-          { id: 181, name: 'Uganda', code: 'UG' },
-          { id: 182, name: 'Ruanda', code: 'RW' },
-          { id: 183, name: 'Burundi', code: 'BI' },
-          { id: 184, name: 'Mosambik', code: 'MZ' },
-          { id: 185, name: 'Malawi', code: 'MW' },
-          { id: 186, name: 'Sambia', code: 'ZM' },
-          { id: 187, name: 'Simbabwe', code: 'ZW' },
-          { id: 188, name: 'Botswana', code: 'BW' },
-          { id: 189, name: 'Namibia', code: 'NA' },
-          { id: 190, name: 'Südafrika', code: 'ZA' },
-          { id: 191, name: 'Lesotho', code: 'LS' },
-          { id: 192, name: 'Eswatini', code: 'SZ' },
-          { id: 193, name: 'Komoren', code: 'KM' },
-          { id: 194, name: 'Madagaskar', code: 'MG' },
-          { id: 195, name: 'Mauritius', code: 'MU' },
-          { id: 196, name: 'Seychellen', code: 'SC' },
-          { id: 197, name: 'Kap Verde', code: 'CV' },
-          { id: 198, name: 'São Tomé und Príncipe', code: 'ST' },
-          { id: 199, name: 'Äquatorialguinea', code: 'GQ' },
-          { id: 200, name: 'Gabun', code: 'GA' },
-          { id: 201, name: 'Republik Kongo', code: 'CG' },
-          { id: 202, name: 'Demokratische Republik Kongo', code: 'CD' },
-          { id: 203, name: 'Angola', code: 'AO' },
-          { id: 204, name: 'Namibia', code: 'NA' },
-          { id: 205, name: 'Zimbabwe', code: 'ZW' },
-          { id: 206, name: 'Botsuana', code: 'BW' },
-          { id: 207, name: 'Sambia', code: 'ZM' },
-          { id: 208, name: 'Malawi', code: 'MW' },
-          { id: 209, name: 'Tansania', code: 'TZ' },
-          { id: 210, name: 'Kenia', code: 'KE' },
-          { id: 211, name: 'Uganda', code: 'UG' },
-          { id: 212, name: 'Ruanda', code: 'RW' },
-          { id: 213, name: 'Burundi', code: 'BI' },
-          { id: 214, name: 'Südafrika', code: 'ZA' },
-          { id: 215, name: 'Namibia', code: 'NA' },
-        ];
-        setCountries(sortCountries(hardcodedCountries));
-
-        // Set Germany as default country (ID 1)
-        setFormData(prev => ({ ...prev, countryId: 1 }));
-      } catch (error) {
-        console.error('Error loading countries:', error);
-      }
-    };
-
-    loadCountries();
-  }, []);
-
   // Handler für Registrierungs-Änderungen
-  const handleRegisterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleRegisterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'dailyRate' ? (value ? parseFloat(value) : undefined) : value,
+      [name]: value,
     }));
-  };
-
-  // Handler für Checkbox-Änderungen
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleCheckboxChange = (name: string, checked: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      [name]: checked,
-    }));
-  };
-
-  // Handler für Themen-Auswahl
-  const handleTopicSelect = (topicName: string, level: ExpertiseLevel, isSuggestion?: boolean) => {
-    if (isSuggestion) {
-      // Add to topic suggestions list
-      if (!topicSuggestionsList.includes(topicName)) {
-        setTopicSuggestionsList(prev => [...prev, topicName]);
-      }
-    } else {
-      // Add to main topics with level
-      if (!topicsWithLevels.some(t => t.name === topicName)) {
-        setTopicsWithLevels(prev => [...prev, { name: topicName, level }]);
-        // Also update formData for backward compatibility (API might still expect string[])
-        setFormData(prev => ({
-          ...prev,
-          topics: [...prev.topics, topicName],
-        }));
-      }
-    }
-  };
-
-  // Handler für Themen-Entfernung
-  const handleTopicRemove = (topicName: string, isSuggestion?: boolean) => {
-    if (isSuggestion) {
-      setTopicSuggestionsList(prev => prev.filter(t => t !== topicName));
-    } else {
-      setTopicsWithLevels(prev => prev.filter(t => t.name !== topicName));
-      setFormData(prev => ({
-        ...prev,
-        topics: prev.topics.filter(t => t !== topicName),
-      }));
-    }
-  };
-
-  // Handler für Themen-Suche
-  const handleTopicSearch = async (searchTerm: string) => {
-    // Handle empty or short search term
-    if (!searchTerm || searchTerm.length < 3) {
-      setTopicSuggestions([]);
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/topics?search=${encodeURIComponent(searchTerm)}`);
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Map the data to include type and status
-        const mappedSuggestions = data.map((topic: { 
-          id: number; 
-          name: string; 
-          short_title?: string;
-          displayName?: string;
-        }) => ({
-          id: topic.id,
-          name: topic.name,
-          short_title: topic.short_title,
-          displayName: topic.displayName,
-          type: 'existing' as const,
-          status: 'online'
-        }));
-        
-        setTopicSuggestions(mappedSuggestions);
-        console.log(`Found ${mappedSuggestions.length} topics for "${searchTerm}"`);
-      }
-    } catch (error) {
-      console.error('Error searching topics:', error);
-      setTopicSuggestions([]);
-    }
   };
 
   // Handler für Registrierungs-Submit
@@ -396,9 +36,7 @@ function TrainerRegistrationContent() {
     setError(null);
     setLoading(true);
     try {
-      // Password validation removed - using email login links instead
-
-      // 1) Register using local API
+      // Register using local API - only firstName, lastName, email
       const registerResponse = await fetch('/api/register-trainer', {
         method: 'POST',
         headers: {
@@ -408,42 +46,27 @@ function TrainerRegistrationContent() {
           firstName: formData.firstName,
           lastName: formData.lastName,
           email: formData.email,
-          phone: formData.phone,
-          street: formData.street,
-          houseNumber: formData.addressLine2, // Using addressLine2 as houseNumber
-          zipCode: formData.zip,
-          city: formData.city,
-          countryId: formData.countryId,
-          topicsWithLevels: topicsWithLevels, // Send full topic data with levels
-          topicSuggestions: topicSuggestionsList,
-          bio: formData.bio,
-          dailyRate: formData.dailyRate,
-          isCompany: formData.isCompany,
-          companyName: formData.companyName,
         }),
       });
 
       if (!registerResponse.ok) {
         const errorData = await registerResponse.json();
-        throw new Error(errorData.error || 'Registration failed');
+        throw new Error(errorData.message || errorData.error || 'Registration failed');
       }
 
       const registerData = await registerResponse.json();
 
-      // 2) Save trainer data to localStorage for immediate use
-      saveTrainerData(registerData.trainer);
-
-      // 3) Show success message and redirect to login
-      setSuccessMessage('Registration erfolgreich! Überprüfen Sie Ihre E-Mail für den Login-Link.');
-      addToast('Registrierung erfolgreich! Sie können sich jetzt einloggen.', 'success');
+      // Show success message and redirect to login
+      setSuccessMessage('Registrierung erfolgreich! Überprüfen Sie Ihre E-Mail für den Login-Link. Nach dem Login müssen Sie Ihr Profil vervollständigen.');
+      addToast('Registrierung erfolgreich! Bitte überprüfen Sie Ihre E-Mail.', 'success');
 
       // Redirect to login page after short delay
       setTimeout(() => {
         router.push('/register');
-      }, 2000);
+      }, 3000);
     } catch (err: unknown) {
       console.error('Registration error:', err);
-      setError((err as Error)?.message || 'Registration failed');
+      setError((err as Error)?.message || 'Registrierung fehlgeschlagen');
       addToast('Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.', 'error');
     } finally {
       setLoading(false);
@@ -479,6 +102,9 @@ function TrainerRegistrationContent() {
             {/* Personal Information */}
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Persönliche Informationen</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Geben Sie Ihre grundlegenden Informationen ein. Nach der Registrierung und dem ersten Login können Sie Ihr Profil vervollständigen.
+              </p>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="relative">
@@ -493,7 +119,7 @@ function TrainerRegistrationContent() {
                     required
                   />
                   <label htmlFor="firstName" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    Vorname
+                    Vorname *
                   </label>
                 </div>
                 <div className="relative">
@@ -508,7 +134,7 @@ function TrainerRegistrationContent() {
                     required
                   />
                   <label htmlFor="lastName" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    Nachname
+                    Nachname *
                   </label>
                 </div>
               </div>
@@ -526,189 +152,9 @@ function TrainerRegistrationContent() {
                     required
                   />
                   <label htmlFor="email" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    E-Mail-Adresse
+                    E-Mail-Adresse *
                   </label>
                 </div>
-              </div>
-
-              <div className="mt-4">
-                <div className="relative">
-                  <input
-                    type="tel"
-                    name="phone"
-                    id="phone"
-                    placeholder="Telefonnummer"
-                    value={formData.phone}
-                    onChange={handleRegisterChange}
-                    className="form-input"
-                    required
-                  />
-                  <label htmlFor="phone" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    Telefonnummer
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Address Information */}
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Adresse</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="relative md:col-span-2">
-                  <input
-                    type="text"
-                    name="street"
-                    id="street"
-                    placeholder="Straße"
-                    value={formData.street}
-                    onChange={handleRegisterChange}
-                    className="form-input"
-                    required
-                  />
-                  <label htmlFor="street" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    Straße *
-                  </label>
-                </div>
-
-                <div className="relative">
-                  <input
-                    type="text"
-                    name="addressLine2"
-                    id="addressLine2"
-                    placeholder="Hausnummer"
-                    value={formData.addressLine2}
-                    onChange={handleRegisterChange}
-                    className="form-input"
-                    required
-                  />
-                  <label htmlFor="addressLine2" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    Hausnummer *
-                  </label>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="relative">
-                  <input
-                    type="text"
-                    name="zip"
-                    id="zip"
-                    placeholder="PLZ"
-                    value={formData.zip}
-                    onChange={handleRegisterChange}
-                    className="form-input"
-                    required
-                  />
-                  <label htmlFor="zip" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    PLZ *
-                  </label>
-                </div>
-                <div className="relative md:col-span-2">
-                  <input
-                    type="text"
-                    name="city"
-                    id="city"
-                    placeholder="Ort"
-                    value={formData.city}
-                    onChange={handleRegisterChange}
-                    className="form-input"
-                    required
-                  />
-                  <label htmlFor="city" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                    Ort *
-                  </label>
-                </div>
-              </div>
-
-              <div className="relative">
-                <select
-                  name="countryId"
-                  id="countryId"
-                  value={formData.countryId || ''}
-                  onChange={handleRegisterChange}
-                  className="form-input"
-                  required
-                >
-                  <option value="">Land auswählen</option>
-                  {countries.map(country => (
-                    <option key={country.id} value={country.id}>
-                      {country.name}
-                    </option>
-                  ))}
-                </select>
-                <label htmlFor="countryId" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Land *
-                </label>
-              </div>
-            </div>
-
-            {/* Professional Information */}
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Professionelle Informationen</h3>
-
-              <div className="relative mb-4">
-                <textarea
-                  name="bio"
-                  id="bio"
-                  placeholder="Beschreiben Sie Ihre Expertise und Erfahrung"
-                  value={formData.bio}
-                  onChange={handleRegisterChange}
-                  className="form-input"
-                  rows={4}
-                  required
-                />
-                <label htmlFor="bio" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Profilbeschreibung
-                </label>
-              </div>
-
-              <div className="relative mb-4">
-                <input
-                  type="number"
-                  name="dailyRate"
-                  id="dailyRate"
-                  placeholder="Tageshonorar in EUR"
-                  value={formData.dailyRate || ''}
-                  onChange={handleRegisterChange}
-                  className="form-input"
-                  step="10"
-                  min="0"
-                />
-                <label htmlFor="dailyRate" className="absolute -top-2.5 left-3 bg-white px-1 text-xs text-gray-500">
-                  Tageshonorar (EUR) - optional
-                </label>
-                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs text-blue-800">
-                    💡 <strong>Hinweis:</strong> Dies ist nur ein grober Richtwert für eine Standard-Schulung (9-16 Uhr). 
-                    Sie können verschiedene Tagessätze für unterschiedliche Schulungen vereinbaren und diesen Wert 
-                    jederzeit in Ihren Profil-Einstellungen anpassen.
-                  </p>
-                </div>
-              </div>
-
-              {/* Topics */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Fachgebiete
-                </label>
-                <TopicSelector
-                  topics={topicsWithLevels}
-                  topicSuggestions={topicSuggestionsList}
-                  onAddTopic={handleTopicSelect}
-                  onRemoveTopic={handleTopicRemove}
-                  searchTerm={topicSearch}
-                  onSearchChange={setTopicSearch}
-                  onSearch={handleTopicSearch}
-                  suggestions={topicSuggestions}
-                />
-              </div>
-
-              {/* Profilbild Notice */}
-              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                <p className="text-xs text-gray-600">
-                  💡 <strong>Hinweis:</strong> Ihr Profilbild können Sie nach der Registrierung in Ihren Profil-Einstellungen hochladen.
-                </p>
               </div>
             </div>
 

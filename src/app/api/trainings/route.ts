@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserData } from '@/lib/session';
 import { geocodeAddress } from '@/lib/geocoding';
+import { TrainingRequestStatus } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,15 +62,33 @@ export async function GET(request: NextRequest) {
 
       // Transform to match frontend expectations
       const transformedTrainings = trainings.map(training => {
-        // Find the accepted trainer request
-        const acceptedRequest = training.requests.find(r => r.status === 'ACCEPTED');
+        // Find the booked trainer request (GEBUCHT status - fully booked)
+        const bookedRequest = training.requests.find(r => r.status === TrainingRequestStatus.GEBUCHT);
+        // Find accepted requests (trainer accepted, waiting for company)
+        const acceptedRequests = training.requests.filter(r => r.status === TrainingRequestStatus.ACCEPTED);
+        // Find pending requests (not yet accepted by trainer)
+        const pendingRequests = training.requests.filter(r => r.status === TrainingRequestStatus.PENDING);
         
-        const assignedTrainer = acceptedRequest ? {
-          id: acceptedRequest.trainer.id,
-          firstName: acceptedRequest.trainer.firstName,
-          lastName: acceptedRequest.trainer.lastName,
-          fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
+        // Use booked request if available, otherwise null
+        const assignedTrainer = bookedRequest ? {
+          id: bookedRequest.trainer.id,
+          firstName: bookedRequest.trainer.firstName,
+          lastName: bookedRequest.trainer.lastName,
+          fullName: `${bookedRequest.trainer.firstName} ${bookedRequest.trainer.lastName}`
         } : null;
+
+        // Get trainer price from booked request (counterPrice or dailyRate)
+        const trainerPrice = bookedRequest 
+          ? (bookedRequest.counterPrice || training.dailyRate)
+          : null;
+
+        // Get requested trainers (pending + accepted requests - trainer accepted but not yet booked)
+        const requestedTrainers = [...pendingRequests, ...acceptedRequests].map(req => ({
+          id: req.trainer.id,
+          firstName: req.trainer.firstName,
+          lastName: req.trainer.lastName,
+          fullName: `${req.trainer.firstName} ${req.trainer.lastName}`
+        }));
 
         // Get location display string from Location table
         let locationDisplay = 'Kein Ort angegeben';
@@ -98,20 +117,23 @@ export async function GET(request: NextRequest) {
           startTime: training.startTime,
           endDate: training.endDate.toISOString(),
           requestCount: training.requests.length,
-          acceptedRequests: training.requests.filter(r => r.status === 'ACCEPTED').length,
-          assignedTrainer: assignedTrainer
+          acceptedRequests: training.requests.filter(r => r.status === TrainingRequestStatus.ACCEPTED || r.status === TrainingRequestStatus.GEBUCHT).length,
+          assignedTrainer: assignedTrainer,
+          trainerPrice: trainerPrice,
+          requestedTrainers: requestedTrainers,
+          hasAcceptedTrainer: !!bookedRequest
         };
       });
 
       return NextResponse.json(transformedTrainings);
     } else if (type === 'available') {
-      // Get trainings without assigned trainers for sending requests
+      // Get trainings without booked trainers for sending requests
       const trainings = await prisma.training.findMany({
         where: {
           status: 'PUBLISHED',
           requests: {
             none: {
-              status: 'ACCEPTED'
+              status: TrainingRequestStatus.GEBUCHT
             }
           }
         },
@@ -125,9 +147,7 @@ export async function GET(request: NextRequest) {
           company: {
             select: {
               id: true,
-              companyName: true,
-              firstName: true,
-              lastName: true
+              companyName: true
             }
           },
           requests: {
@@ -179,13 +199,13 @@ export async function GET(request: NextRequest) {
         );
       }
       
-      // Fetch trainings for trainer via TrainingRequest with ACCEPTED status
+      // Fetch trainings for trainer via TrainingRequest with GEBUCHT status (fully booked)
       const now = new Date();
 
       const trainingRequests = await prisma.trainingRequest.findMany({
         where: {
           trainerId: parseInt(trainerId),
-          status: 'ACCEPTED',
+          status: TrainingRequestStatus.GEBUCHT,
           training: type === 'upcoming'
             ? { startDate: { gte: now } }
             : { startDate: { lt: now } }
@@ -197,9 +217,22 @@ export async function GET(request: NextRequest) {
               company: {
                 select: {
                   id: true,
-                  companyName: true,
-                  firstName: true,
-                  lastName: true
+                  companyName: true
+                },
+                include: {
+                  users: {
+                    where: {
+                      role: 'ADMIN',
+                      isActive: true
+                    },
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true
+                    },
+                    take: 1
+                  }
                 }
               }
             }
@@ -246,7 +279,13 @@ export async function GET(request: NextRequest) {
             lastName: '',
             fullName: 'You'
           },
-          company: request.training.company
+          company: {
+            id: request.training.company.id,
+            name: request.training.company.companyName,
+            firstName: request.training.company.users?.[0]?.firstName || '',
+            lastName: request.training.company.users?.[0]?.lastName || '',
+            email: request.training.company.users?.[0]?.email || ''
+          }
         };
       });
 

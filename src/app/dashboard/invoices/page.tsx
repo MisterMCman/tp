@@ -363,13 +363,14 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
+    <>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
         <h1 className="text-2xl font-bold text-gray-900">Rechnungen</h1>
         <p className="text-gray-600 mt-1">
           Übersicht über Ihre generierten Rechnungsgutschriften
         </p>
       </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
 
       {credits.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-6 text-center">
@@ -555,6 +556,7 @@ export default function InvoicesPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 } 

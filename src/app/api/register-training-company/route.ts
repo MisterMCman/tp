@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       website,
       industry,
       employees,
-      consultantName,
+      companyType,
       vatId,
       billingEmail,
       billingNotes,
@@ -35,16 +35,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check if email already exists (for both trainers and companies)
+    // Check if email already exists (for both trainers and company users)
     const existingTrainer = await prisma.trainer.findUnique({
       where: { email }
     });
 
-    const existingCompany = await prisma.trainingCompany.findUnique({
+    const existingCompanyUser = await prisma.companyUser.findUnique({
       where: { email }
     });
 
-    if (existingTrainer || existingCompany) {
+    if (existingTrainer || existingCompanyUser) {
       return NextResponse.json(
         { message: 'Diese E-Mail-Adresse ist bereits registriert.' },
         { status: 409 }
@@ -54,15 +54,12 @@ export async function POST(req: Request) {
     // Extract domain from email for company identification
     const domain = email.split('@')[1];
 
-    // Create the training company
+    // Create the training company (without user data)
     const trainingCompany = await prisma.trainingCompany.create({
       data: {
         userType: 'TRAINING_COMPANY',
         companyName,
-        firstName,
-        lastName,
-        email,
-        phone,
+        phone: phone || null, // Keep as fallback for legacy
         street,
         houseNumber,
         zipCode,
@@ -74,15 +71,38 @@ export async function POST(req: Request) {
         website: website || null,
         industry: industry || null,
         employees: employees || null,
-        consultantName: consultantName || null,
+        companyType: companyType || null,
         vatId: vatId || null,
         billingEmail: billingEmail || null,
         billingNotes: billingNotes || null,
         tags: tags || null,
         onboardingStatus: 'Profil unvollständig',
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        // Create the first CompanyUser (ADMIN) along with the company
+        users: {
+          create: {
+            email,
+            firstName,
+            lastName,
+            phone: phone || null,
+            role: 'ADMIN',
+            isActive: true
+          }
+        }
+      },
+      include: {
+        users: {
+          where: {
+            role: 'ADMIN',
+            isActive: true
+          },
+          take: 1
+        },
+        country: true
       }
     });
+
+    const adminUser = trainingCompany.users[0];
 
     // Return success response
     return NextResponse.json({
@@ -91,15 +111,16 @@ export async function POST(req: Request) {
         id: trainingCompany.id,
         userType: trainingCompany.userType,
         companyName: trainingCompany.companyName,
-        firstName: trainingCompany.firstName,
-        lastName: trainingCompany.lastName,
-        email: trainingCompany.email,
-        phone: trainingCompany.phone,
+        firstName: adminUser?.firstName || '',
+        lastName: adminUser?.lastName || '',
+        email: adminUser?.email || '',
+        phone: adminUser?.phone || trainingCompany.phone || '',
         street: trainingCompany.street,
         houseNumber: trainingCompany.houseNumber,
         zipCode: trainingCompany.zipCode,
         city: trainingCompany.city,
         countryId: trainingCompany.countryId,
+        country: trainingCompany.country,
         domain: trainingCompany.domain,
         onboardingStatus: trainingCompany.onboardingStatus,
         status: trainingCompany.status

@@ -162,7 +162,7 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
         <p className="text-xs text-gray-500 ml-1 -mt-1">
           💡 <strong>Tipp:</strong> Klicken Sie auf <span className="text-green-600 font-medium">+ Verfügbar</span> zum Hinzufügen, 
           <span className="text-blue-600 font-medium"> Vorschlag einreichen</span> für neue Themen, 
-          oder <span className="text-red-500 font-medium">− Ausgewählt</span> zum Entfernen
+          oder <span className="text-gray-600 font-medium">− Ausgewählt</span> zum Entfernen
         </p>
       )}
       
@@ -200,7 +200,7 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
                       {suggestions.length} Ergebnisse gefunden
                     </span>
                     {selectedCount > 0 && (
-                      <span className="text-green-600 bg-green-100 px-2 py-0.5 rounded">
+                      <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
                         {selectedCount} bereits ausgewählt
                       </span>
                     )}
@@ -221,15 +221,15 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
                     key={`${topic.type}-${topic.id}`}
                     onClick={() => isSelected ? handleRemoveTopicClick(topic.name) : handleAddTopicClick(topic.name, topic.type === 'suggestion')}
                     title={isSelected ? 'Klicken zum Entfernen' : 'Klicken zum Hinzufügen'}
-                    className={`group p-3 cursor-pointer border-b border-gray-100 last:border-0 transition-all duration-150 ${
+                    className={`group p-3 cursor-pointer border-b border-gray-100 last:border-0 transition-all duration-200 ${
                       isSelected 
-                        ? 'bg-green-50 hover:bg-red-50' 
-                        : 'hover:bg-red-50'
+                        ? 'bg-green-50 hover:bg-gray-100' 
+                        : 'hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex flex-col flex-1 min-w-0">
-                        <span className={`font-medium truncate ${isSelected ? 'text-green-800' : ''}`}>
+                        <span className={`font-medium truncate transition-colors ${isSelected ? 'text-green-800 group-hover:text-gray-800' : 'text-gray-900 group-hover:text-gray-700'}`}>
                           {topic.displayName || topic.name}
                         </span>
                         {topic.short_title && topic.short_title !== topic.name && (
@@ -240,29 +240,29 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
                       </div>
                       <div className="flex items-center gap-2">
                         {isSelected ? (
-                          <span className="text-xs text-green-700 bg-green-200 px-2 py-1 rounded whitespace-nowrap font-medium">
+                          <span className="text-xs text-green-700 bg-green-100 px-2 py-1 rounded whitespace-nowrap font-medium border border-green-200">
                             ✓ Ausgewählt
                           </span>
                         ) : (
                           <>
                             {topic.type === 'suggestion' && (
-                              <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded whitespace-nowrap">
+                              <span className="text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded whitespace-nowrap border border-blue-200">
                                 Vorschlag ({topic.status})
                               </span>
                             )}
                             {topic.type === 'existing' && (
-                              <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded whitespace-nowrap">
+                              <span className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded whitespace-nowrap border border-green-200">
                                 Verfügbar
                               </span>
                             )}
                           </>
                         )}
                         {isSelected ? (
-                          <svg className="w-6 h-6 text-red-500 group-hover:text-red-700 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" />
+                          <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         ) : (
-                          <svg className="w-5 h-5 text-green-500 group-hover:text-green-700 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                           </svg>
                         )}
@@ -386,19 +386,25 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
                 {topics.map((topic, index) => (
                   <span
                     key={`topic-${index}`}
-                    className="selected-topic group flex items-center gap-2"
+                    className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all hover:shadow-sm"
+                    style={{ 
+                      background: topic.level === 'GRUNDLAGE' ? '#E0E0E0' : topic.level === 'FORTGESCHRITTEN' ? '#2196F3' : '#212121',
+                      borderColor: topic.level === 'GRUNDLAGE' ? '#9CA3AF' : topic.level === 'FORTGESCHRITTEN' ? '#1E40AF' : '#374151',
+                      color: topic.level === 'GRUNDLAGE' ? '#1F2937' : '#FFFFFF'
+                    }}
                   >
-                    <span>{topic.name}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${getLevelColor(topic.level)}`}>
-                      {getLevelLabel(topic.level)}
-                    </span>
+                    <span className="text-sm font-medium">{topic.name}</span>
+                    <span className="text-xs opacity-75">({getLevelLabel(topic.level)})</span>
                     <button
                       type="button"
                       onClick={() => onRemoveTopic(topic.name, false)}
-                      className="ml-1 text-red-600 opacity-70 hover:opacity-100 transition-opacity"
+                      className="ml-1 opacity-70 hover:opacity-100 transition-opacity"
+                      style={{ color: topic.level === 'GRUNDLAGE' ? '#1F2937' : '#FFFFFF' }}
                       title="Entfernen"
                     >
-                      ×
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </span>
                 ))}
@@ -426,16 +432,18 @@ export const TopicSelector: React.FC<TopicSelectorProps> = ({
                 {topicSuggestions.map((topic, index) => (
                   <span
                     key={`suggestion-${index}`}
-                    className="selected-topic bg-blue-50 text-blue-700 border-blue-300"
+                    className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full border bg-blue-50 text-blue-700 border-blue-300 transition-all hover:shadow-sm"
                   >
-                    {topic}
+                    <span className="text-sm font-medium">{topic}</span>
                     <button
                       type="button"
                       onClick={() => onRemoveTopic(topic, true)}
-                      className="ml-2 text-blue-700 opacity-70 hover:opacity-100 transition-opacity"
+                      className="opacity-70 hover:opacity-100 transition-opacity text-blue-700"
                       title="Entfernen"
                     >
-                      ×
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </span>
                 ))}

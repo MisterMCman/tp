@@ -28,7 +28,7 @@ interface User {
   website?: string;
   industry?: string;
   employees?: string;
-  consultantName?: string;
+  companyType?: string;
 }
 
 export default function DashboardLayout({
@@ -36,6 +36,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -117,37 +118,62 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="ptw-dashboard flex h-screen">
+    <div className="ptw-dashboard flex h-screen" style={{ 
+      '--sidebar-width': sidebarCollapsed ? '0px' : '256px',
+      '--content-left-padding': sidebarCollapsed ? '56px' : '24px'
+    } as React.CSSProperties}>
       {/* Sidebar */}
-      <div className="ptw-sidebar w-64">
-        <div className="ptw-sidebar-header">
-          {user?.userType === 'TRAINING_COMPANY' && user.logo ? (
-            <div className="mb-3">
-              <img
-                src={user.logo.startsWith('http') || user.logo.startsWith('/api/images/') ? user.logo : `/api/images/${user.logo.split('/').pop()}`}
-                alt={user.companyName || 'Company Logo'}
-                className="max-h-12 max-w-full object-contain"
-              />
+      <div className={`ptw-sidebar ${sidebarCollapsed ? 'w-0' : 'w-64'} transition-all duration-300 relative overflow-hidden`}>
+        {/* Collapse Button - Always visible and on top, positioned outside sidebar when collapsed */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="fixed top-4 z-50 bg-white border border-gray-300 rounded-full p-1 shadow-md hover:bg-gray-50 transition-all duration-300"
+          style={{ left: sidebarCollapsed ? '8px' : '253px' }}
+          aria-label={sidebarCollapsed ? "Sidebar erweitern" : "Sidebar einklappen"}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4 text-gray-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            style={{ transform: sidebarCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        {/* Sidebar Content - Hidden when collapsed */}
+        {!sidebarCollapsed && (
+          <>
+            <div className="ptw-sidebar-header">
+              {user?.userType === 'TRAINING_COMPANY' && user.logo ? (
+                <div className="mb-3">
+                  <img
+                    src={user.logo.startsWith('http') || user.logo.startsWith('/api/images/') ? user.logo : `/api/images/${user.logo.split('/').pop()}`}
+                    alt={user.companyName || 'Company Logo'}
+                    className="max-h-12 max-w-full object-contain"
+                  />
+                </div>
+              ) : (
+                <h2 className="font-bold">TRAINER PORTAL</h2>
+              )}
+              <p className="text-sm">
+                {user?.userType === 'TRAINER'
+                  ? `${user.firstName} ${user.lastName}`
+                  : user?.companyName || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'Unternehmen')
+                }
+              </p>
+              {user?.userType === 'TRAINER' && user.dailyRate && (
+                <p className="text-xs mt-1" style={{ color: 'var(--ptw-accent-primary)' }}>
+                  €{user.dailyRate}/Tag
+                </p>
+              )}
             </div>
-          ) : (
-            <h2 className="font-bold">TRAINER PORTAL</h2>
-          )}
-          <p className="text-sm">
-            {user?.userType === 'TRAINER'
-              ? `${user.firstName} ${user.lastName}`
-              : user?.companyName || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'Unternehmen')
-            }
-          </p>
-          {user?.userType === 'TRAINER' && user.dailyRate && (
-            <p className="text-xs mt-1" style={{ color: 'var(--ptw-accent-primary)' }}>
-              €{user.dailyRate}/Tag
-            </p>
-          )}
-        </div>
-        <nav className="mt-6">
+            <nav className="mt-6">
           <Link
             href="/dashboard"
             className={`ptw-nav-item ${pathname === "/dashboard" ? "active" : ""}`}
+            title="DASHBOARD"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -163,32 +189,12 @@ export default function DashboardLayout({
                 d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
               />
             </svg>
-            DASHBOARD
-          </Link>
-          <Link
-            href="/dashboard/profile"
-            className={`ptw-nav-item ${pathname === "/dashboard/profile" ? "active" : ""}`}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
-            </svg>
-            PROFIL
-          </Link>
-          {user?.userType === 'TRAINING_COMPANY' && (
+              <span>DASHBOARD</span>
+            </Link>
             <Link
-              href="/dashboard/trainer"
-              className={`ptw-nav-item ${pathname === "/dashboard/trainer" ? "active" : ""}`}
+              href="/dashboard/trainings"
+              className={`ptw-nav-item ${pathname === "/dashboard/trainings" ? "active" : ""}`}
+              title="TRAININGS"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -201,36 +207,100 @@ export default function DashboardLayout({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              TRAINER
+              <span>TRAININGS</span>
             </Link>
-          )}
-          <Link
-            href="/dashboard/trainings"
-            className={`ptw-nav-item ${pathname === "/dashboard/trainings" ? "active" : ""}`}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            TRAININGS
-          </Link>
-          {user?.userType === 'TRAINING_COMPANY' && (
+            {user?.userType === 'TRAINING_COMPANY' && (
+              <Link
+                href="/dashboard/trainer"
+                className={`ptw-nav-item ${pathname === "/dashboard/trainer" ? "active" : ""}`}
+                title="TRAINER"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                <span>TRAINER</span>
+              </Link>
+            )}
             <Link
-              href="/dashboard/locations"
-              className={`ptw-nav-item ${pathname.startsWith("/dashboard/locations") ? "active" : ""}`}
+              href="/dashboard/requests"
+              className={`ptw-nav-item ${pathname === "/dashboard/requests" ? "active" : ""}`}
+              title="ANFRAGEN"
+            >
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.123.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 002.25 2.25h8.25a2.25 2.25 0 002.25-2.25V6.108a2.25 2.25 0 00-2.25-2.25H15c-1.012 0-1.867.668-2.15 1.586z"
+                />
+              </svg>
+              <span>ANFRAGEN</span>
+            </Link>
+            <Link
+              href="/dashboard/messages"
+              className={`ptw-nav-item ${pathname === "/dashboard/messages" || pathname === "/dashboard/chat" ? "active" : ""}`}
+              title="NACHRICHTEN"
+            >
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+              <span>NACHRICHTEN</span>
+            </Link>
+            <Link
+              href="/dashboard/invoices"
+              className={`ptw-nav-item ${pathname === "/dashboard/invoices" ? "active" : ""}`}
+              title="RECHNUNGEN"
+            >
+              <svg
+                className="w-5 h-5"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+                />
+              </svg>
+              <span>RECHNUNGEN</span>
+            </Link>
+            <Link
+              href="/dashboard/profile"
+              className={`ptw-nav-item ${pathname === "/dashboard/profile" ? "active" : ""}`}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -243,105 +313,93 @@ export default function DashboardLayout({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                 />
+              </svg>
+              <span>PROFIL</span>
+            </Link>
+            {user?.userType === 'TRAINING_COMPANY' && (
+              <Link
+                href="/dashboard/topics"
+                className={`ptw-nav-item ${pathname.startsWith("/dashboard/topics") ? "active" : ""}`}
+                title="THEMEN"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                  />
+                </svg>
+                <span>THEMEN</span>
+              </Link>
+            )}
+            {user?.userType === 'TRAINING_COMPANY' && (
+              <Link
+                href="/dashboard/locations"
+                className={`ptw-nav-item ${pathname.startsWith("/dashboard/locations") ? "active" : ""}`}
+                title="ORTE"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+                <span>ORTE</span>
+              </Link>
+            )}
+          </nav>
+          <div className="absolute bottom-0 w-64 border-t transition-all duration-300" style={{ borderColor: 'var(--ptw-border-primary)' }}>
+            <button
+              onClick={handleLogout}
+              className="ptw-nav-item w-full justify-start"
+              title="ABMELDEN"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                 />
               </svg>
-              ORTE
-            </Link>
-          )}
-          <Link
-            href="/dashboard/requests"
-            className={`ptw-nav-item ${pathname === "/dashboard/requests" ? "active" : ""}`}
-          >
-            <svg
-              className="w-5 h-5"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="1.5"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.123.08C9.095 4.01 8.25 4.973 8.25 6.108V19.5a2.25 2.25 0 002.25 2.25h8.25a2.25 2.25 0 002.25-2.25V6.108a2.25 2.25 0 00-2.25-2.25H15c-1.012 0-1.867.668-2.15 1.586z"
-              />
-            </svg>
-            ANFRAGEN
-          </Link>
-          <Link
-            href="/dashboard/messages"
-            className={`ptw-nav-item ${pathname === "/dashboard/messages" || pathname === "/dashboard/chat" ? "active" : ""}`}
-          >
-            <svg
-              className="w-5 h-5"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="1.5"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
-            </svg>
-            NACHRICHTEN
-          </Link>
-          <Link
-            href="/dashboard/invoices"
-            className={`ptw-nav-item ${pathname === "/dashboard/invoices" ? "active" : ""}`}
-          >
-            <svg
-              className="w-5 h-5"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="1.5"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
-              />
-            </svg>
-            RECHNUNGEN
-          </Link>
-        </nav>
-        <div className="absolute bottom-0 w-64 border-t" style={{ borderColor: 'var(--ptw-border-primary)' }}>
-          <button
-            onClick={handleLogout}
-            className="ptw-nav-item w-full justify-start"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            ABMELDEN
-          </button>
-        </div>
+              <span>ABMELDEN</span>
+            </button>
+          </div>
+          </>
+        )}
       </div>
 
       {/* Main content */}
-      <div className={`flex-1 ${pathname === "/dashboard/messages" || pathname === "/dashboard/chat" ? "overflow-hidden" : "overflow-y-auto p-6"}`}>
+      <div className={`flex-1 ${pathname === "/dashboard/messages" || pathname === "/dashboard/chat" ? "overflow-hidden" : "overflow-y-auto"}`}>
         {children}
       </div>
     </div>

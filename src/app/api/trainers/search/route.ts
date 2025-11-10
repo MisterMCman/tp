@@ -44,6 +44,7 @@ export async function GET(req: Request) {
     const topic = url.searchParams.get('topic');
     const topicId = url.searchParams.get('topicId');
     const location = url.searchParams.get('location');
+    const locationId = url.searchParams.get('locationId');
     const minPrice = url.searchParams.get('minPrice');
     const maxPrice = url.searchParams.get('maxPrice');
     const expertiseLevel = url.searchParams.get('expertiseLevel'); // 'minimum_grundlage', 'minimum_fortgeschritten', 'minimum_experte'
@@ -54,7 +55,7 @@ export async function GET(req: Request) {
 
     // Build the where clause based on filters
     const where: any = {};
-    console.log('Search params:', { topic, topicId, location, minPrice, maxPrice, status });
+    console.log('Search params:', { topic, topicId, location, locationId, minPrice, maxPrice, status });
 
     // Filter by topic ID if provided (exact match for trainer selection)
     // Priority: topicId over topic name to ensure exact matching
@@ -110,7 +111,28 @@ export async function GET(req: Request) {
     }
 
     // Filter by location if provided
-    if (location) {
+    // Priority: locationId (specific location) over location (country code)
+    if (locationId) {
+      // Get the location details to filter trainers by distance
+      const locationData = await prisma.location.findUnique({
+        where: { id: parseInt(locationId) },
+        include: { country: true }
+      });
+      
+      if (locationData && locationData.latitude && locationData.longitude) {
+        // Filter trainers who can travel to this location
+        // We'll filter by trainers who have a travel radius and are within that radius
+        // This will be done after fetching trainers
+        where.latitude = { not: null };
+        where.longitude = { not: null };
+        where.travelRadius = { not: null };
+      } else if (locationData?.country) {
+        // Fallback to country filter if location doesn't have coordinates
+        where.country = {
+          code: locationData.country.code
+        };
+      }
+    } else if (location) {
       where.country = {
         code: location.toUpperCase()
       };
@@ -174,14 +196,58 @@ export async function GET(req: Request) {
       completedMap.set(req.trainerId, (completedMap.get(req.trainerId) || 0) + 1);
     });
 
-    // Get training location if trainingId is provided
+    // Get average ratings for each trainer
+    let ratings: Array<{ trainerId: number; rating: number }> = [];
+    try {
+      if (prisma.trainingRating) {
+        ratings = await prisma.trainingRating.findMany({
+          where: {
+            trainerId: { in: trainerIds }
+          },
+          select: {
+            trainerId: true,
+            rating: true
+          }
+        });
+      }
+    } catch (error) {
+      console.warn('Could not fetch ratings (Prisma client may need regeneration):', error);
+      // Continue without ratings if the model isn't available yet
+    }
+
+    // Calculate average rating per trainer
+    const ratingMap = new Map<number, { average: number; count: number }>();
+    trainerIds.forEach(id => {
+      const trainerRatings = ratings.filter(r => r.trainerId === id);
+      if (trainerRatings.length > 0) {
+        const average = trainerRatings.reduce((sum, r) => sum + r.rating, 0) / trainerRatings.length;
+        ratingMap.set(id, { average, count: trainerRatings.length });
+      }
+    });
+
+    // Get location for distance calculation (from trainingId or locationId)
     let trainingLocation: { 
       latitude: number | null; 
       longitude: number | null;
       type: 'ONLINE' | 'PHYSICAL' | null;
     } | null = null;
     
-    if (trainingId) {
+    if (locationId) {
+      // Use locationId if provided (for location-based filtering)
+      const locationData = await prisma.location.findUnique({
+        where: { id: parseInt(locationId) },
+        include: { country: true }
+      });
+      
+      if (locationData) {
+        trainingLocation = {
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          type: locationData.type
+        };
+      }
+    } else if (trainingId) {
+      // Fallback to trainingId if locationId not provided
       const training = await prisma.training.findUnique({
         where: { id: parseInt(trainingId) },
         include: {
@@ -248,6 +314,8 @@ export async function GET(req: Request) {
         completedTrainings: completedMap.get(trainer.id) || 0,
         isCompany: trainer.isCompany,
         companyName: trainer.companyName,
+        averageRating: ratingMap.get(trainer.id)?.average || null,
+        ratingCount: ratingMap.get(trainer.id)?.count || 0,
         // Distance information (for PHYSICAL locations)
         distanceInfo: distanceInfo ? {
           isWithinRadius: distanceInfo.isWithinRadius,

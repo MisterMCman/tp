@@ -181,11 +181,14 @@ export default function LocationsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--ptw-text-primary)' }}>
-          Orte verwalten
-        </h1>
+    <>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4 flex justify-between items-start" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Orte verwalten</h1>
+          <p className="text-gray-600 mt-1">
+            Verwalten Sie Trainingsorte und Standorte
+          </p>
+        </div>
         <button
           onClick={() => handleOpenModal()}
           className="ptw-button-primary"
@@ -193,6 +196,7 @@ export default function LocationsPage() {
           + Neuer Ort
         </button>
       </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {locations.map((location) => (
@@ -471,7 +475,8 @@ export default function LocationsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

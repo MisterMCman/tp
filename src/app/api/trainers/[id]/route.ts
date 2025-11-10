@@ -54,6 +54,10 @@ export async function GET(
         name: trainer.country.name,
         code: trainer.country.code
       } : null,
+      country: trainer.country ? {
+        name: trainer.country.name,
+        code: trainer.country.code
+      } : null,
       topics: trainer.topics?.map(t => t.topic.name) || [],
       topicsWithLevels: trainer.topics?.map(t => ({
         name: t.topic.name,

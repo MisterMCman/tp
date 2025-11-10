@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import jsPDF from 'jspdf';
 import { getUserData, getTrainerData, getCompanyData } from "../../../lib/session";
+import { buildUrlWithNavigation, initializeNavigation } from "@/lib/navigationStack";
 import Button from "@/components/ui/Button";
 import StatusBadge from "@/components/ui/StatusBadge";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -70,6 +71,16 @@ type FilterStatus = "all" | "pending" | "accepted" | "rejected" | "abgesagt" | "
 export default function RequestsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
+  
+  // Initialize navigation tracking for this page
+  useEffect(() => {
+    const queryParams: Record<string, string> = {};
+    searchParams.forEach((value, key) => {
+      queryParams[key] = value;
+    });
+    initializeNavigation(pathname, queryParams);
+  }, [pathname, searchParams]);
   const [requests, setRequests] = useState<TrainingRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<TrainingRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +149,15 @@ export default function RequestsPage() {
           if (response.ok) {
             const requests = await response.json();
 
+            // Handle empty response
+            if (!requests || !Array.isArray(requests)) {
+              console.log('No training requests found for trainer');
+              setRequests([]);
+              setFilteredRequests([]);
+              setLoading(false);
+              return;
+            }
+
             // Transform training requests to match the existing interface
             const mapped: TrainingRequest[] = requests.map((req: any) => {
               // Determine status: if training is COMPLETED and request is ACCEPTED, mark as "completed"
@@ -157,7 +177,9 @@ export default function RequestsPage() {
                 trainingId: req.trainingId,
                 courseTitle: req.training.title,
                 topicName: req.training.topic.name,
-                date: typeof req.training.startDate === 'string' ? req.training.startDate : req.training.startDate.toISOString(),
+                date: typeof req.training.startDate === 'string' 
+                  ? new Date(`${req.training.startDate.split('T')[0]}T${req.training.startTime || '00:00'}`).toISOString()
+                  : new Date(`${req.training.startDate.toISOString().split('T')[0]}T${req.training.startTime || '00:00'}`).toISOString(),
                 endTime: typeof req.training.endDate === 'string' 
                   ? new Date(`${req.training.endDate.split('T')[0]}T${req.training.endTime}`).toISOString()
                   : new Date(`${req.training.endDate.toISOString().split('T')[0]}T${req.training.endTime}`).toISOString(),
@@ -177,7 +199,7 @@ export default function RequestsPage() {
                   firstName: req.training.company.firstName || '',
                   lastName: req.training.company.lastName || '',
                   email: req.training.company.email || ''
-                } : undefined
+                } : undefined // Note: firstName, lastName, email now come from CompanyUser via API transformation
               };
             });
 
@@ -200,6 +222,16 @@ export default function RequestsPage() {
           const response = await fetch(`/api/training-requests?companyId=${user.id}`);
           if (response.ok) {
             const requests = await response.json();
+            
+            // Handle empty response
+            if (!requests || !Array.isArray(requests)) {
+              console.log('No training requests found for company');
+              setRequests([]);
+              setFilteredRequests([]);
+              setLoading(false);
+              return;
+            }
+            
             console.log(`Found ${requests.length} requests for company`);
             
             const mapped: TrainingRequest[] = requests.map((req: any) => {
@@ -225,7 +257,9 @@ export default function RequestsPage() {
                 trainingId: req.trainingId,
                 courseTitle: req.training.title,
                 topicName: req.training.topic.name,
-                date: typeof req.training.startDate === 'string' ? req.training.startDate : req.training.startDate.toISOString(),
+                date: typeof req.training.startDate === 'string' 
+                  ? new Date(`${req.training.startDate.split('T')[0]}T${req.training.startTime || '00:00'}`).toISOString()
+                  : new Date(`${req.training.startDate.toISOString().split('T')[0]}T${req.training.startTime || '00:00'}`).toISOString(),
                 endTime: typeof req.training.endDate === 'string' 
                   ? new Date(`${req.training.endDate.split('T')[0]}T${req.training.endTime}`).toISOString()
                   : new Date(`${req.training.endDate.toISOString().split('T')[0]}T${req.training.endTime}`).toISOString(),
@@ -1037,10 +1071,18 @@ Mit freundlichen Grüßen
   }, []);
 
   return (
-    <div>
-      <div className="ptw-dashboard-header">
-        <h1>{userType === 'TRAINER' ? 'MEINE TRAININGSANFRAGEN' : 'TRAININGSANFRAGEN'}</h1>
+    <>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {userType === 'TRAINER' ? 'Meine Trainingsanfragen' : 'Trainingsanfragen'}
+        </h1>
+        <p className="text-gray-600 mt-1">
+          {userType === 'TRAINER' 
+            ? 'Verwalten Sie Ihre Trainingsanfragen und Angebote'
+            : 'Verwalten Sie Ihre Trainingsanfragen und Angebote'}
+        </p>
       </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
       
       {/* Filter/Search */}
       <div className="ptw-dashboard-card mb-6">
@@ -1157,7 +1199,7 @@ Mit freundlichen Grüßen
                     {userType === 'TRAINER' && request.company && (
                       <div className="mt-2 text-sm text-gray-600">
                         <span className="font-medium">Firma: </span>
-                        {request.company.companyName || `${request.company.firstName} ${request.company.lastName}`}
+                        {request.company?.companyName || (request.company?.firstName && request.company?.lastName ? `${request.company.firstName} ${request.company.lastName}` : 'Unbekannt')}
                       </div>
                     )}
                   </div>
@@ -1414,13 +1456,7 @@ Mit freundlichen Grüßen
                     Rückfrage
                   </Button>
                   <Link
-                    href={(() => {
-                      // Preserve status filter when linking to training details
-                      const backUrl = statusFilter && statusFilter !== 'all'
-                        ? `/dashboard/requests?status=${statusFilter}`
-                        : '/dashboard/requests';
-                      return `/dashboard/training/${request.trainingId}?from=${encodeURIComponent(backUrl)}`;
-                    })()}
+                    href={buildUrlWithNavigation(`/dashboard/training/${request.trainingId}`)}
                     className="ptw-btn ptw-btn-outline ptw-btn-sm inline-flex items-center"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -2008,7 +2044,8 @@ Mit freundlichen Grüßen
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

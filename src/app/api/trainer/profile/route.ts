@@ -111,6 +111,11 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    // Check if topics, suggestions, or training types are being updated
+    const hasTopicChanges = topicsWithLevelsToUpdate !== undefined;
+    const hasSuggestionChanges = suggestionsToUpdate !== undefined;
+    const hasTrainingTypeChanges = offeredTrainingTypesToUpdate !== undefined;
+
     // Bestimme geänderte Felder
     const changedFields: string[] = [];
     const versionData: Record<string, unknown> = {
@@ -126,11 +131,81 @@ export async function PATCH(request: NextRequest) {
       }
     });
 
+    // Add topic-related changes to changedFields if they're being updated
+    if (hasTopicChanges) {
+      changedFields.push('topics');
+      versionData.topics = topicsWithLevelsToUpdate;
+    }
+    if (hasSuggestionChanges) {
+      changedFields.push('topicSuggestions');
+      versionData.topicSuggestions = suggestionsToUpdate;
+    }
+    if (hasTrainingTypeChanges) {
+      changedFields.push('offeredTrainingTypes');
+      versionData.offeredTrainingTypes = offeredTrainingTypesToUpdate;
+    }
+
     if (changedFields.length === 0) {
-      return NextResponse.json(
-        { message: 'Keine Änderungen gefunden' },
-        { status: 200 }
-      );
+      // Still return trainer data even if no changes
+      const currentTrainer = await prisma.trainer.findUnique({
+        where: { id: trainerData.id as number },
+        include: {
+          topics: {
+            include: {
+              topic: true
+            }
+          },
+          topicSuggestions: {
+            where: {
+              status: 'PENDING'
+            }
+          },
+          offeredTrainingTypes: true,
+          country: true
+        }
+      });
+
+      if (!currentTrainer) {
+        return NextResponse.json(
+          { error: 'Trainer nicht gefunden' },
+          { status: 404 }
+        );
+      }
+
+      const response = {
+        id: currentTrainer.id,
+        firstName: currentTrainer.firstName,
+        lastName: currentTrainer.lastName,
+        email: currentTrainer.email,
+        phone: currentTrainer.phone,
+        street: currentTrainer.street,
+        houseNumber: currentTrainer.houseNumber,
+        zipCode: currentTrainer.zipCode,
+        city: currentTrainer.city,
+        country: currentTrainer.country,
+        bio: currentTrainer.bio,
+        profilePicture: currentTrainer.profilePicture,
+        iban: currentTrainer.iban,
+        taxId: currentTrainer.taxId,
+        companyName: currentTrainer.companyName,
+        isCompany: currentTrainer.isCompany,
+        dailyRate: currentTrainer.dailyRate,
+        status: currentTrainer.status,
+        offeredTrainingTypes: currentTrainer.offeredTrainingTypes.map(tt => tt.type) || [],
+        travelRadius: currentTrainer.travelRadius,
+        topics: currentTrainer.topics.map(t => ({
+          name: t.topic.name,
+          level: t.expertiseLevel
+        })),
+        pendingSuggestions: currentTrainer.topicSuggestions.map(s => s.name),
+        createdAt: currentTrainer.createdAt.toISOString(),
+        updatedAt: currentTrainer.updatedAt.toISOString(),
+      };
+
+      return NextResponse.json({
+        message: 'Keine Änderungen gefunden',
+        trainer: response
+      }, { status: 200 });
     }
 
     // Hole die nächste Versionsnummer
@@ -151,7 +226,7 @@ export async function PATCH(request: NextRequest) {
       }
     });
 
-    // Geocode address if address fields changed and travelRadius is set
+    // Geocode address if address fields changed (always geocode when address changes)
     const addressFieldsChanged = 
       changedFields.includes('street') ||
       changedFields.includes('houseNumber') ||
@@ -159,7 +234,7 @@ export async function PATCH(request: NextRequest) {
       changedFields.includes('city') ||
       changedFields.includes('countryId');
 
-    if (addressFieldsChanged && (updateData.travelRadius || currentTrainer.travelRadius)) {
+    if (addressFieldsChanged) {
       const country = updateData.countryId 
         ? await prisma.country.findUnique({ where: { id: updateData.countryId as number } })
         : currentTrainer.countryId 
@@ -295,7 +370,42 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // Reload trainer with updated topics and suggestions
+    // Check if profile is now complete and update status to ACTIVE if needed
+    const trainerForStatusCheck = await prisma.trainer.findUnique({
+      where: { id: trainerData.id as number }
+    });
+
+    if (trainerForStatusCheck && trainerForStatusCheck.status === 'INACTIVE') {
+      // Check if all required fields are filled
+      const hasRequiredFields = 
+        trainerForStatusCheck.phone &&
+        trainerForStatusCheck.phone !== '000000000' && // Not the placeholder
+        trainerForStatusCheck.street &&
+        trainerForStatusCheck.zipCode &&
+        trainerForStatusCheck.city &&
+        trainerForStatusCheck.countryId &&
+        trainerForStatusCheck.bio;
+
+      // Check if trainer has at least one topic
+      const topicCount = await prisma.trainerTopic.count({
+        where: { trainerId: trainerData.id as number }
+      });
+
+      // Check if trainer has at least one training type
+      const trainingTypeCount = await prisma.trainerTrainingType.count({
+        where: { trainerId: trainerData.id as number }
+      });
+
+      if (hasRequiredFields && topicCount > 0 && trainingTypeCount > 0) {
+        // Profile is complete, set status to ACTIVE
+        await prisma.trainer.update({
+          where: { id: trainerData.id as number },
+          data: { status: 'ACTIVE' }
+        });
+      }
+    }
+
+    // Reload trainer with updated topics and suggestions (after potential status update)
     const reloadedTrainer = await prisma.trainer.findUnique({
       where: { id: trainerData.id as number },
       include: {

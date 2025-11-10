@@ -1,10 +1,73 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getUserData } from '@/lib/session';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const query = searchParams.get("search") || "";
   const all = searchParams.get("all"); // Special flag to get all topics
+  const manage = searchParams.get("manage"); // Flag for management view (all topics with details)
+
+  // If 'manage' parameter is set, return all topics for management (companies only)
+  if (manage === 'true') {
+    try {
+      const currentUser = getUserData();
+      if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      const now = new Date();
+      
+      const topics = await prisma.topic.findMany({
+        include: {
+          trainings: {
+            select: {
+              id: true,
+              status: true,
+              startDate: true,
+              endDate: true
+            }
+          },
+          trainers: {
+            select: {
+              id: true
+            }
+          }
+        },
+        orderBy: {
+          name: 'asc'
+        }
+      });
+
+      // Calculate completed and future trainings for each topic
+      const topicsWithCounts = topics.map(topic => {
+        const completedTrainings = topic.trainings.filter(t => {
+          const endDate = new Date(t.endDate);
+          return t.status === 'COMPLETED' || (endDate < now && t.status !== 'CANCELLED');
+        });
+        
+        const futureTrainings = topic.trainings.filter(t => {
+          const startDate = new Date(t.startDate);
+          return startDate >= now && t.status !== 'COMPLETED' && t.status !== 'CANCELLED';
+        });
+
+        return {
+          ...topic,
+          completedTrainingsCount: completedTrainings.length,
+          futureTrainingsCount: futureTrainings.length,
+          trainersCount: topic.trainers.length
+        };
+      });
+
+      return NextResponse.json({ topics: topicsWithCounts });
+    } catch (dbError) {
+      console.error("Database error loading topics for management:", dbError);
+      return NextResponse.json({ error: 'Fehler beim Laden der Topics' }, { status: 500 });
+    }
+  }
 
   // If 'all' parameter is set, return all online topics
   if (all === 'true') {
@@ -135,5 +198,77 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: "An unknown error occurred" }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/topics
+ * Create a new topic (companies only)
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const currentUser = getUserData();
+    if (!currentUser || currentUser.userType !== 'TRAINING_COMPANY') {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await req.json();
+    const { name, short_title, state } = body;
+
+    if (!name || name.trim() === '') {
+      return NextResponse.json(
+        { error: 'Name is required' },
+        { status: 400 }
+      );
+    }
+
+    // Generate slug from name
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+
+    // Check if slug already exists
+    const existingTopic = await prisma.topic.findUnique({
+      where: { slug }
+    });
+
+    if (existingTopic) {
+      return NextResponse.json(
+        { error: 'Ein Thema mit diesem Namen existiert bereits' },
+        { status: 400 }
+      );
+    }
+
+    // Create topic
+    const topic = await prisma.topic.create({
+      data: {
+        name: name.trim(),
+        short_title: short_title?.trim() || null,
+        slug,
+        state: state || 'online'
+      }
+    });
+
+    return NextResponse.json({ topic });
+  } catch (error: any) {
+    console.error('Error creating topic:', error);
+    
+    // Handle unique constraint violation
+    if (error.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'Ein Thema mit diesem Namen existiert bereits' },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to create topic' },
+      { status: 500 }
+    );
   }
 }

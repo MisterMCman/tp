@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import Link from "next/link";
 import { getUserData } from "@/lib/session";
+import { buildUrlWithNavigation, initializeNavigation } from "@/lib/navigationStack";
+import StarRating from "@/components/StarRating";
 
 interface TopicWithLevel {
   name: string;
@@ -36,11 +38,23 @@ interface TrainerSearchResult {
   onlineTrainingInfo?: {
     offersOnline: boolean;
   } | null;
+  averageRating?: number | null;
+  ratingCount?: number;
 }
 
 export default function TrainerSearchPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  
+  // Initialize navigation tracking for this page
+  useEffect(() => {
+    const queryParams: Record<string, string> = {};
+    searchParams.forEach((value, key) => {
+      queryParams[key] = value;
+    });
+    initializeNavigation(pathname, queryParams);
+  }, [pathname, searchParams]);
   const [user, setUser] = useState<any>(null);
   
   // Search state
@@ -51,9 +65,13 @@ export default function TrainerSearchPage() {
     topic: '',
     topicId: '', // Store selected topic ID for precise search
     location: '',
+    locationId: '', // Store selected location ID for precise search
     maxPrice: '',
     expertiseLevel: 'all' // 'all', 'minimum_grundlage', 'minimum_fortgeschritten', 'minimum_experte'
   });
+  
+  // Locations state
+  const [locations, setLocations] = useState<{ id: number; name: string; type: string; city?: string; country?: { name: string; code: string } }[]>([]);
   
   // Ref to store latest filters to avoid stale closures in useCallback
   const searchFiltersRef = useRef(searchFilters);
@@ -80,6 +98,26 @@ export default function TrainerSearchPage() {
   const [topicSuggestions, setTopicSuggestions] = useState<{ id: number; name: string; short_title?: string }[]>([]);
   const [showTopicSuggestions, setShowTopicSuggestions] = useState(false);
   const [topicSearchTerm, setTopicSearchTerm] = useState(''); // Separate state for search input
+
+  // Load locations on mount
+  useEffect(() => {
+    const loadLocations = async () => {
+      try {
+        const response = await fetch('/api/locations');
+        if (response.ok) {
+          const data = await response.json();
+          setLocations(data.locations || []);
+        }
+      } catch (error) {
+        console.error('Error loading locations:', error);
+      }
+    };
+    
+    const userData = getUserData();
+    if (userData && userData.userType === 'TRAINING_COMPANY') {
+      loadLocations();
+    }
+  }, []);
 
   useEffect(() => {
     // Check if user is logged in and is a company (works for both trainers and companies)
@@ -108,6 +146,7 @@ export default function TrainerSearchPage() {
     const topicParam = searchParams.get('topic');
     const topicIdParam = searchParams.get('topicId');
     const locationParam = searchParams.get('location');
+    const locationIdParam = searchParams.get('locationId');
     const maxPriceParam = searchParams.get('maxPrice');
     const expertiseLevelParam = searchParams.get('expertiseLevel');
     const trainingIdParam = searchParams.get('trainingId');
@@ -117,22 +156,24 @@ export default function TrainerSearchPage() {
       topic: topicParam ? decodeURIComponent(topicParam) : '',
       topicId: topicIdParam || '',
       location: locationParam || '',
+      locationId: locationIdParam || '',
       maxPrice: maxPriceParam || '',
       expertiseLevel: expertiseLevelParam || 'all'
     };
     
     // Update state from URL (only if URL has params to avoid overwriting user input)
     // Only update if the URL params are different from current state to prevent unnecessary updates
-    if (topicParam || topicIdParam || locationParam || maxPriceParam || expertiseLevelParam) {
+    if (topicParam || topicIdParam || locationParam || locationIdParam || maxPriceParam || expertiseLevelParam) {
       const currentTopicId = searchFilters.topicId || '';
       const currentTopic = searchFilters.topic || '';
       
-      // Only update if URL params are different from current state
-      if (urlFilters.topicId !== currentTopicId || 
-          urlFilters.topic !== currentTopic ||
-          urlFilters.location !== searchFilters.location ||
-          urlFilters.maxPrice !== searchFilters.maxPrice ||
-          urlFilters.expertiseLevel !== searchFilters.expertiseLevel) {
+        // Only update if URL params are different from current state
+        if (urlFilters.topicId !== currentTopicId || 
+            urlFilters.topic !== currentTopic ||
+            urlFilters.location !== searchFilters.location ||
+            urlFilters.locationId !== searchFilters.locationId ||
+            urlFilters.maxPrice !== searchFilters.maxPrice ||
+            urlFilters.expertiseLevel !== searchFilters.expertiseLevel) {
         
         if (urlFilters.topicId) {
           // If topicId is in URL, we need to fetch the topic name
@@ -149,7 +190,7 @@ export default function TrainerSearchPage() {
         // If we have filters in URL, trigger a search to restore results
         // This restores search results when navigating back from trainer profile
         // We check if we have active filters and either haven't searched or results are empty
-        const hasActiveFilters = urlFilters.topicId || urlFilters.topic || urlFilters.location || urlFilters.maxPrice || urlFilters.expertiseLevel !== 'all';
+        const hasActiveFilters = urlFilters.topicId || urlFilters.topic || urlFilters.location || urlFilters.locationId || urlFilters.maxPrice || urlFilters.expertiseLevel !== 'all';
         if (hasActiveFilters && (!hasSearched || searchResults.length === 0)) {
           // Use a small delay to ensure state is updated
           setTimeout(() => {
@@ -288,7 +329,9 @@ export default function TrainerSearchPage() {
       params.set('topic', filters.topic);
     }
     
-    if (filters.location && filters.location.trim() !== '') {
+    if (filters.locationId && filters.locationId.trim() !== '') {
+      params.set('locationId', filters.locationId);
+    } else if (filters.location && filters.location.trim() !== '') {
       params.set('location', filters.location);
     }
     
@@ -325,6 +368,7 @@ export default function TrainerSearchPage() {
       topic: '',
       topicId: '',
       location: '',
+      locationId: '',
       maxPrice: '',
       expertiseLevel: 'all'
     });
@@ -334,7 +378,7 @@ export default function TrainerSearchPage() {
     setHasSearched(false);
   };
 
-  const hasActiveFilters = searchFilters.topic || searchFilters.location || searchFilters.maxPrice || searchFilters.expertiseLevel !== 'all';
+  const hasActiveFilters = searchFilters.topic || searchFilters.location || searchFilters.locationId || searchFilters.maxPrice || searchFilters.expertiseLevel !== 'all';
 
   const searchTrainers = useCallback(async (filtersOverride?: typeof searchFilters) => {
     setSearchLoading(true);
@@ -354,7 +398,9 @@ export default function TrainerSearchPage() {
         params.append('topic', filtersToUse.topic);
       }
       
-      if (filtersToUse.location && filtersToUse.location.trim() !== '') {
+      if (filtersToUse.locationId && filtersToUse.locationId.trim() !== '') {
+        params.append('locationId', filtersToUse.locationId);
+      } else if (filtersToUse.location && filtersToUse.location.trim() !== '') {
         params.append('location', filtersToUse.location);
       }
       
@@ -418,10 +464,14 @@ export default function TrainerSearchPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="ptw-dashboard-header">
-        <h1>TRAINER SUCHEN</h1>
+    <>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
+        <h1 className="text-2xl font-bold text-gray-900">Trainer suchen</h1>
+        <p className="text-gray-600 mt-1">
+          Finden Sie qualifizierte Trainer für Ihre Schulungsanforderungen
+        </p>
       </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
 
       <div className="ptw-dashboard-card">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0 mb-6">
@@ -514,20 +564,58 @@ export default function TrainerSearchPage() {
 
           {/* Location Select */}
           <div className="relative">
-            <label className="absolute -top-2.5 left-3 bg-white px-1 text-xs font-medium" style={{ color: searchFilters.location ? 'var(--ptw-accent-primary)' : '#6b7280' }}>
-              Standort {searchFilters.location && '•'}
+            <label className="absolute -top-2.5 left-3 bg-white px-1 text-xs font-medium" style={{ color: (searchFilters.location || searchFilters.locationId) ? 'var(--ptw-accent-primary)' : '#6b7280' }}>
+              Standort {(searchFilters.location || searchFilters.locationId) && '•'}
             </label>
             <select
-              value={searchFilters.location}
-              onChange={(e) => setSearchFilters({ ...searchFilters, location: e.target.value })}
+              value={searchFilters.locationId ? `loc_${searchFilters.locationId}` : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value.startsWith('loc_')) {
+                  // Location ID selected
+                  const locationId = value.replace('loc_', '');
+                  const selectedLocation = locations.find(l => l.id.toString() === locationId);
+                  const newFilters = { 
+                    ...searchFilters, 
+                    locationId: locationId,
+                    location: selectedLocation ? selectedLocation.name : ''
+                  };
+                  setSearchFilters(newFilters);
+                  updateURLParams(newFilters);
+                } else {
+                  // Clear selection
+                  const newFilters = { 
+                    ...searchFilters, 
+                    location: '',
+                    locationId: ''
+                  };
+                  setSearchFilters(newFilters);
+                  updateURLParams(newFilters);
+                }
+              }}
               onKeyPress={handleKeyPress}
               className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all appearance-none bg-white"
-              style={{ borderColor: searchFilters.location ? 'var(--ptw-accent-primary)' : undefined }}
+              style={{ borderColor: (searchFilters.location || searchFilters.locationId) ? 'var(--ptw-accent-primary)' : undefined }}
             >
               <option value="">Alle Standorte</option>
-              <option value="de">Deutschland</option>
-              <option value="at">Österreich</option>
-              <option value="ch">Schweiz</option>
+              {locations.length > 0 && (
+                <>
+                  <optgroup label="Vor Ort">
+                    {locations.filter(loc => loc.type === 'PHYSICAL' || loc.type === 'HYBRID').map((loc) => (
+                      <option key={loc.id} value={`loc_${loc.id}`}>
+                        {loc.name}{loc.city ? ` (${loc.city})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Online">
+                    {locations.filter(loc => loc.type === 'ONLINE').map((loc) => (
+                      <option key={loc.id} value={`loc_${loc.id}`}>
+                        {loc.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                </>
+              )}
             </select>
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -688,6 +776,12 @@ export default function TrainerSearchPage() {
                               {trainer.dailyRate}€/Tag
                             </p>
                           )}
+                          {trainer.averageRating !== null && trainer.averageRating !== undefined && (
+                            <div className="mb-1 flex items-center justify-end gap-1">
+                              <StarRating rating={trainer.averageRating} size="sm" showValue />
+                              <span className="text-xs text-gray-500">({trainer.ratingCount || 0})</span>
+                            </div>
+                          )}
                           <p className="text-xs sm:text-sm" style={{ color: 'var(--ptw-text-secondary)' }}>
                             {trainer.completedTrainings} abgeschlossene Trainings
                           </p>
@@ -833,21 +927,22 @@ export default function TrainerSearchPage() {
                       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-4">
                         <Link
                           href={(() => {
-                            // Build URL with current search filters to preserve them when navigating back
-                            const params = new URLSearchParams();
+                            // Use navigation stack to build URL with current search filters
+                            const params: Record<string, string> = {};
                             if (searchFilters.topicId) {
-                              params.set('topicId', searchFilters.topicId);
+                              params.topicId = searchFilters.topicId;
                             } else if (searchFilters.topic) {
-                              params.set('topic', searchFilters.topic);
+                              params.topic = searchFilters.topic;
                             }
-                            if (searchFilters.location) params.set('location', searchFilters.location);
-                            if (searchFilters.maxPrice) params.set('maxPrice', searchFilters.maxPrice);
-                            if (searchFilters.expertiseLevel !== 'all') params.set('expertiseLevel', searchFilters.expertiseLevel);
-                            if (trainingIdFromUrl) params.set('trainingId', trainingIdFromUrl.toString());
-                            // Add returnTo parameter to indicate we came from search
-                            params.set('returnTo', 'search');
-                            const queryString = params.toString();
-                            return `/dashboard/trainer/${trainer.id}${queryString ? `?${queryString}` : ''}`;
+                            if (searchFilters.locationId) {
+                              params.locationId = searchFilters.locationId;
+                            } else if (searchFilters.location) {
+                              params.location = searchFilters.location;
+                            }
+                            if (searchFilters.maxPrice) params.maxPrice = searchFilters.maxPrice;
+                            if (searchFilters.expertiseLevel !== 'all') params.expertiseLevel = searchFilters.expertiseLevel;
+                            if (trainingIdFromUrl) params.trainingId = trainingIdFromUrl.toString();
+                            return buildUrlWithNavigation(`/dashboard/trainer/${trainer.id}`, params);
                           })()}
                           className="text-sm sm:text-base hover:text-red-600 transition-colors text-center sm:text-left flex-shrink-0"
                           style={{ color: 'var(--ptw-accent-primary)' }}
@@ -921,7 +1016,8 @@ export default function TrainerSearchPage() {
                               } else if (searchFilters.topic) {
                                 params.set('topic', searchFilters.topic);
                               }
-                              if (searchFilters.location) params.set('location', searchFilters.location);
+                              if (searchFilters.locationId) params.set('locationId', searchFilters.locationId);
+                            else if (searchFilters.location) params.set('location', searchFilters.location);
                               if (searchFilters.maxPrice) params.set('maxPrice', searchFilters.maxPrice);
                               if (searchFilters.expertiseLevel !== 'all') params.set('expertiseLevel', searchFilters.expertiseLevel);
                               if (trainingIdFromUrl) params.set('trainingId', trainingIdFromUrl.toString());
@@ -965,7 +1061,8 @@ export default function TrainerSearchPage() {
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

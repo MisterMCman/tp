@@ -182,9 +182,6 @@ async function seedDatabase() {
   const company1 = await prisma.trainingCompany.create({
     data: {
       companyName: 'PowerToWork GmbH',
-      firstName: 'Sarah',
-      lastName: 'Müller',
-      email: 'sarah.mueller@powertowork.de',
       phone: '+49 30 12345678',
       street: 'Friedrichstraße',
       houseNumber: '123',
@@ -195,18 +192,26 @@ async function seedDatabase() {
       website: 'https://www.powertowork.de',
       industry: 'consulting',
       employees: '51-200',
-      consultantName: 'Max Bauer',
+      companyType: 'GMBH',
       status: 'ACTIVE',
       countryId: germany.id,
+      // Create the first CompanyUser (ADMIN) along with the company
+      users: {
+        create: {
+          email: 'sarah.mueller@powertowork.de',
+          firstName: 'Sarah',
+          lastName: 'Müller',
+          phone: '+49 30 12345678',
+          role: 'ADMIN',
+          isActive: true
+        }
+      }
     }
   });
 
   const company2 = await prisma.trainingCompany.create({
     data: {
       companyName: 'TechAcademy Solutions',
-      firstName: 'Klaus',
-      lastName: 'Weber',
-      email: 'klaus.weber@techacademy.de',
       phone: '+49 89 98765432',
       street: 'Maximilianstraße',
       houseNumber: '45',
@@ -217,9 +222,20 @@ async function seedDatabase() {
       website: 'https://www.techacademy.de',
       industry: 'it',
       employees: '11-50',
-      consultantName: 'Lisa Schneider',
+      companyType: 'GBR',
       status: 'ACTIVE',
       countryId: germany.id,
+      // Create the first CompanyUser (ADMIN) along with the company
+      users: {
+        create: {
+          email: 'klaus.weber@techacademy.de',
+          firstName: 'Klaus',
+          lastName: 'Weber',
+          phone: '+49 89 98765432',
+          role: 'ADMIN',
+          isActive: true
+        }
+      }
     }
   });
 

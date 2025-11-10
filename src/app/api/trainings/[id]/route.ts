@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserData } from '@/lib/session';
+import { TrainingRequestStatus } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
@@ -34,8 +35,19 @@ export async function GET(
           select: {
             id: true,
             companyName: true,
-            firstName: true,
-            lastName: true
+            users: {
+              where: {
+                role: 'ADMIN',
+                isActive: true
+              },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true
+              },
+              take: 1
+            }
           }
         },
         requests: {
@@ -63,49 +75,96 @@ export async function GET(
       );
     }
 
-    // Find the accepted trainer request
-    const acceptedRequest = training.requests.find(r => 
-      String(r.status).toUpperCase() === 'ACCEPTED'
+    // Find the booked trainer request (GEBUCHT status - fully booked)
+    // Also check for ACCEPTED as fallback (for backward compatibility with old data)
+    const bookedRequest = training.requests.find(r => 
+      r.status === TrainingRequestStatus.GEBUCHT
+    ) || training.requests.find(r => 
+      r.status === TrainingRequestStatus.ACCEPTED
     );
     
     // Determine assigned trainer based on user type and permissions
     let assignedTrainer = null;
     
-    if (acceptedRequest && acceptedRequest.trainer) {
+    if (bookedRequest && bookedRequest.trainer) {
       // If user is a company, they can always see the assigned trainer
       if (currentUser && currentUser.userType === 'TRAINING_COMPANY') {
         assignedTrainer = {
-          id: acceptedRequest.trainer.id,
-          firstName: acceptedRequest.trainer.firstName,
-          lastName: acceptedRequest.trainer.lastName,
-          fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
+          id: bookedRequest.trainer.id,
+          firstName: bookedRequest.trainer.firstName,
+          lastName: bookedRequest.trainer.lastName,
+          fullName: `${bookedRequest.trainer.firstName} ${bookedRequest.trainer.lastName}`
         };
       }
       // If user is a trainer, only show assigned trainer if it's them
-      else if (currentUser && currentUser.userType === 'TRAINER' && Number(currentUser.id) === acceptedRequest.trainer.id) {
+      else if (currentUser && currentUser.userType === 'TRAINER' && Number(currentUser.id) === bookedRequest.trainer.id) {
         assignedTrainer = {
-          id: acceptedRequest.trainer.id,
-          firstName: acceptedRequest.trainer.firstName,
-          lastName: acceptedRequest.trainer.lastName,
-          fullName: `${acceptedRequest.trainer.firstName} ${acceptedRequest.trainer.lastName}`
+          id: bookedRequest.trainer.id,
+          firstName: bookedRequest.trainer.firstName,
+          lastName: bookedRequest.trainer.lastName,
+          fullName: `${bookedRequest.trainer.firstName} ${bookedRequest.trainer.lastName}`
         };
       }
       // If user is not logged in or not the assigned trainer, don't show assigned trainer info
     }
 
+    // Separate booked trainer (GEBUCHT or ACCEPTED) from requested trainers (PENDING/ACCEPTED but not booked)
+    const bookedRequestForDetails = training.requests.find(r => 
+      r.status === TrainingRequestStatus.GEBUCHT
+    ) || training.requests.find(r => 
+      r.status === TrainingRequestStatus.ACCEPTED
+    );
+    
+    const bookedTrainer = bookedRequestForDetails ? {
+      id: bookedRequestForDetails.trainer.id,
+      firstName: bookedRequestForDetails.trainer.firstName,
+      lastName: bookedRequestForDetails.trainer.lastName,
+      fullName: `${bookedRequestForDetails.trainer.firstName} ${bookedRequestForDetails.trainer.lastName}`,
+      email: bookedRequestForDetails.trainer.email || '',
+      price: bookedRequestForDetails.counterPrice || training.dailyRate
+    } : null;
+
     // Transform requests to include trainer info and status
-    const requestedTrainers = training.requests.map(request => ({
-      id: request.trainer.id,
-      firstName: request.trainer.firstName,
-      lastName: request.trainer.lastName,
-      email: request.trainer.email || '',
-      status: request.status.toLowerCase(),
-      counterPrice: request.counterPrice,
-      companyCounterPrice: request.companyCounterPrice,
-      trainerAccepted: request.trainerAccepted,
-      createdAt: request.createdAt.toISOString(),
-      updatedAt: request.updatedAt.toISOString()
-    }));
+    // Exclude booked trainers from requested list
+    const requestedTrainers = training.requests
+      .filter(request => {
+        return request.status !== TrainingRequestStatus.GEBUCHT && request.status !== TrainingRequestStatus.ACCEPTED;
+      })
+      .map(request => ({
+        id: request.trainer.id,
+        trainingRequestId: request.id,
+        firstName: request.trainer.firstName,
+        lastName: request.trainer.lastName,
+        email: request.trainer.email || '',
+        status: request.status.toLowerCase(),
+        counterPrice: request.counterPrice,
+        companyCounterPrice: request.companyCounterPrice,
+        trainerAccepted: request.trainerAccepted,
+        createdAt: request.createdAt.toISOString(),
+        updatedAt: request.updatedAt.toISOString()
+      }));
+    
+    // Also include ACCEPTED requests (trainer accepted, waiting for company) in requested trainers
+    const acceptedRequests = training.requests
+      .filter(request => {
+        return request.status === TrainingRequestStatus.ACCEPTED && (!bookedRequestForDetails || request.id !== bookedRequestForDetails.id);
+      })
+      .map(request => ({
+        id: request.trainer.id,
+        trainingRequestId: request.id,
+        firstName: request.trainer.firstName,
+        lastName: request.trainer.lastName,
+        email: request.trainer.email || '',
+        status: request.status.toLowerCase(),
+        counterPrice: request.counterPrice,
+        companyCounterPrice: request.companyCounterPrice,
+        trainerAccepted: request.trainerAccepted,
+        createdAt: request.createdAt.toISOString(),
+        updatedAt: request.updatedAt.toISOString()
+      }));
+    
+    // Combine pending and accepted (but not booked) requests
+    const allRequestedTrainers = [...requestedTrainers, ...acceptedRequests];
 
     // Get location display string from Location table
     let locationDisplay = 'Kein Ort angegeben';
@@ -117,6 +176,15 @@ export async function GET(
           (training.location.city ? `${training.location.city}${training.location.street ? `, ${training.location.street}` : ''}` : 'Vor Ort');
       }
     }
+
+    // Transform company to include user data
+    const transformedCompany = training.company ? {
+      ...training.company,
+      firstName: training.company.users?.[0]?.firstName || '',
+      lastName: training.company.users?.[0]?.lastName || '',
+      email: training.company.users?.[0]?.email || '',
+      users: undefined // Remove users array from response
+    } : null;
 
     // Transform to match frontend expectations
     const transformedTraining = {
@@ -134,9 +202,10 @@ export async function GET(
       dailyRate: training.dailyRate,
       startTime: training.startTime,
       endDate: training.endDate.toISOString(),
-      company: training.company,
+      company: transformedCompany,
       assignedTrainer: assignedTrainer,
-      requestedTrainers: requestedTrainers
+      bookedTrainer: bookedTrainer,
+      requestedTrainers: allRequestedTrainers
     };
 
     return NextResponse.json(transformedTraining);

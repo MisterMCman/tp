@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getUserData } from "@/lib/session";
+import { buildBackUrl } from "@/lib/navigation";
+import { initializeNavigation, buildUrlWithNavigation } from "@/lib/navigationStack";
 import Link from "next/link";
+import StarRating from "@/components/StarRating";
 
 interface Trainer {
   id: number;
@@ -11,11 +14,19 @@ interface Trainer {
   lastName: string;
   email: string;
   phone: string;
+  street?: string;
+  houseNumber?: string;
+  zipCode?: string;
+  city?: string;
   address?: string;
   bio?: string;
   profilePicture?: string;
   dailyRate?: number;
   location?: {
+    name: string;
+    code: string;
+  };
+  country?: {
     name: string;
     code: string;
   };
@@ -61,59 +72,21 @@ export default function TrainerProfilePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const trainerId = params.id as string;
+  const pathname = `/dashboard/trainer/${trainerId}`;
   
-  // Get returnTo parameter and preserved state from URL
-  const returnTo = searchParams.get('returnTo');
-  const topicId = searchParams.get('topicId');
-  const topic = searchParams.get('topic');
-  const location = searchParams.get('location');
-  const maxPrice = searchParams.get('maxPrice');
-  const expertiseLevel = searchParams.get('expertiseLevel');
-  const trainingId = searchParams.get('trainingId');
-  const view = searchParams.get('view'); // For trainings page
-  const week = searchParams.get('week'); // For trainings calendar view
-  const status = searchParams.get('status'); // For requests page
+  // Initialize navigation tracking for this page
+  useEffect(() => {
+    const queryParams: Record<string, string> = {};
+    searchParams.forEach((value, key) => {
+      queryParams[key] = value;
+    });
+    initializeNavigation(pathname, queryParams);
+  }, [pathname, searchParams]);
   
-  // Build back URL with preserved state
+  // Build back URL using navigation stack
   const getBackUrl = () => {
-    if (returnTo === 'search') {
-      // Return to trainer search with filters
-      const params = new URLSearchParams();
-      if (topicId) {
-        params.set('topicId', topicId);
-      } else if (topic) {
-        params.set('topic', topic);
-      }
-      if (location) params.set('location', location);
-      if (maxPrice) params.set('maxPrice', maxPrice);
-      if (expertiseLevel && expertiseLevel !== 'all') params.set('expertiseLevel', expertiseLevel);
-      if (trainingId) params.set('trainingId', trainingId);
-      const queryString = params.toString();
-      return `/dashboard/trainer${queryString ? `?${queryString}` : ''}`;
-    } else if (returnTo === 'trainings') {
-      // Return to trainings page with view mode and week
-      const params = new URLSearchParams();
-      if (view && view !== 'upcoming') {
-        params.set('view', view);
-      }
-      if (view === 'calendar' && week) {
-        params.set('week', week);
-      }
-      const queryString = params.toString();
-      return `/dashboard/trainings${queryString ? `?${queryString}` : ''}`;
-    } else if (returnTo === 'requests') {
-      // Return to requests page with status filter
-      const params = new URLSearchParams();
-      if (status && status !== 'all') {
-        params.set('status', status);
-      }
-      const queryString = params.toString();
-      return `/dashboard/requests${queryString ? `?${queryString}` : ''}`;
-    } else if (returnTo === 'invoices') {
-      // Return to invoices page
-      return '/dashboard/invoices';
-    }
-    return '/dashboard/trainer';
+    // buildBackUrl() already returns '/dashboard' if stack is empty
+    return buildBackUrl();
   };
 
   const [trainer, setTrainer] = useState<Trainer | null>(null);
@@ -124,6 +97,15 @@ export default function TrainerProfilePage() {
   const [sendingRequests, setSendingRequests] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ratings, setRatings] = useState<{
+    averageRating: number | null;
+    totalRatings: number;
+    ratingsByTopic: Array<{
+      topic: { id: number; name: string };
+      ratings: any[];
+      average: number;
+    }>;
+  } | null>(null);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('de-DE', {
@@ -247,6 +229,13 @@ export default function TrainerProfilePage() {
             const bookingsData = await bookingsResponse.json();
             setPastBookings(bookingsData.bookings);
           }
+
+          // Fetch ratings for this trainer
+          const ratingsResponse = await fetch(`/api/trainers/${trainerId}/ratings`);
+          if (ratingsResponse.ok) {
+            const ratingsData = await ratingsResponse.json();
+            setRatings(ratingsData);
+          }
         }
 
       } catch (err) {
@@ -285,53 +274,95 @@ export default function TrainerProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <Link
-          href={getBackUrl()}
-          className="text-sm hover:text-red-600 transition-colors"
-          style={{ color: 'var(--ptw-accent-primary)' }}
-        >
-          ← Zurück zur Suche
-        </Link>
-      </div>
-
-      {/* Trainer Profile Header */}
-      <div className="ptw-dashboard-card mb-6">
-        <div className="flex items-start gap-6">
-          {/* Profile Picture */}
-          <div className="flex-shrink-0">
-            {trainer.profilePicture ? (
-              <img
-                src={trainer.profilePicture}
-                alt={`${trainer.firstName} ${trainer.lastName}`}
-                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-              />
-            ) : (
-              <div className="w-24 h-24 rounded-full bg-gray-300 flex items-center justify-center border-4 border-white shadow-lg">
-                <svg className="w-12 h-12 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
-              </div>
+    <>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
+        <div className="max-w-4xl mx-auto">
+          <Link
+            href={getBackUrl()}
+            className="text-sm hover:text-red-600 transition-colors mb-4 inline-flex items-center gap-2"
+            style={{ color: 'var(--ptw-accent-primary)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Zurück zur Suche
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {trainer.firstName} {trainer.lastName}
+            {trainer.isCompany && trainer.companyName && (
+              <span className="text-sm text-gray-500 ml-2">({trainer.companyName})</span>
             )}
-          </div>
+          </h1>
+        </div>
+      </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
+        <div className="max-w-4xl mx-auto">
 
-          {/* Trainer Info */}
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--ptw-text-primary)' }}>
-              {trainer.firstName} {trainer.lastName}
-              {trainer.isCompany && trainer.companyName && (
-                <span className="text-sm text-gray-500 ml-2">({trainer.companyName})</span>
+        {/* Trainer Profile Header */}
+        <div className="ptw-dashboard-card mb-6">
+          <div className="flex items-start gap-6">
+            {/* Profile Picture */}
+            <div className="flex-shrink-0">
+              {trainer.profilePicture ? (
+                <img
+                  src={trainer.profilePicture}
+                  alt={`${trainer.firstName} ${trainer.lastName}`}
+                  className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-gray-300 flex items-center justify-center border-4 border-white shadow-lg">
+                  <svg className="w-12 h-12 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  </svg>
+                </div>
               )}
-            </h1>
+            </div>
+
+            {/* Trainer Info */}
+            <div className="flex-1">
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <p className="text-sm text-gray-600 mb-1">📧 {trainer.email}</p>
                 <p className="text-sm text-gray-600 mb-1">📱 {trainer.phone}</p>
-                {trainer.location && (
-                  <p className="text-sm text-gray-600 mb-1">📍 {trainer.location.name}</p>
+                {/* Full Address */}
+                {(trainer.street || trainer.city || trainer.zipCode) && (
+                  <div className="text-sm text-gray-600 mb-1">
+                    <p className="font-semibold mb-1">📍 Adresse:</p>
+                    {trainer.street && trainer.houseNumber && (
+                      <p>{trainer.street} {trainer.houseNumber}</p>
+                    )}
+                    {(trainer.zipCode || trainer.city) && (
+                      <p>{trainer.zipCode} {trainer.city}</p>
+                    )}
+                    {trainer.country && (
+                      <p>{trainer.country.name}</p>
+                    )}
+                  </div>
+                )}
+                {/* Training Types */}
+                {trainer.offeredTrainingTypes && trainer.offeredTrainingTypes.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm font-semibold mb-1" style={{ color: 'var(--ptw-text-primary)' }}>
+                      Trainingsarten:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {trainer.offeredTrainingTypes.map((type) => (
+                        <span
+                          key={type}
+                          className="text-xs px-2 py-1 rounded-full font-semibold bg-blue-100 text-blue-800"
+                        >
+                          {type === 'ONLINE' ? 'Online' : type === 'HYBRID' ? 'Hybrid' : 'Vor Ort'}
+                        </span>
+                      ))}
+                    </div>
+                    {/* Travel Radius - only show if HYBRID or VOR_ORT */}
+                    {trainer.travelRadius && (trainer.offeredTrainingTypes.includes('HYBRID') || trainer.offeredTrainingTypes.includes('VOR_ORT')) && (
+                      <p className="text-xs text-gray-600 mt-1">
+                        Reiseradius: {trainer.travelRadius} km
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               <div>
@@ -407,6 +438,32 @@ export default function TrainerProfilePage() {
           </div>
         </div>
 
+        {/* Ratings by Topic */}
+        {ratings && ratings.ratingsByTopic.length > 0 && (
+          <div className="mt-6 pt-4 border-t" style={{ borderColor: 'var(--ptw-border-primary)' }}>
+            <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--ptw-text-primary)' }}>
+              Bewertungen nach Thema
+            </h3>
+            <div className="space-y-3">
+              {ratings.ratingsByTopic.map((topicRating) => (
+                <div key={topicRating.topic.id} className="flex items-center justify-between p-3 rounded-lg border" style={{ background: 'var(--ptw-bg-secondary)', borderColor: 'var(--ptw-border-primary)' }}>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium" style={{ color: 'var(--ptw-text-primary)' }}>
+                      {topicRating.topic.name}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--ptw-text-secondary)' }}>
+                      {topicRating.ratings.length} Bewertung{topicRating.ratings.length !== 1 ? 'en' : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StarRating rating={topicRating.average} size="sm" showValue />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Bio */}
         {trainer.bio && (
           <div className="mt-6 pt-4 border-t" style={{ borderColor: 'var(--ptw-border-primary)' }}>
@@ -429,8 +486,8 @@ export default function TrainerProfilePage() {
 
           <div className="space-y-4">
             {pastBookings.map((booking) => {
-              // Construct the training details URL with returnTo parameter
-              const trainingUrl = `/dashboard/training/${booking.id}?returnTo=trainer&trainerId=${trainerId}`;
+              // Use navigation stack to build URL
+              const trainingUrl = buildUrlWithNavigation(`/dashboard/training/${booking.id}`);
               
               return (
                 <Link
@@ -589,6 +646,8 @@ export default function TrainerProfilePage() {
           </div>
         </div>
       )}
-    </div>
+        </div>
+      </div>
+    </>
   );
 }

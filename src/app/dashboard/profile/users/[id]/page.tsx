@@ -26,6 +26,7 @@ export default function UserDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
+    email: '',
     firstName: '',
     lastName: '',
     phone: '',
@@ -53,6 +54,7 @@ export default function UserDetailsPage() {
         const data = await response.json();
         setUser(data.user);
         setFormData({
+          email: data.user.email,
           firstName: data.user.firstName,
           lastName: data.user.lastName,
           phone: data.user.phone || '',
@@ -116,10 +118,9 @@ export default function UserDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
+    <>
+      <div className="fixed top-0 z-40 bg-white border-b border-gray-200 pl-[var(--content-left-padding)] pr-6 py-4" style={{ left: 'var(--sidebar-width, 256px)', right: 0, paddingLeft: '40px', paddingRight: '40px' }}>
+        <div className="max-w-4xl mx-auto">
           <button
             onClick={() => router.push('/dashboard/profile')}
             className="text-primary-600 hover:text-primary-800 mb-4 flex items-center gap-2"
@@ -129,11 +130,14 @@ export default function UserDetailsPage() {
             </svg>
             Zurück zur Übersicht
           </button>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900">
             Benutzer bearbeiten: {user.firstName} {user.lastName}
           </h1>
-          <p className="text-gray-600 mt-2">{user.email}</p>
+          <p className="text-gray-600 mt-1">{user.email}</p>
         </div>
+      </div>
+      <div className="pl-[var(--content-left-padding)] pr-6 pt-32 pb-6">
+        <div className="max-w-4xl mx-auto">
 
         {/* User Details Form */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -171,15 +175,15 @@ export default function UserDetailsPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  E-Mail
+                  E-Mail *
                 </label>
                 <input
                   type="email"
-                  value={user.email}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
                 />
-                <p className="text-xs text-gray-500 mt-1">E-Mail kann nicht geändert werden</p>
               </div>
               
               <div>
@@ -244,7 +248,9 @@ export default function UserDetailsPage() {
           </form>
         </div>
       </div>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
 
